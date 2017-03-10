@@ -1,0 +1,17 @@
+fscftl Fully name Full Stack Control FTL
+it's a Full Host-based FTL solution
+
+the HW expose PPA interface to Host, and we manage the physical page address(PPA) directly in Host side
+so different with tradition device-base solution, the PPA in visible on Host perspective,  
+we can utility Host high-performance CPU to accelerate I/O response, and get good iops/BW/Latency
+
+Module:
+Host write datapath
+Host read datapath
+write cache manage
+Garbage Collection
+power on/off
+Read Error-handle(Read retry->1DX->BSPP1)
+Program Fail-Handle
+BadBlock Manage
+Wear-Leveling
