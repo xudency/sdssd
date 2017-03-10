@@ -1,9 +1,28 @@
 # fscftl - Full Stack Control FTL
 NVMe SSD Host-Based(Linux Kernel) FLash Translation Layer       
-split as a Module fscftl.ko base Linux 4.0+       
 
-## Framework(storage software stack)
 
+compare device-base and host-based     
+
+## device-based FTL storage stack     
+++++++++++++++++++++++++++++++++   
+**Page Cache**      
+    buffer_head         
+++++++++++++++++++++++++++++++++  
+**Generic Block Layer**       
+    bio        
+++++++++++++++++++++++++++++++++    
+**Official NVMe Driver**  
+    /dev/nvme0n1   
+    make_request_fn bio->LBA CMD          
+++++++++++++++++++++++++++++++++    
+**Controller**    
+      FW+Logic    
+++++++++++++++++++++++++++++++++  
+**NandFlash**     
+
+
+## Host-based storage stack   
 ++++++++++++++++++++++++++++++++   
 **Page Cache**      
     buffer_head         
@@ -12,10 +31,11 @@ split as a Module fscftl.ko base Linux 4.0+
     bio        
 ++++++++++++++++++++++++++++++++  
 **FSCFTL**       
-      make_request_fn    
+      /dev/cnexssd 
+      make_request_fn bio->PPA CMD         
 ++++++++++++++++++++++++++++++++    
 **Official NVMe Driver**    
-      NVMe SQE/CQE     
+      NVMe PPA R/W/E API   
 ++++++++++++++++++++++++++++++++    
 **Controller**    
       FW+Logic    
