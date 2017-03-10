@@ -1,6 +1,6 @@
-# XUDCFTL
+# fscftl - Full Stack Control FTL
 NVMe SSD Host-Based(Linux Kernel) FLash Translation Layer       
-split as a Module xudcftl.ko base Linux 4.0+       
+split as a Module fscftl.ko base Linux 4.0+       
 
 ## Framework(storage software stack)
 
