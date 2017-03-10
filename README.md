@@ -31,7 +31,7 @@ compare device-base and host-based
     bio        
 ++++++++++++++++++++++++++++++++  
 **FSCFTL**       
-      /dev/cnexssd 
+      /dev/cnexssd    
       make_request_fn bio->PPA CMD         
 ++++++++++++++++++++++++++++++++    
 **Official NVMe Driver**    
