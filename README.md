@@ -1,5 +1,9 @@
 # fscftl - Full Stack Control FTL
 NVMe SSD Host-Based(Linux Kernel) FLash Translation Layer       
+base CNEXLabs WestLake SSD controller   
+
+the controller need provide physical page address(PPA) interace to Host    
+we use wrppa rdppa ersppa to directly manage NandFlash    
 
 
 compare device-base and host-based     
