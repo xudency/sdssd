@@ -20,45 +20,31 @@
 
 #include "pblk.h"
 
-#if 0
-static ssize_t pblk_sysfs_luns_active_show(struct pblk *pblk, char *page)
-{
-	return sprintf(page, "luns_active=%d\n",
-					pblk_map_get_active_luns(pblk));
-}
-
 static ssize_t pblk_sysfs_luns_show(struct pblk *pblk, char *page)
 {
+	struct nvm_tgt_dev *dev = pblk->dev;
+	struct nvm_geo *geo = &dev->geo;
 	struct pblk_lun *rlun;
 	ssize_t sz = 0;
 	int i;
 
-	spin_lock(&pblk->w_luns.lock);
-	for (i = 0; i < pblk->w_luns.nr_luns; i++) {
+	for (i = 0; i < geo->nr_luns; i++) {
 		int active = 1;
 
-		rlun = pblk->w_luns.luns[i];
+		rlun = &pblk->luns[i];
 		if (!down_trylock(&rlun->wr_sem)) {
 			active = 0;
 			up(&rlun->wr_sem);
 		}
-		sz += sprintf(page + sz, "POS:%d, CH:%d, LUN:%d - %d\n",
+		sz += sprintf(page + sz, "pblk: pos:%d, ch:%d, lun:%d - %d\n",
 					i,
 					rlun->bppa.g.ch,
 					rlun->bppa.g.lun,
 					active);
 	}
-	spin_unlock(&pblk->w_luns.lock);
 
 	return sz;
 }
-#endif
-
-/* static ssize_t pblk_sysfs_consume_blocks_show(struct pblk *pblk, char *page) */
-/* { */
-	/* return sprintf(page, "consume_blocks=%d\n", */
-					/* pblk_map_get_consume_blocks(pblk)); */
-/* } */
 
 static ssize_t pblk_sysfs_rate_limiter(struct pblk *pblk, char *page)
 {
@@ -66,7 +52,7 @@ static ssize_t pblk_sysfs_rate_limiter(struct pblk *pblk, char *page)
 	struct nvm_geo *geo = &dev->geo;
 	unsigned long free_blocks, total_blocks;
 	int rb_user_max, rb_user_cnt;
-	int rb_gc_max, rb_gc_rsv, rb_gc_cnt, rb_budget, w_cnt;
+	int rb_gc_max, rb_gc_rsv, rb_gc_cnt, rb_budget;
 
 	spin_lock(pblk->rl.lock);
 	free_blocks = pblk->rl.free_blocks;
@@ -76,13 +62,12 @@ static ssize_t pblk_sysfs_rate_limiter(struct pblk *pblk, char *page)
 	rb_gc_rsv = pblk->rl.rb_gc_rsv;
 	rb_gc_cnt = pblk->rl.rb_gc_cnt;
 	rb_budget = pblk->rl.rb_budget;
-	w_cnt = pblk->rl.write_cnt;
 	spin_unlock(pblk->rl.lock);
 
 	total_blocks = geo->blks_per_lun * geo->nr_luns;
 
 	return sprintf(page,
-		"u:%u/%u,gc:%u/%u/%u(%u)(stop:<%u,full:>%u,free:%lu/%lu)w:%d\n",
+		"u:%u/%u,gc:%u/%u/%u(%u)(stop:<%u,full:>%u,free:%lu/%lu)\n",
 				rb_user_cnt,
 				rb_user_max,
 				rb_gc_cnt,
@@ -92,8 +77,7 @@ static ssize_t pblk_sysfs_rate_limiter(struct pblk *pblk, char *page)
 				1 << pblk->rl.low_pw,
 				1 << pblk->rl.high_pw,
 				free_blocks,
-				total_blocks,
-				w_cnt);
+				total_blocks);
 }
 
 static ssize_t pblk_sysfs_gc_state_show(struct pblk *pblk, char *page)
@@ -119,27 +103,12 @@ static ssize_t pblk_sysfs_stats(struct pblk *pblk, char *page)
 	return offset;
 }
 
-#ifdef CONFIG_NVM_DEBUG
-static ssize_t pblk_sysfs_stats_debug(struct pblk *pblk, char *page)
+static ssize_t pblk_sysfs_write_buffer(struct pblk *pblk, char *page)
 {
-	return sprintf(page, "%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u\n",
-			atomic_read(&pblk->inflight_writes),
-			atomic_read(&pblk->inflight_reads),
-			atomic_read(&pblk->req_writes),
-			atomic_read(&pblk->nr_flush),
-			atomic_read(&pblk->padded_writes),
-			atomic_read(&pblk->sub_writes),
-			atomic_read(&pblk->sync_writes),
-			atomic_read(&pblk->compl_writes),
-			atomic_read(&pblk->inflight_meta),
-			atomic_read(&pblk->compl_meta),
-			atomic_read(&pblk->recov_writes),
-			atomic_read(&pblk->recov_gc_writes),
-			atomic_read(&pblk->requeued_writes),
-			atomic_read(&pblk->sync_reads));
+	return pblk_rb_sysfs(&pblk->rwb, page);
 }
 
-static ssize_t pblk_sysfs_ppaf_debug(struct pblk *pblk, char *page)
+static ssize_t pblk_sysfs_ppaf(struct pblk *pblk, char *page)
 {
 	struct nvm_tgt_dev *dev = pblk->dev;
 	struct nvm_geo *geo = &dev->geo;
@@ -178,22 +147,81 @@ static ssize_t pblk_sysfs_lines(struct pblk *pblk, char *page)
 	int cur_data, cur_log;
 	int free_line_cnt = 0, closed_line_cnt = 0;
 	int d_line_cnt = 0, l_line_cnt = 0;
+	int gc_full = 0, gc_high = 0, gc_mid = 0, gc_low = 0, gc_empty = 0;
+	int free = 0, bad = 0, cor = 0;
+	int msecs, ssecs, cur_sec, vsc, sec_in_line, map_weight, meta_weight;
 
-	spin_lock(&l_mg->lock);
+	spin_lock(&l_mg->free_lock);
 	cur_data = (l_mg->data_line) ? l_mg->data_line->id : -1;
 	cur_log = (l_mg->log_line) ? l_mg->log_line->id : -1;
 	nr_free_lines = l_mg->nr_free_lines;
 
 	list_for_each_entry(line, &l_mg->free_list, list)
-			free_line_cnt++;
-	list_for_each_entry(line, &l_mg->closed_list, list) {
+		free_line_cnt++;
+	spin_unlock(&l_mg->free_lock);
+
+	spin_lock(&l_mg->gc_lock);
+	list_for_each_entry(line, &l_mg->gc_full_list, list) {
 		if (line->type == PBLK_LINETYPE_DATA)
 			d_line_cnt++;
 		else if (line->type == PBLK_LINETYPE_LOG)
 			l_line_cnt++;
 		closed_line_cnt++;
+		gc_full++;
 	}
-	spin_unlock(&l_mg->lock);
+
+	list_for_each_entry(line, &l_mg->gc_high_list, list) {
+		if (line->type == PBLK_LINETYPE_DATA)
+			d_line_cnt++;
+		else if (line->type == PBLK_LINETYPE_LOG)
+			l_line_cnt++;
+		closed_line_cnt++;
+		gc_high++;
+	}
+
+	list_for_each_entry(line, &l_mg->gc_mid_list, list) {
+		if (line->type == PBLK_LINETYPE_DATA)
+			d_line_cnt++;
+		else if (line->type == PBLK_LINETYPE_LOG)
+			l_line_cnt++;
+		closed_line_cnt++;
+		gc_mid++;
+	}
+
+	list_for_each_entry(line, &l_mg->gc_low_list, list) {
+		if (line->type == PBLK_LINETYPE_DATA)
+			d_line_cnt++;
+		else if (line->type == PBLK_LINETYPE_LOG)
+			l_line_cnt++;
+		closed_line_cnt++;
+		gc_low++;
+	}
+
+	list_for_each_entry(line, &l_mg->gc_empty_list, list) {
+		if (line->type == PBLK_LINETYPE_DATA)
+			d_line_cnt++;
+		else if (line->type == PBLK_LINETYPE_LOG)
+			l_line_cnt++;
+		closed_line_cnt++;
+		gc_empty++;
+	}
+
+	list_for_each_entry(line, &l_mg->free_list, list)
+		free++;
+	list_for_each_entry(line, &l_mg->bad_list, list)
+		bad++;
+	list_for_each_entry(line, &l_mg->corrupt_list, list)
+		cor++;
+
+	cur_sec = l_mg->data_line->cur_sec;
+	msecs = l_mg->data_line->left_msecs;
+	ssecs = l_mg->data_line->left_ssecs;
+	vsc = l_mg->data_line->vsc;
+	sec_in_line = l_mg->data_line->sec_in_line;
+	meta_weight = bitmap_weight(&l_mg->meta_bitmap, PBLK_DATA_LINES);
+	map_weight = bitmap_weight(l_mg->data_line->map_bitmap,
+							lm->sec_per_line);
+	spin_unlock(&l_mg->gc_lock);
 
 	if (nr_free_lines != free_line_cnt)
 		pr_err("pblk: corrupted free line list\n");
@@ -203,165 +231,23 @@ static ssize_t pblk_sysfs_lines(struct pblk *pblk, char *page)
 		geo->nr_luns, lm->blk_per_line, lm->sec_per_line);
 
 	sz += sprintf(page + sz,
-		"lines:cur_d:%d,cur_l:%d - free:%d/%d, closed:%d(d:%d,l:%d)\n",
-		cur_data, cur_log, nr_free_lines,
-		l_mg->nr_lines, closed_line_cnt,
-		d_line_cnt, l_line_cnt);
+		"lines:d:%d,l:%d-f:%d(%d),b:%d,co:%d,c:%d(d:%d,l:%d)t:%d\n",
+		cur_data, cur_log,
+		free, nr_free_lines, bad, cor,
+		closed_line_cnt,
+		d_line_cnt, l_line_cnt,
+		l_mg->nr_lines);
+
+	sz += sprintf(page + sz,
+		"lines GC: full:%d, high:%d, mid:%d, low:%d, empty:%d\n",
+		gc_full, gc_high, gc_mid, gc_low, gc_empty);
+
+	sz += sprintf(page + sz,
+		"data (%d) cur:%d, left:%d/%d, vsc:%d, s:%d, map:%d/%d (%d)\n",
+		cur_data, cur_sec, msecs, ssecs, vsc, sec_in_line,
+		map_weight, lm->sec_per_line, meta_weight);
 
 	return sz;
-}
-
-#if 0
-static ssize_t pblk_sysfs_blocks(struct pblk *pblk, char *page)
-{
-	struct nvm_tgt_dev *dev = pblk->dev;
-	struct nvm_geo *geo = &dev->geo;
-	struct pblk_lun *rlun;
-	struct pblk_block *rblk;
-	unsigned int free, used_int, used_cnt, bad, total_lun;
-	int i;
-	ssize_t line, sz = 0;
-
-	pblk_for_each_lun(pblk, rlun, i) {
-		free = used_int = bad = 0;
-
-		spin_lock(&rlun->lock);
-		list_for_each_entry(rblk, &rlun->free_list, list)
-			free++;
-		list_for_each_entry(rblk, &rlun->bb_list, list)
-			bad++;
-
-		list_for_each_entry(rblk, &rlun->open_list, list)
-			used_int++;
-		list_for_each_entry(rblk, &rlun->closed_list, list)
-			used_int++;
-		list_for_each_entry(rblk, &rlun->g_bb_list, list)
-			used_int++;
-		spin_unlock(&rlun->lock);
-
-		used_cnt = geo->blks_per_lun - free - bad;
-		total_lun = used_int + free + bad;
-
-		if (used_cnt != used_int)
-			pr_err("pblk: used list corruption (i:%u,c:%u)\n",
-					used_int, used_cnt);
-
-		if (geo->blks_per_lun != total_lun)
-			pr_err("pblk: list corruption (t:%u,c:%u)\n",
-					geo->blks_per_lun, total_lun);
-
-		line = sprintf(page + sz,
-			"lun(%i %i):u=%u,f=%u,b=%u,t=%u,v=%u\n",
-			rlun->bppa.g.ch, rlun->bppa.g.lun,
-			used_int, free, bad, total_lun, rlun->nr_free_blocks);
-
-		sz += line;
-		if (sz + line > PAGE_SIZE) {
-			sz += sprintf(page + sz, "Cannot fit all LUNs\n");
-			break;
-		}
-	}
-
-	return sz;
-}
-
-static ssize_t pblk_sysfs_open_blks(struct pblk *pblk, char *page)
-{
-	struct pblk_lun *rlun;
-	struct pblk_block *rblk;
-	int i;
-	ssize_t sz = 0;
-
-	pblk_for_each_lun(pblk, rlun, i) {
-		sz += sprintf(page + sz, "LUN:%d\n", rlun->id);
-
-		spin_lock(&rlun->lock);
-		list_for_each_entry(rblk, &rlun->open_list, list) {
-			spin_lock(&rblk->lock);
-			sz += sprintf(page + sz,
-				"open:\tblk:%d\t%u\t%u\t%u\t%u\t%u\t%u\n",
-				rblk->id,
-				pblk->dev->geo.sec_per_blk,
-				pblk->nr_blk_dsecs,
-				bitmap_weight(rblk->sector_bitmap,
-						pblk->dev->geo.sec_per_blk),
-				bitmap_weight(rblk->sync_bitmap,
-						pblk->dev->geo.sec_per_blk),
-				bitmap_weight(rblk->invalid_bitmap,
-						pblk->dev->geo.sec_per_blk),
-				rblk->nr_invalid_secs);
-			spin_unlock(&rblk->lock);
-		}
-		spin_unlock(&rlun->lock);
-	}
-
-	return sz;
-}
-
-static ssize_t pblk_sysfs_bad_blks(struct pblk *pblk, char *page)
-{
-	struct pblk_lun *rlun;
-	struct pblk_block *rblk;
-	int i;
-	ssize_t line, sz = 0;
-
-	pblk_for_each_lun(pblk, rlun, i) {
-		int bad_blks = 0;
-
-		spin_lock(&rlun->lock);
-		list_for_each_entry(rblk, &rlun->g_bb_list, list)
-			bad_blks++;
-		spin_unlock(&rlun->lock);
-
-		line = sprintf(page + sz, "lun(%i %i):bad=%u\n",
-				rlun->bppa.g.ch,
-				rlun->bppa.g.lun,
-				bad_blks);
-
-		sz += line;
-		if (sz + line > PAGE_SIZE) {
-			sz += sprintf(page + sz, "Cannot fit all LUNs\n");
-			break;
-		}
-	}
-
-	return sz;
-}
-
-static ssize_t pblk_sysfs_gc_blks(struct pblk *pblk, char *page)
-{
-	struct pblk_lun *rlun;
-	struct pblk_block *rblk;
-	int i;
-	ssize_t line, sz = 0;
-
-	pblk_for_each_lun(pblk, rlun, i) {
-		int gc_blks = 0;
-
-		spin_lock(&rlun->lock);
-		list_for_each_entry(rblk, &rlun->prio_list, prio)
-			gc_blks++;
-		spin_unlock(&rlun->lock);
-
-		line = sprintf(page + sz, "lun(%i %i):gc=%u\n",
-				rlun->bppa.g.ch,
-				rlun->bppa.g.lun,
-				gc_blks);
-
-		sz += line;
-		if (sz + line > PAGE_SIZE) {
-			sz += sprintf(page + sz, "Cannot fit all LUNs\n");
-			break;
-		}
-	}
-
-	return sz;
-}
-#endif
-
-static ssize_t pblk_sysfs_write_buffer(struct pblk *pblk, char *page)
-{
-	return pblk_rb_sysfs(&pblk->rwb, page);
 }
 
 static ssize_t pblk_sysfs_lines_info(struct pblk *pblk, char *page)
@@ -388,10 +274,31 @@ static ssize_t pblk_sysfs_lines_info(struct pblk *pblk, char *page)
 	return sz;
 }
 
+#ifdef CONFIG_NVM_DEBUG
+static ssize_t pblk_sysfs_stats_debug(struct pblk *pblk, char *page)
+{
+	return sprintf(page, "%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u\t%u\n",
+			atomic_read(&pblk->inflight_writes),
+			atomic_read(&pblk->inflight_reads),
+			atomic_read(&pblk->req_writes),
+			atomic_read(&pblk->nr_flush),
+			atomic_read(&pblk->padded_writes),
+			atomic_read(&pblk->sub_writes),
+			atomic_read(&pblk->sync_writes),
+			atomic_read(&pblk->compl_writes),
+			atomic_read(&pblk->inflight_meta),
+			atomic_read(&pblk->compl_meta),
+			atomic_read(&pblk->recov_writes),
+			atomic_read(&pblk->recov_gc_writes),
+			atomic_read(&pblk->requeued_writes),
+			atomic_read(&pblk->sync_reads));
+}
+
 static ssize_t pblk_sysfs_write_buffer_vb(struct pblk *pblk, char *page)
 {
 	return pblk_rb_sysfs_vb(&pblk->rwb, page);
 }
+#endif
 
 enum {
 	PBLK_SEE_ONLY_LINE_META = 0,
@@ -474,7 +381,7 @@ static ssize_t pblk_sysfs_line_bb(struct pblk *pblk, const char *page,
 	if (c_len >= len)
 		return -EINVAL;
 
-	if (sscanf(page, "%d", &line_id) != 1)
+	if (kstrtouint(page, 0, &line_id))
 		return -EINVAL;
 
 	if (line_id > l_mg->nr_lines) {
@@ -545,14 +452,18 @@ static ssize_t pblk_sysfs_line_meta(struct pblk *pblk, const char *page,
 		}
 		spin_unlock(&line->lock);
 
-		spin_lock(&l_mg->lock);
+		spin_lock(&l_mg->free_lock);
 		if (l_mg->data_line)
 			cur_data = l_mg->data_line->id;
 		if (l_mg->log_line)
 			cur_log = l_mg->log_line->id;
-		spin_unlock(&l_mg->lock);
+		spin_unlock(&l_mg->free_lock);
 
-		if (line->id == cur_data){
+		pr_info("pblk: line: %d\t%d\t%d\t%d\t%d\t%d\n",
+				line->id, line->seq_nr, line->vsc, line->state,
+				line->type, line->gc_group);
+
+		if (line->id == cur_data) {
 			pr_info("pblk: cannot read metadata (active data line)\n");
 			goto free_emeta;
 		} else if (line->id == cur_log) {
@@ -565,22 +476,29 @@ static ssize_t pblk_sysfs_line_meta(struct pblk *pblk, const char *page,
 
 		__pblk_sysfs_line_meta(pblk, line, cmd);
 	} else {
-		spin_lock(&l_mg->lock);
-		list_for_each_entry(line, &l_mg->closed_list, list) {
-			spin_lock(&line->lock);
-			if (line->type != PBLK_LINESTATE_CLOSED) {
-				pr_info("pblk: line: %d corrupted\n", line->id);
+		struct list_head *group_list;
+		int i = 0;
+
+		spin_lock(&l_mg->gc_lock);
+		for (i = 0; i < PBLK_NR_GC_LISTS; i++) {
+			group_list = l_mg->gc_lists[i];
+			list_for_each_entry(line, group_list, list) {
+				spin_lock(&line->lock);
+				if (line->type != PBLK_LINESTATE_CLOSED) {
+					pr_info("pblk: line: %d corrupted\n",
+								line->id);
+					spin_unlock(&line->lock);
+					continue;
+				}
 				spin_unlock(&line->lock);
-				continue;
+
+				line->smeta = smeta;
+				line->emeta = emeta;
+
+				__pblk_sysfs_line_meta(pblk, line, cmd);
 			}
-			spin_unlock(&line->lock);
-
-			line->smeta = smeta;
-			line->emeta = emeta;
-
-			__pblk_sysfs_line_meta(pblk, line, cmd);
 		}
-		spin_unlock(&l_mg->lock);
+		spin_unlock(&l_mg->gc_lock);
 	}
 
 free_emeta:
@@ -590,58 +508,12 @@ free_smeta:
 out:
 	return len;
 }
-#endif
-
-#if 0
-static ssize_t pblk_sysfs_luns_active_store(struct pblk *pblk, const char *page,
-					    size_t len)
-{
-	size_t c_len;
-	int value;
-	int ret;
-
-	c_len = strcspn(page, "\n");
-	if (c_len >= len)
-		return -EINVAL;
-
-	if (kstrtouint(page, 0, &value))
-		return -EINVAL;
-
-	ret = pblk_map_set_active_luns(pblk, value);
-	if (ret)
-		return ret;
-
-	return len;
-}
-
-static ssize_t pblk_sysfs_consume_blocks_store(struct pblk *pblk,
-					       const char *page, size_t len)
-{
-	size_t c_len;
-	int value;
-	int ret;
-
-	c_len = strcspn(page, "\n");
-	if (c_len >= len)
-		return -EINVAL;
-
-	if (kstrtouint(page, 0, &value))
-		return -EINVAL;
-
-	ret = pblk_map_set_consume_blocks(pblk, value);
-	if (ret)
-		return ret;
-
-	return len;
-}
-#endif
 
 static ssize_t pblk_sysfs_rate_store(struct pblk *pblk, const char *page,
 				     size_t len)
 {
 	size_t c_len;
 	int value;
-	int ret;
 
 	c_len = strcspn(page, "\n");
 	if (c_len >= len)
@@ -650,30 +522,7 @@ static ssize_t pblk_sysfs_rate_store(struct pblk *pblk, const char *page,
 	if (kstrtouint(page, 0, &value))
 		return -EINVAL;
 
-	ret = pblk_rl_sysfs_rate_store(&pblk->rl, value);
-	if (ret)
-		return ret;
-
-	return len;
-}
-
-static ssize_t pblk_sysfs_gc_state_store(struct pblk *pblk,
-					 const char *page, size_t len)
-{
-	size_t c_len;
-	int value;
-	int ret;
-
-	c_len = strcspn(page, "\n");
-	if (c_len >= len)
-		return -EINVAL;
-
-	if (kstrtouint(page, 0, &value))
-		return -EINVAL;
-
-	ret = pblk_gc_sysfs_enable(pblk, value);
-	if (ret)
-		return ret;
+	pblk_rl_set_gc_rsc(&pblk->rl, value);
 
 	return len;
 }
@@ -682,19 +531,19 @@ static ssize_t pblk_sysfs_gc_force(struct pblk *pblk, const char *page,
 				   size_t len)
 {
 	size_t c_len;
-	int value;
-	int ret;
+	int force;
 
 	c_len = strcspn(page, "\n");
 	if (c_len >= len)
 		return -EINVAL;
 
-	if (kstrtouint(page, 0, &value))
+	if (kstrtouint(page, 0, &force))
 		return -EINVAL;
 
-	ret = pblk_gc_sysfs_force(pblk, value);
-	if (ret)
-		return ret;
+	if (force < 0 || force > 1)
+		return -EINVAL;
+
+	pblk_gc_sysfs_force(pblk, force);
 
 	return len;
 }
@@ -703,10 +552,20 @@ static ssize_t pblk_sysfs_gc_force(struct pblk *pblk, const char *page,
 static ssize_t pblk_sysfs_l2p_map_print(struct pblk *pblk, const char *page,
 					ssize_t len)
 {
-	size_t c_len;
-	sector_t lba_init, lba_end;
+	struct nvm_tgt_dev *dev = pblk->dev;
+	struct nvm_geo *geo = &dev->geo;
+	struct bio *bio;
 	struct ppa_addr ppa;
+	struct nvm_rq rqd;
+	struct pblk_sec_meta *meta_list;
+	void *data;
+	dma_addr_t dma_meta_list;
+	sector_t lba_init, lba_end;
 	sector_t i;
+	size_t c_len;
+	u64 lba;
+	int ret;
+	DECLARE_COMPLETION_ONSTACK(wait);
 
 	c_len = strcspn(page, "\n");
 	if (c_len >= len)
@@ -716,31 +575,75 @@ static ssize_t pblk_sysfs_l2p_map_print(struct pblk *pblk, const char *page,
 					(unsigned long long *)&lba_end) != 2)
 		return -EINVAL;
 
+	meta_list = nvm_dev_dma_alloc(dev->parent, GFP_KERNEL, &dma_meta_list);
+	if (!meta_list)
+		return -ENOMEM;
+
+	data = kcalloc(pblk->max_write_pgs, geo->sec_size, GFP_KERNEL);
+	if (!data)
+		goto free_meta_list;
+
 	for (i = lba_init; i < lba_end; i++) {
 		ppa = pblk_get_lba_map(pblk, i);
 
 		if (ppa_empty(ppa)) {
-			pr_info("pblk: lba:%lu - ppa: EMPTY ADDRESS\n", i);
-		} else {
-			if (ppa.c.is_cached) {
-				pr_debug("pblk: lba:%lu - ppa: cacheline:%llu\n",
-					i,
-					(u64)ppa.c.line);
-
+			pr_info("pblk: lba:%lu - ppa: empty\n", i);
+			continue;
+		} else if (ppa.c.is_cached) {
+			pr_info("pblk: lba:%lu - ppa: cacheline:%llu\n",
+				i, (u64)ppa.c.line);
 				continue;
-			}
-
-			pr_info("pblk: lba:%lu - ppa: %llx: ch:%d,lun:%d,blk:%d,pg:%d,pl:%d,sec:%d\n",
-				i,
-				ppa.ppa,
-				ppa.g.ch,
-				ppa.g.lun,
-				ppa.g.blk,
-				ppa.g.pg,
-				ppa.g.pl,
-				ppa.g.sec);
 		}
+
+		/* Default: ppa in media */
+		bio = bio_map_kern(dev->q, data, geo->sec_size, GFP_KERNEL);
+		if (IS_ERR(bio))
+			goto free_data;
+
+		memset(&rqd, 0, sizeof(struct nvm_rq));
+
+		bio->bi_iter.bi_sector = 0; /* artificial bio */
+		bio_set_op_attrs(bio, REQ_OP_READ, 0);
+		bio->bi_private = &wait;
+		bio->bi_end_io = pblk_end_bio_sync;
+
+		rqd.bio = bio;
+		rqd.opcode = NVM_OP_PREAD;
+		rqd.flags = pblk_set_read_mode(pblk);
+		rqd.meta_list = meta_list;
+		rqd.nr_ppas = 1;
+		rqd.ppa_addr = ppa;
+		rqd.dma_meta_list = dma_meta_list;
+		rqd.end_io = NULL;
+
+		ret = pblk_submit_io(pblk, &rqd);
+		if (ret) {
+			bio_put(bio);
+			goto free_data;
+		}
+		wait_for_completion_io(&wait);
+		bio_put(bio);
+
+		if (rqd.error)
+			lba = ADDR_EMPTY;
+		else
+			lba = meta_list[0].lba;
+
+		pr_info("pblk: lba:%lu(oob:%llu) - ppa: %llx: ch:%d,lun:%d,blk:%d,pg:%d,pl:%d,sec:%d\n",
+			i, lba,
+			ppa.ppa,
+			ppa.g.ch,
+			ppa.g.lun,
+			ppa.g.blk,
+			ppa.g.pg,
+			ppa.g.pl,
+			ppa.g.sec);
 	}
+
+free_data:
+	kfree(data);
+free_meta_list:
+	nvm_dev_dma_free(dev->parent, meta_list, dma_meta_list);
 
 	return len;
 }
@@ -821,14 +724,14 @@ static ssize_t pblk_sysfs_l2p_map_sanity(struct pblk *pblk, const char *page,
 	rqd->flags = pblk_set_read_mode(pblk);
 	rqd->end_io = NULL;
 
-	if (nvm_set_rqd_ppalist(dev->parent, rqd, &ppa, 1, 0)) {
+	if (nvm_set_rqd_ppalist(dev, rqd, &ppa, 1, 0)) {
 		pr_err("pblk: could not set rqd ppa list\n");
 		goto out;
 	}
 
 	if (pblk_submit_io(pblk, rqd)) {
 		pr_err("pblk: I/O submission failed\n");
-		nvm_free_rqd_ppalist(dev->parent, rqd);
+		nvm_free_rqd_ppalist(dev, rqd);
 		goto out;
 	}
 	wait_for_completion_io(&wait);
@@ -847,202 +750,104 @@ out:
 }
 #endif
 
-/*
- * Cleanup does not initialize a new line, this must be done explicitly through
- * lines_init after this function is called.
- */
-static ssize_t pblk_sysfs_cleanup(struct pblk *pblk, const char *page,
-				  ssize_t len)
-{
-	struct pblk_line_mgmt *l_mg = &pblk->l_mg;
-	struct pblk_line *line, *tline;
-	size_t c_len;
-	int value;
-	sector_t i;
-	LIST_HEAD(cleanup_list);
-
-	c_len = strcspn(page, "\n");
-	if (c_len >= len)
-		return -EINVAL;
-
-	if (kstrtoint(page, 0, &value))
-		return -EINVAL;
-	if (value != 1)
-		return -EINVAL;
-
-	/* Cleanup L2P table */
-	spin_lock(&pblk->trans_lock);
-	for (i = 0; i < pblk->rl.nr_secs; i++)
-		ppa_set_empty(&pblk->trans_map[i]);
-	spin_unlock(&pblk->trans_lock);
-
-	spin_lock(&l_mg->lock);
-	list_for_each_entry_safe(line, tline, &l_mg->closed_list, list) {
-		spin_lock(&line->lock);
-		line->state = PBLK_LINESTATE_GC;
-		spin_unlock(&line->lock);
-		list_move_tail(&line->list, &cleanup_list);
-	}
-	if (l_mg->log_line) {
-		spin_lock(&l_mg->log_line->lock);
-		l_mg->log_line->state = PBLK_LINESTATE_GC;
-		spin_unlock(&l_mg->log_line->lock);
-		list_add_tail(&l_mg->log_line->list, &cleanup_list);
-	}
-	if (l_mg->data_line) {
-		spin_lock(&l_mg->data_line->lock);
-		l_mg->data_line->state = PBLK_LINESTATE_GC;
-		spin_unlock(&l_mg->data_line->lock);
-		list_add_tail(&l_mg->data_line->list, &cleanup_list);
-	}
-	l_mg->log_line = NULL;
-	l_mg->data_line = NULL;
-	spin_unlock(&l_mg->lock);
-
-	list_for_each_entry_safe(line, tline, &cleanup_list, list) {
-		pblk_line_erase(pblk, line);
-		list_del(&line->list);
-		kref_put(&line->ref, pblk_line_put);
-	}
-
-	return len;
-}
-
-static struct attribute sys_luns_active = {
-	.name = "luns_active",
-	.mode = S_IRUGO | S_IWUSR,
-};
-
-static struct attribute sys_consume_blocks = {
-	.name = "consume_blocks",
-	.mode = S_IRUGO | S_IWUSR,
-};
-
 static struct attribute sys_write_luns = {
 	.name = "write_luns",
-	.mode = S_IRUGO,
+	.mode = 0444,
 };
 
 static struct attribute sys_rate_limiter_attr = {
 	.name = "rate_limiter",
-	.mode = S_IRUGO,
+	.mode = 0444,
 };
 
 static struct attribute sys_gc_state = {
 	.name = "gc_state",
-	.mode = S_IRUGO | S_IWUSR,
-};
-
-static struct attribute sys_gc_force = {
-	.name = "gc_force",
-	.mode = S_IWUSR,
+	.mode = 0444,
 };
 
 static struct attribute sys_errors_attr = {
 	.name = "errors",
-	.mode = S_IRUGO,
+	.mode = 0444,
 };
 
-static struct attribute sys_cleanup = {
-	.name = "cleanup",
-	.mode = S_IWUSR,
+static struct attribute sys_rb_attr = {
+	.name = "write_buffer",
+	.mode = 0444,
+};
+
+static struct attribute sys_stats_ppaf_attr = {
+	.name = "ppa_format",
+	.mode = 0444,
+};
+
+static struct attribute sys_lines_attr = {
+	.name = "lines",
+	.mode = 0444,
+};
+
+static struct attribute sys_lines_info_attr = {
+	.name = "lines_info",
+	.mode = 0444,
+};
+
+static struct attribute sys_gc_force = {
+	.name = "gc_force",
+	.mode = 0200,
+};
+
+static struct attribute sys_gc_rl_max = {
+	.name = "gc_rl_max",
+	.mode = 0200,
+};
+
+static struct attribute sys_line_meta_attr = {
+	.name = "line_metadata",
+	.mode = 0644,
+};
+
+static struct attribute sys_line_bb_attr = {
+	.name = "line_bb",
+	.mode = 0644,
 };
 
 #ifdef CONFIG_NVM_DEBUG
 static struct attribute sys_stats_debug_attr = {
 	.name = "stats",
-	.mode = S_IRUGO,
-};
-
-static struct attribute sys_stats_ppaf_attr = {
-	.name = "ppa_format",
-	.mode = S_IRUGO,
-};
-
-static struct attribute sys_lines_attr = {
-	.name = "lines",
-	.mode = S_IRUGO,
-};
-
-static struct attribute sys_blocks_attr = {
-	.name = "blocks",
-	.mode = S_IRUGO,
-};
-
-static struct attribute sys_open_blocks_attr = {
-	.name = "open_blks",
-	.mode = S_IRUGO,
-};
-
-static struct attribute sys_bad_blocks_attr = {
-	.name = "bad_blks",
-	.mode = S_IRUGO,
-};
-
-static struct attribute sys_gc_blocks_attr = {
-	.name = "gc_blks",
-	.mode = S_IRUGO,
-};
-
-static struct attribute sys_rb_attr = {
-	.name = "write_buffer",
-	.mode = S_IRUGO,
+	.mode = 0444,
 };
 
 static struct attribute sys_rb_vb_attr = {
 	.name = "write_buffer_vb",
-	.mode = S_IRUGO,
-};
-
-static struct attribute sys_lines_info_attr = {
-	.name = "lines_info",
-	.mode = S_IRUGO,
-};
-
-static struct attribute sys_line_meta_attr = {
-	.name = "line_metadata",
-	.mode = S_IRUGO | S_IWUSR,
-};
-
-static struct attribute sys_line_bb_attr = {
-	.name = "line_bb",
-	.mode = S_IRUGO | S_IWUSR,
+	.mode = 0444,
 };
 
 static struct attribute sys_l2p_map_attr = {
 	.name = "l2p_map",
-	.mode = S_IRUGO | S_IWUSR,
+	.mode = 0644,
 };
 
 static struct attribute sys_l2p_sanity_attr = {
 	.name = "l2p_sanity",
-	.mode = S_IRUGO | S_IWUSR,
+	.mode = 0644,
 };
-
 #endif
 
 static struct attribute *pblk_attrs[] = {
-	&sys_luns_active,
-	&sys_consume_blocks,
 	&sys_write_luns,
 	&sys_rate_limiter_attr,
 	&sys_errors_attr,
 	&sys_gc_state,
 	&sys_gc_force,
-	&sys_cleanup,
-#ifdef CONFIG_NVM_DEBUG
-	&sys_stats_debug_attr,
+	&sys_gc_rl_max,
+	&sys_rb_attr,
 	&sys_stats_ppaf_attr,
 	&sys_lines_attr,
-	&sys_blocks_attr,
-	&sys_open_blocks_attr,
-	&sys_bad_blocks_attr,
-	&sys_gc_blocks_attr,
-	&sys_rb_attr,
-	&sys_rb_vb_attr,
 	&sys_lines_info_attr,
 	&sys_line_meta_attr,
 	&sys_line_bb_attr,
+#ifdef CONFIG_NVM_DEBUG
+	&sys_stats_debug_attr,
+	&sys_rb_vb_attr,
 	&sys_l2p_map_attr,
 	&sys_l2p_sanity_attr,
 #endif
@@ -1054,39 +859,27 @@ static ssize_t pblk_sysfs_show(struct kobject *kobj, struct attribute *attr,
 {
 	struct pblk *pblk = container_of(kobj, struct pblk, kobj);
 
-	/* if (strcmp(attr->name, "luns_active") == 0) */
-		/* return pblk_sysfs_luns_active_show(pblk, buf); */
-	/* else if (strcmp(attr->name, "write_luns") == 0) */
-		/* return pblk_sysfs_luns_show(pblk, buf); */
-	/* else if (strcmp(attr->name, "consume_blocks") == 0) */
-		/* return pblk_sysfs_consume_blocks_show(pblk, buf); */
 	if (strcmp(attr->name, "rate_limiter") == 0)
 		return pblk_sysfs_rate_limiter(pblk, buf);
+	else if (strcmp(attr->name, "write_luns") == 0)
+		return pblk_sysfs_luns_show(pblk, buf);
 	else if (strcmp(attr->name, "gc_state") == 0)
 		return pblk_sysfs_gc_state_show(pblk, buf);
 	else if (strcmp(attr->name, "errors") == 0)
 		return pblk_sysfs_stats(pblk, buf);
+	else if (strcmp(attr->name, "write_buffer") == 0)
+		return pblk_sysfs_write_buffer(pblk, buf);
+	else if (strcmp(attr->name, "ppa_format") == 0)
+		return pblk_sysfs_ppaf(pblk, buf);
+	else if (strcmp(attr->name, "lines") == 0)
+		return pblk_sysfs_lines(pblk, buf);
+	else if (strcmp(attr->name, "lines_info") == 0)
+		return pblk_sysfs_lines_info(pblk, buf);
 #ifdef CONFIG_NVM_DEBUG
 	else if (strcmp(attr->name, "stats") == 0)
 		return pblk_sysfs_stats_debug(pblk, buf);
-	else if (strcmp(attr->name, "ppa_format") == 0)
-		return pblk_sysfs_ppaf_debug(pblk, buf);
-	else if (strcmp(attr->name, "lines") == 0)
-		return pblk_sysfs_lines(pblk, buf);
-	/* else if (strcmp(attr->name, "blocks") == 0) */
-		/* return pblk_sysfs_blocks(pblk, buf); */
-	/* else if (strcmp(attr->name, "open_blks") == 0) */
-		/* return pblk_sysfs_open_blks(pblk, buf); */
-	/* else if (strcmp(attr->name, "bad_blks") == 0) */
-		/* return pblk_sysfs_bad_blks(pblk, buf); */
-	/* else if (strcmp(attr->name, "gc_blks") == 0) */
-		/* return pblk_sysfs_gc_blks(pblk, buf); */
-	else if (strcmp(attr->name, "write_buffer") == 0)
-		return pblk_sysfs_write_buffer(pblk, buf);
 	else if (strcmp(attr->name, "write_buffer_vb") == 0)
 		return pblk_sysfs_write_buffer_vb(pblk, buf);
-	else if (strcmp(attr->name, "lines_info") == 0)
-		return pblk_sysfs_lines_info(pblk, buf);
 #endif
 	return 0;
 }
@@ -1096,27 +889,19 @@ static ssize_t pblk_sysfs_store(struct kobject *kobj, struct attribute *attr,
 {
 	struct pblk *pblk = container_of(kobj, struct pblk, kobj);
 
-	/* if (strcmp(attr->name, "luns_active") == 0) */
-		/* return pblk_sysfs_luns_active_store(pblk, buf, len); */
-	/* else if (strcmp(attr->name, "consume_blocks") == 0) */
-		/* return pblk_sysfs_consume_blocks_store(pblk, buf, len); */
-	if (strcmp(attr->name, "rate_limiter") == 0)
+	if (strcmp(attr->name, "gc_rl_max") == 0)
 		return pblk_sysfs_rate_store(pblk, buf, len);
-	else if (strcmp(attr->name, "gc_state") == 0)
-		return pblk_sysfs_gc_state_store(pblk, buf, len);
 	else if (strcmp(attr->name, "gc_force") == 0)
 		return pblk_sysfs_gc_force(pblk, buf, len);
-	else if (strcmp(attr->name, "cleanup") == 0)
-		return pblk_sysfs_cleanup(pblk, buf, len);
+	else if (strcmp(attr->name, "line_metadata") == 0)
+		return pblk_sysfs_line_meta(pblk, buf, len);
+	else if (strcmp(attr->name, "line_bb") == 0)
+		return pblk_sysfs_line_bb(pblk, buf, len);
 #ifdef CONFIG_NVM_DEBUG
 	else if (strcmp(attr->name, "l2p_map") == 0)
 		return pblk_sysfs_l2p_map_print(pblk, buf, len);
 	else if (strcmp(attr->name, "l2p_sanity") == 0)
 		return pblk_sysfs_l2p_map_sanity(pblk, buf, len);
-	else if (strcmp(attr->name, "line_metadata") == 0)
-		return pblk_sysfs_line_meta(pblk, buf, len);
-	else if (strcmp(attr->name, "line_bb") == 0)
-		return pblk_sysfs_line_bb(pblk, buf, len);
 #endif
 
 	return 0;
@@ -1140,9 +925,9 @@ int pblk_sysfs_init(struct gendisk *tdisk)
 
 	ret = kobject_init_and_add(&pblk->kobj, &pblk_ktype,
 					kobject_get(&parent_dev->kobj),
-					"%s", "lightnvm");
+					"%s", "pblk");
 	if (ret) {
-		pr_err("pblk: could not register %s/lightnvm - name in use\n",
+		pr_err("pblk: could not register %s/pblk\n",
 						tdisk->disk_name);
 		return ret;
 	}
@@ -1151,9 +936,9 @@ int pblk_sysfs_init(struct gendisk *tdisk)
 	return 0;
 }
 
-void pblk_sysfs_exit(void *tt)
+void pblk_sysfs_exit(struct gendisk *tdisk)
 {
-	struct pblk *pblk = tt;
+	struct pblk *pblk = tdisk->private_data;
 
 	kobject_uevent(&pblk->kobj, KOBJ_REMOVE);
 	kobject_del(&pblk->kobj);

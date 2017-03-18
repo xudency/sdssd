@@ -122,6 +122,22 @@ struct nvm_ioctl_dev_factory {
 	__u32 flags;
 };
 
+/* one LightNVM Target info */
+struct nvm_tgt_info {
+	char tgtname[NVM_TTYPE_NAME_MAX];
+	char tgttype[NVM_TTYPE_NAME_MAX];
+
+	struct nvm_ioctl_create_conf conf;
+};
+
+struct nvm_ioctl_get_targets {
+	char nvm_dev[DISK_NAME_LEN];		/* In */
+	__u32 flags;				/* In */
+
+	__u32 nr_tgts;				/* Out */
+	struct nvm_tgt_info tgt_info[31];	/* Out */
+};
+
 struct nvm_user_vio {
 	__u8 opcode;
 	__u8 flags;
@@ -176,11 +192,22 @@ enum {
 	/* Factory reset device */
 	NVM_DEV_FACTORY_CMD,
 
+	/* Get all tgts create base specified LightNVM device */
+	NVM_GET_TARGET_CMD,
+
 	/* Vector user I/O */
 	NVM_DEV_VIO_ADMIN_CMD = 0x41,
 	NVM_DEV_VIO_CMD = 0x42,
 	NVM_DEV_VIO_USER_CMD = 0x43,
+
+	/* CNEX misc cmd */
+	NVM_CNEX_MISC_CMD = 0x44,
 };
+
+typedef enum {
+	NVM_CNEX_MISC_RD_REGISTER	= 0,		
+	NVM_CNEX_MISC_WR_REGISTER	= 1,
+} NVM_CNEX_MISC_CMDTYPE;
 
 #define NVM_IOCTL 'L' /* 0x4c */
 
@@ -196,12 +223,17 @@ enum {
 						struct nvm_ioctl_dev_init)
 #define NVM_DEV_FACTORY		_IOW(NVM_IOCTL, NVM_DEV_FACTORY_CMD, \
 						struct nvm_ioctl_dev_factory)
+#define NVM_GET_TARGETS		_IOWR(NVM_IOCTL, NVM_GET_TARGET_CMD, \
+						struct nvm_ioctl_get_targets)
 
 #define NVME_NVM_IOCTL_IO_VIO		_IOWR(NVM_IOCTL, NVM_DEV_VIO_USER_CMD, \
 						struct nvm_passthru_vio)
 #define NVME_NVM_IOCTL_ADMIN_VIO	_IOWR(NVM_IOCTL, NVM_DEV_VIO_ADMIN_CMD,\
 						struct nvm_passthru_vio)
 #define NVME_NVM_IOCTL_SUBMIT_VIO	_IOWR(NVM_IOCTL, NVM_DEV_VIO_CMD,\
+						struct nvm_user_vio)
+
+#define NVME_NVM_IOCTL_CNEX_MISC	_IOWR(NVM_IOCTL, NVM_CNEX_MISC_CMD,\
 						struct nvm_user_vio)
 
 #define NVM_VERSION_MAJOR	1

@@ -17,63 +17,46 @@
 
 #include "pblk.h"
 
-#if 0
-int pblk_replace_blk(struct pblk *pblk, struct pblk_block *rblk,
-		     struct pblk_lun *rlun, int lun_pos)
-{
-	rblk = pblk_get_blk(pblk, rlun);
-	if (!rblk) {
-		pr_debug("pblk: could not get new block\n");
-		return 0;
-	}
-
-	pblk_set_lun_cur(rlun, rblk);
-	return pblk_map_replace_lun(pblk, lun_pos);
-}
-#endif
-
-static void pblk_sync_buffer(struct pblk *pblk, struct pblk_line *line,
-			     u64 paddr, int flags)
+static void pblk_sync_line(struct pblk *pblk, struct pblk_line *line)
 {
 #ifdef CONFIG_NVM_DEBUG
 	atomic_inc(&pblk->sync_writes);
 #endif
 
 	/* Counter protected by rb sync lock */
-	if (--line->left_ssecs == 0)
+	line->left_ssecs--;
+	if (!line->left_ssecs)
 		pblk_line_run_ws(pblk, line, pblk_line_close);
 }
 
 static unsigned long pblk_end_w_bio(struct pblk *pblk, struct nvm_rq *rqd,
-				    struct pblk_compl_ctx *c_ctx)
+				    struct pblk_c_ctx *c_ctx)
 {
 	struct nvm_tgt_dev *dev = pblk->dev;
 	struct bio *original_bio;
 	unsigned long ret;
-	int nr_entries = c_ctx->nr_valid;
 	int i;
 
-	for (i = 0; i < nr_entries; i++) {
-		struct ppa_addr p = rqd->ppa_list[i];
-		struct pblk_line *line;
+	for (i = 0; i < c_ctx->nr_valid; i++) {
 		struct pblk_w_ctx *w_ctx;
+		struct ppa_addr p;
+		struct pblk_line *line;
 
 		w_ctx = pblk_rb_w_ctx(&pblk->rwb, c_ctx->sentry + i);
-		line = &pblk->lines[pblk_ppa_to_line(p)];
 
-		pblk_sync_buffer(pblk, line, w_ctx->paddr, w_ctx->flags);
+		p = rqd->ppa_list[i];
+		line = &pblk->lines[pblk_ppa_to_line(p)];
+		pblk_sync_line(pblk, line);
+
 		while ((original_bio = bio_list_pop(&w_ctx->bios)))
 			bio_endio(original_bio);
 	}
 
 #ifdef CONFIG_NVM_DEBUG
-	atomic_add(nr_entries, &pblk->compl_writes);
+	atomic_add(c_ctx->nr_valid, &pblk->compl_writes);
 #endif
 
-	ret = pblk_rb_sync_advance(&pblk->rwb, nr_entries);
-
-	if (nr_entries > 1)
-		nvm_dev_dma_free(dev->parent, rqd->ppa_list, rqd->dma_ppa_list);
+	ret = pblk_rb_sync_advance(&pblk->rwb, c_ctx->nr_valid);
 
 	if (rqd->meta_list)
 		nvm_dev_dma_free(dev->parent, rqd->meta_list,
@@ -87,16 +70,16 @@ static unsigned long pblk_end_w_bio(struct pblk *pblk, struct nvm_rq *rqd,
 
 static unsigned long pblk_end_queued_w_bio(struct pblk *pblk,
 					   struct nvm_rq *rqd,
-					   struct pblk_compl_ctx *c_ctx)
+					   struct pblk_c_ctx *c_ctx)
 {
 	list_del(&c_ctx->list);
 	return pblk_end_w_bio(pblk, rqd, c_ctx);
 }
 
-static void pblk_compl_queue(struct pblk *pblk, struct nvm_rq *rqd,
-			     struct pblk_compl_ctx *c_ctx)
+static void pblk_complete_write(struct pblk *pblk, struct nvm_rq *rqd,
+				struct pblk_c_ctx *c_ctx)
 {
-	struct pblk_compl_ctx *c, *r;
+	struct pblk_c_ctx *c, *r;
 	unsigned long flags;
 	unsigned long pos;
 
@@ -119,30 +102,88 @@ retry:
 			}
 		}
 	} else {
-		BUG_ON(nvm_rq_from_c_ctx(c_ctx) != rqd);
+		WARN_ON(nvm_rq_from_c_ctx(c_ctx) != rqd);
 		list_add_tail(&c_ctx->list, &pblk->compl_list);
 	}
-
 	pblk_rb_sync_end(&pblk->rwb, &flags);
 }
 
+/* When a write fails, we are not sure whether the block has grown bad or a page
+ * range is more susceptible to write errors. If a high number of pages fail, we
+ * assume that the block is bad and we mark it accordingly. In all cases, we
+ * remap and resubmit the failed entries as fast as possible; if a flush is
+ * waiting on a completion, the whole stack would stall otherwise.
+ */
+static void pblk_end_w_fail(struct pblk *pblk, struct nvm_rq *rqd)
+{
+	void *comp_bits = &rqd->ppa_status;
+	struct pblk_c_ctx *c_ctx = nvm_rq_to_pdu(rqd);
+	struct pblk_rec_ctx *recovery;
+	struct ppa_addr *ppa_list = rqd->ppa_list;
+	int nr_ppas = rqd->nr_ppas;
+	unsigned int c_entries;
+	int bit, ret;
 
-void pblk_end_io_write(struct nvm_rq *rqd)
+	if (unlikely(nr_ppas == 1))
+		ppa_list = &rqd->ppa_addr;
+
+	recovery = mempool_alloc(pblk->rec_pool, GFP_ATOMIC);
+	if (!recovery) {
+		pr_err("pblk: could not allocate recovery context\n");
+		return;
+	}
+	INIT_LIST_HEAD(&recovery->failed);
+
+	bit = -1;
+	while ((bit = find_next_bit(comp_bits, nr_ppas, bit + 1)) < nr_ppas) {
+		struct pblk_rb_entry *entry;
+		struct ppa_addr ppa;
+
+		/* Logic error */
+		BUG_ON(bit > c_ctx->nr_valid);
+
+		ppa = ppa_list[bit];
+		entry = pblk_rb_sync_scan_entry(&pblk->rwb, &ppa);
+		if (!entry) {
+			pr_err("pblk: could not scan entry on write failure\n");
+			goto out;
+		}
+
+		/* The list is filled first and emptied afterwards. No need for
+		 * protecting it with a lock
+		 */
+		list_add_tail(&entry->index, &recovery->failed);
+	}
+
+	c_entries = find_first_bit(comp_bits, nr_ppas);
+	ret = pblk_recov_setup_rq(pblk, c_ctx, recovery, comp_bits, c_entries);
+	if (ret) {
+		pr_err("pblk: could not recover from write failure\n");
+		goto out;
+	}
+
+	INIT_WORK(&recovery->ws_rec, pblk_submit_rec);
+	queue_work(pblk->kw_wq, &recovery->ws_rec);
+
+out:
+	pblk_complete_write(pblk, rqd, c_ctx);
+}
+
+static void pblk_end_io_write(struct nvm_rq *rqd)
 {
 	struct pblk *pblk = rqd->private;
-	struct pblk_compl_ctx *c_ctx = nvm_rq_to_pdu(rqd);
+	struct pblk_c_ctx *c_ctx = nvm_rq_to_pdu(rqd);
 
 	if (rqd->error) {
 		pblk_log_write_err(pblk, rqd);
-		/* BUG_ON(1); */
-		/* return pblk_end_w_fail(pblk, rqd); */
+		return pblk_end_w_fail(pblk, rqd);
 	}
 #ifdef CONFIG_NVM_DEBUG
 	else
 		BUG_ON(rqd->bio->bi_error);
 #endif
 
-	pblk_compl_queue(pblk, rqd, c_ctx);
+	pblk_complete_write(pblk, rqd, c_ctx);
 }
 
 static int pblk_alloc_w_rq(struct pblk *pblk, struct nvm_rq *rqd,
@@ -165,27 +206,21 @@ static int pblk_alloc_w_rq(struct pblk *pblk, struct nvm_rq *rqd,
 	if (unlikely(nr_secs == 1))
 		return 0;
 
-	/* TODO: Reuse same dma region for ppa_list and metadata */
-	rqd->ppa_list = nvm_dev_dma_alloc(dev->parent, GFP_KERNEL,
-							&rqd->dma_ppa_list);
-	if (!rqd->ppa_list) {
-		nvm_dev_dma_free(dev->parent, rqd->meta_list,
-							rqd->dma_meta_list);
-		return -ENOMEM;
-	}
+	rqd->ppa_list = rqd->meta_list + pblk_dma_meta_size;
+	rqd->dma_ppa_list = rqd->dma_meta_list + pblk_dma_meta_size;
 
 	return 0;
 }
 
 static int pblk_setup_w_rq(struct pblk *pblk, struct nvm_rq *rqd,
-			   struct pblk_compl_ctx *c_ctx,
-			   struct ppa_addr *erase_ppa)
+			   struct pblk_c_ctx *c_ctx)
 {
 	struct pblk_line_meta *lm = &pblk->lm;
 	struct pblk_line *e_line = pblk_line_get_data_next(pblk);
-	unsigned int valid_secs = c_ctx->nr_valid;
-	unsigned int padded_secs = c_ctx->nr_padded;
-	unsigned int nr_secs = valid_secs + padded_secs;
+	struct ppa_addr erase_ppa;
+	unsigned int valid = c_ctx->nr_valid;
+	unsigned int padded = c_ctx->nr_padded;
+	unsigned int nr_secs = valid + padded;
 	unsigned long *lun_bitmap;
 	int ret = 0;
 
@@ -202,38 +237,64 @@ static int pblk_setup_w_rq(struct pblk *pblk, struct nvm_rq *rqd,
 		goto out;
 	}
 
-	ppa_set_empty(erase_ppa);
-	if (likely(!e_line->left_eblks)) {
-		ret = pblk_map_rq(pblk, rqd, c_ctx->sentry, lun_bitmap,
-								valid_secs, 0);
-		if (ret)
-			goto out;
+	ppa_set_empty(&erase_ppa);
+	if (likely(!e_line || !e_line->left_eblks)) {
+		pblk_map_rq(pblk, rqd, c_ctx->sentry, lun_bitmap, valid, 0);
 	} else {
 		ret = pblk_map_erase_rq(pblk, rqd, c_ctx->sentry, lun_bitmap,
-							valid_secs, erase_ppa);
+							valid, &erase_ppa);
 		if (ret)
 			goto out;
 	}
 
 out:
+	if (unlikely(!ppa_empty(erase_ppa))) {
+		if (pblk_blk_erase_async(pblk, erase_ppa)) {
+			struct nvm_tgt_dev *dev = pblk->dev;
+			struct nvm_geo *geo = &dev->geo;
+			int bit;
+
+			e_line->left_eblks++;
+			bit = erase_ppa.g.lun * geo->nr_chnls + erase_ppa.g.ch;
+			WARN_ON(!test_and_clear_bit(bit, e_line->erase_bitmap));
+			pr_err("pblk: could not erase preparation line\n");
+		}
+	}
+
+	return ret;
+}
+
+int pblk_setup_w_rec_rq(struct pblk *pblk, struct nvm_rq *rqd,
+			struct pblk_c_ctx *c_ctx)
+{
+	struct pblk_line_meta *lm = &pblk->lm;
+	unsigned long *lun_bitmap;
+	int ret;
+
+	lun_bitmap = kzalloc(lm->lun_bitmap_len, GFP_KERNEL);
+	if (!lun_bitmap)
+		return -ENOMEM;
+
+	c_ctx->lun_bitmap = lun_bitmap;
+
+	ret = pblk_alloc_w_rq(pblk, rqd, rqd->nr_ppas);
+	if (ret)
+		return ret;
+
+	pblk_map_rq(pblk, rqd, c_ctx->sentry, lun_bitmap, c_ctx->nr_valid, 0);
+
+	rqd->ppa_status = (u64)0;
+	rqd->flags = pblk_set_progr_mode(pblk, WRITE);
+
 	return ret;
 }
 
 static int pblk_calc_secs_to_sync(struct pblk *pblk, unsigned long secs_avail,
 				  unsigned long secs_to_flush)
 {
-	int secs_in_line;
 	int secs_to_sync;
 
 	secs_to_sync = pblk_calc_secs(pblk, secs_avail, secs_to_flush);
-
-	/* Since the write thread is a pipeline, we know where in the line we
-	 * are going to map the incoming data. Reserve part of the I/O for
-	 * metadata if necessary
-	 */
-	secs_in_line = pblk_line_secs_data(pblk);
-	if (secs_in_line < secs_to_sync)
-		secs_to_sync = secs_in_line;
 
 #ifdef CONFIG_NVM_DEBUG
 	BUG_ON(!secs_to_sync && secs_to_flush);
@@ -248,18 +309,21 @@ int pblk_submit_write(struct pblk *pblk)
 {
 	struct bio *bio;
 	struct nvm_rq *rqd;
-	struct pblk_compl_ctx *c_ctx;
-	struct ppa_addr erase_ppa;
+	struct pblk_c_ctx *c_ctx;
 	unsigned int pgs_read;
 	unsigned int secs_avail, secs_to_sync, secs_to_com;
 	unsigned int secs_to_flush;
-	unsigned long sync_point = 0;
 	unsigned long pos;
 	int err;
 
-	/* Pre-check if we should start writing before doing allocations */
-	secs_to_flush = pblk_rb_sync_point_count(&pblk->rwb);
+	/* If there are no sectors in the cache, flushes (bios without data)
+	 * will be cleared on the cache threads
+	 */
 	secs_avail = pblk_rb_read_count(&pblk->rwb);
+	if (!secs_avail)
+		return 1;
+
+	secs_to_flush = pblk_rb_sync_point_count(&pblk->rwb);
 	if (!secs_to_flush && secs_avail < pblk->max_write_pgs)
 		return 1;
 
@@ -289,23 +353,18 @@ int pblk_submit_write(struct pblk *pblk)
 	pos = pblk_rb_read_commit(&pblk->rwb, secs_to_com);
 
 	pgs_read = pblk_rb_read_to_bio(&pblk->rwb, bio, c_ctx, pos,
-					secs_to_sync, secs_avail, &sync_point);
+						secs_to_sync, secs_avail);
 	if (!pgs_read) {
-		//TOGO
-		printk(KERN_CRIT "ERROR! !pgs_read, avail:%d,com:%d,sync:%d,,flush:%d\n",
-				secs_to_com, secs_avail, secs_to_sync, secs_to_flush);
+		pr_err("pblk: corrupted write bio\n");
 		goto fail_put_bio;
 	}
-
-	if (secs_to_flush && secs_to_flush <= secs_to_sync)
-		pblk_rb_sync_point_reset(&pblk->rwb, sync_point);
 
 	if (c_ctx->nr_padded)
 		if (pblk_bio_add_pages(pblk, bio, GFP_KERNEL, c_ctx->nr_padded))
 			goto fail_put_bio;
 
 	/* Assign lbas to ppas and populate request structure */
-	err = pblk_setup_w_rq(pblk, rqd, c_ctx, &erase_ppa);
+	err = pblk_setup_w_rq(pblk, rqd, c_ctx);
 	if (err) {
 		pr_err("pblk: could not setup write request\n");
 		goto fail_free_bio;
@@ -316,9 +375,6 @@ int pblk_submit_write(struct pblk *pblk)
 		pr_err("pblk: I/O submission failed: %d\n", err);
 		goto fail_free_bio;
 	}
-
-	if (unlikely(!ppa_empty(erase_ppa)))
-		pblk_blk_erase_async(pblk, erase_ppa);
 
 #ifdef CONFIG_NVM_DEBUG
 	atomic_add(secs_to_sync, &pblk->sub_writes);
@@ -349,107 +405,3 @@ int pblk_write_ts(void *data)
 
 	return 0;
 }
-
-/*
- * When a write fails we assume for now that the flash block has grown bad.
- * Thus, we start a recovery mechanism to (in general terms):
- *  - Take block out of the active open block list
- *  - Complete the successful writes on the request
- *  - Remap failed writes to a new request
- *  - Move written data on grown bad block(s) to new block(s)
- *  - Mark grown bad block(s) as bad and return to media manager
- *
- *  This function assumes that ppas in rqd are in generic mode. This is,
- *  nvm_addr_to_generic_mode(dev, rqd) has been called.
- *
- *  TODO: Depending on the type of memory, try write retry
- */
-// JAVIER: 
-#if 0
-static void pblk_end_w_fail(struct pblk *pblk, struct nvm_rq *rqd)
-{
-	void *comp_bits = &rqd->ppa_status;
-	struct pblk_ctx *ctx = pblk_set_ctx(pblk, rqd);
-	struct pblk_compl_ctx *c_ctx = ctx->c_ctx;
-	struct pblk_rb_entry *entry;
-	struct pblk_w_ctx *w_ctx;
-	struct pblk_rec_ctx *recovery;
-	struct ppa_addr ppa, prev_ppa;
-	unsigned int c_entries;
-	int nr_ppas = rqd->nr_ppas;
-	int bit;
-	int ret;
-
-	/* The last page of a block contains recovery metadata, if a block
-	 * becomes bad when writing this page, there is no need to recover what
-	 * is being written; this metadata is generated in a per-block basis.
-	 * This block is on its way to being closed. Mark as bad and trigger
-	 * recovery
-	 */
-	if (ctx->flags & PBLK_IOTYPE_CLOSE_BLK) {
-		struct pblk_compl_close_ctx *c_ctx = ctx->c_ctx;
-
-		pblk_run_recovery(pblk, c_ctx->rblk);
-		pblk_end_close_blk_bio(pblk, rqd, 0);
-		return;
-	}
-
-	/* look up blocks and mark them as bad
-	 * TODO: RECOVERY HERE TOO
-	 */
-	if (nr_ppas == 1)
-		return;
-
-	recovery = mempool_alloc(pblk->rec_pool, GFP_ATOMIC);
-	if (!recovery) {
-		pr_err("pblk: could not allocate recovery context\n");
-		return;
-	}
-	INIT_LIST_HEAD(&recovery->failed);
-
-	c_entries = find_first_bit(comp_bits, nr_ppas);
-
-	/* Replace all grown bad blocks on RR mapping scheme, mark them as bad
-	 * and return them to the media manager.
-	 */
-	ppa_set_empty(&prev_ppa);
-	bit = -1;
-	while ((bit = find_next_bit(comp_bits, nr_ppas, bit + 1)) < nr_ppas) {
-		if (bit > c_ctx->nr_valid)
-			goto out;
-
-		ppa = rqd->ppa_list[bit];
-
-		entry = pblk_rb_sync_scan_entry(&pblk->rwb, &ppa);
-		if (!entry) {
-			pr_err("pblk: could not scan entry on write failure\n");
-			continue;
-		}
-		w_ctx = &entry->w_ctx;
-
-		/* The list is filled first and emptied afterwards. No need for
-		 * protecting it with a lock
-		 */
-		list_add_tail(&entry->index, &recovery->failed);
-
-		if (ppa_cmp_blk(ppa, prev_ppa))
-			continue;
-
-		pblk_mark_bb(pblk, ppa);
-
-		prev_ppa.ppa = ppa.ppa;
-		pblk_run_recovery(pblk, w_ctx->ppa.rblk);
-	}
-
-out:
-	ret = pblk_recov_setup_rq(pblk, ctx, recovery, comp_bits, c_entries);
-	if (ret)
-		pr_err("pblk: could not recover from write failure\n");
-
-	INIT_WORK(&recovery->ws_rec, pblk_submit_rec);
-	queue_work(pblk->kw_wq, &recovery->ws_rec);
-
-	pblk_compl_queue(pblk, rqd, ctx);
-}
-#endif
-

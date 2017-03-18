@@ -1,0 +1,7 @@
+kfscftl-objs  := ./fscftl-init.o
+
+fscftl-y := ./fscftl-init.o
+
+ccflags-y += -g
+
+obj-m := fscftl.o

@@ -43,6 +43,7 @@
 #include <linux/types.h>
 #include <linux/io-64-nonatomic-lo-hi.h>
 #include <asm/unaligned.h>
+#include <linux/sed-opal.h>
 
 #include "nvme.h"
 
@@ -592,7 +593,7 @@ static int nvme_queue_rq(struct blk_mq_hw_ctx *hctx,
 	 */
 	if (ns && ns->ms && !blk_integrity_rq(req)) {
 		if (!(ns->pi_type && ns->ms == 8) &&
-					req->cmd_type != REQ_TYPE_DRV_PRIV) {
+		    !blk_rq_is_passthrough(req)) {
 			blk_mq_end_request(req, -EFAULT);
 			return BLK_MQ_RQ_QUEUE_OK;
 		}
@@ -649,7 +650,7 @@ static void nvme_complete_rq(struct request *req)
 			return;
 		}
 
-		if (req->cmd_type == REQ_TYPE_DRV_PRIV)
+		if (blk_rq_is_passthrough(req))
 			error = req->errors;
 		else
 			error = nvme_error_status(req->errors);
@@ -1742,6 +1743,7 @@ static void nvme_pci_free_ctrl(struct nvme_ctrl *ctrl)
 	if (dev->ctrl.admin_q)
 		blk_put_queue(dev->ctrl.admin_q);
 	kfree(dev->queues);
+	kfree(dev->ctrl.opal_dev);
 	kfree(dev);
 }
 
@@ -1758,6 +1760,7 @@ static void nvme_remove_dead_ctrl(struct nvme_dev *dev, int status)
 static void nvme_reset_work(struct work_struct *work)
 {
 	struct nvme_dev *dev = container_of(work, struct nvme_dev, reset_work);
+	bool was_suspend = !!(dev->ctrl.ctrl_config & NVME_CC_SHN_NORMAL);
 	int result = -ENODEV;
 
 	if (WARN_ON(dev->ctrl.state == NVME_CTRL_RESETTING))
@@ -1789,6 +1792,14 @@ static void nvme_reset_work(struct work_struct *work)
 	result = nvme_init_identify(&dev->ctrl);
 	if (result)
 		goto out;
+
+	if ((dev->ctrl.oacs & NVME_CTRL_OACS_SEC_SUPP) && !dev->ctrl.opal_dev) {
+		dev->ctrl.opal_dev =
+			init_opal_dev(&dev->ctrl, &nvme_sec_submit);
+	}
+
+	if (was_suspend)
+		opal_unlock_from_suspend(dev->ctrl.opal_dev);
 
 	result = nvme_setup_io_queues(dev);
 	if (result)

@@ -407,67 +407,6 @@ finished:
 	return 0;
 }
 
-static void rrpc_end_io_sync(struct nvm_rq *rqd)
-{
-	struct completion *waiting = rqd->private;
-
-	complete(waiting);
-}
-
-static int pblk_erase_blk(struct rrpc *rrpc, struct ppa_addr ppa)
-{
-	struct nvm_tgt_dev *dev = rrpc->dev;
-	struct nvm_geo *geo = &dev->geo;
-	int nr_secs = geo->plane_mode;
-	struct nvm_rq *rqd;
-	int ret;
-	int i;
-	DECLARE_COMPLETION_ONSTACK(wait);
-
-	rqd = mempool_alloc(rrpc->rq_pool, GFP_KERNEL);
-	if (!rqd)
-		return -ENOMEM;
-	memset(rqd, 0, sizeof(struct nvm_rq));
-
-	rqd->opcode = NVM_OP_ERASE;
-	rqd->nr_ppas = nr_secs;
-	rqd->bio = NULL;
-	rqd->end_io = rrpc_end_io_sync;
-	rqd->private = &wait;
-
-	if (nr_secs > 1) {
-		rqd->ppa_list = nvm_dev_dma_alloc(dev->parent, GFP_KERNEL,
-							&rqd->dma_ppa_list);
-		if (!rqd->ppa_list) {
-			pr_err("rrpc: not able to allocate ppa list\n");
-			ret = -ENOMEM;
-			goto free_rqd;
-		}
-
-		for (i = 0; i < nr_secs; i++) {
-			ppa.g.pl = i;
-			rqd->ppa_list[i] = ppa;
-		}
-	} else {
-		rqd->ppa_addr = ppa;
-		rqd->ppa_addr.g.pl = 0;
-	}
-
-	ret = nvm_submit_io(dev, rqd);
-	if (ret) {
-		pr_err("rrpr: erase I/O submission falied: %d\n", ret);
-		goto free_ppa_list;
-	}
-	wait_for_completion_io(&wait);
-
-free_ppa_list:
-	if (nr_secs > 1)
-		nvm_dev_dma_free(dev->parent, rqd->ppa_list, rqd->dma_ppa_list);
-free_rqd:
-	mempool_free(rqd, rrpc->rq_pool);
-	return 0;
-}
-
 static void rrpc_block_gc(struct work_struct *work)
 {
 	struct rrpc_block_gc *gcb = container_of(work, struct rrpc_block_gc,
@@ -490,7 +429,7 @@ static void rrpc_block_gc(struct work_struct *work)
 	ppa.g.lun = rlun->bppa.g.lun;
 	ppa.g.blk = rblk->id;
 
-	if (pblk_erase_blk(rrpc, ppa))
+	if (nvm_erase_sync(rrpc->dev, &ppa, 1))
 		goto put_back;
 
 	rrpc_put_blk(rrpc, rblk);
@@ -1335,8 +1274,10 @@ static int rrpc_bb_discovery(struct nvm_tgt_dev *dev, struct rrpc_lun *rlun)
 	}
 
 	nr_blks = nvm_bb_tbl_fold(dev->parent, blks, nr_blks);
-	if (nr_blks < 0)
-		return nr_blks;
+	if (nr_blks < 0) {
+		ret = nr_blks;
+		goto out;
+	}
 
 	for (i = 0; i < nr_blks; i++) {
 		if (blks[i] == NVM_BLK_T_FREE)

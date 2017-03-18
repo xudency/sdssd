@@ -281,9 +281,9 @@ static inline void _nvme_nvm_check_size(void)
 	BUILD_BUG_ON(sizeof(struct nvme_nvm_l2ptbl) != 64);
 	BUILD_BUG_ON(sizeof(struct nvme_nvm_erase_blk) != 64);
 	BUILD_BUG_ON(sizeof(struct nvme_nvm_id_group) != 960);
-	BUILD_BUG_ON(sizeof(struct nvme_nvm_addr_format) != 128);
+	BUILD_BUG_ON(sizeof(struct nvme_nvm_addr_format) != 16);
 	BUILD_BUG_ON(sizeof(struct nvme_nvm_id) != 4096);
-	BUILD_BUG_ON(sizeof(struct nvme_nvm_bb_tbl) != 512);
+	BUILD_BUG_ON(sizeof(struct nvme_nvm_bb_tbl) != 64);
 }
 
 static int init_grps(struct nvm_id *nvm_id, struct nvme_nvm_id *nvme_nvm_id)
@@ -344,7 +344,7 @@ static int nvme_nvm_identity12(struct nvm_id *nvm_id,
 	nvm_id->cap = le32_to_cpu(nvme_nvm_id->cap);
 	nvm_id->dom = le32_to_cpu(nvme_nvm_id->dom);
 	memcpy(&nvm_id->ppaf, &nvme_nvm_id->ppaf,
-					sizeof(struct nvme_nvm_addr_format));
+					sizeof(struct nvm_addr_format));
 
 	return init_grps(nvm_id, nvme_nvm_id);
 }
@@ -874,6 +874,37 @@ static int nvme_nvm_user_vcmd(struct nvme_ns *ns, int admin,
 	return ret;
 }
 
+static int nvme_nvm_cnex_misc(struct nvme_ctrl *ctrl, void __user *argp)
+{
+	int ret = 0;
+	struct nvm_user_vio cmd;
+
+	memset(&cmd, 0, sizeof(cmd));
+
+	if (copy_from_user(&cmd, argp, sizeof(cmd)))
+		return -EFAULT;
+
+	switch (cmd.opcode) {
+	case NVM_CNEX_MISC_RD_REGISTER:		
+		ret = ctrl->ops->reg_read32(ctrl, cmd.rsvd3[0], &cmd.rsvd3[1]);
+		if (copy_to_user(argp, &cmd, sizeof(cmd))) {
+			return -EFAULT;
+		}
+		break;
+		
+	case NVM_CNEX_MISC_WR_REGISTER:		
+		ret = ctrl->ops->reg_write32(ctrl, cmd.rsvd3[0], cmd.rsvd3[1]);
+		break;
+
+	/* Other CNEX MIC CMD */
+
+	default:
+		return -ENOTTY;
+	}
+
+	return ret;
+}
+
 int nvme_nvm_ioctl(struct nvme_ns *ns, unsigned int cmd, unsigned long arg)
 {
 	switch (cmd) {
@@ -883,15 +914,75 @@ int nvme_nvm_ioctl(struct nvme_ns *ns, unsigned int cmd, unsigned long arg)
 		return nvme_nvm_user_vcmd(ns, 0, (void __user *)arg);
 	case NVME_NVM_IOCTL_SUBMIT_VIO:
 		return nvme_nvm_submit_vio(ns, (void __user *)arg);
+	case NVME_NVM_IOCTL_CNEX_MISC:
+		return nvme_nvm_cnex_misc(ns->ctrl, (void __user *)arg);
+		
 	default:
 		return -ENOTTY;
 	}
+}
+
+void nvm_print_log_page(struct nvme_ocssd_log *log)
+{
+	pr_info("cnt(%llu), ppa(0x%llx), nsid(%u), st(0x%05x), msk(0x%03x)\n",
+		log->notification_count, log->ppa_addr, log->nsid, log->state,
+		log->lba_mask);
+}
+
+void nvme_vendor_async_event_work(struct work_struct *work)
+{
+	struct nvme_ctrl *ctrl =
+		container_of(work, struct nvme_ctrl, vendor_async_event_work);
+	struct nvme_ns *iter, *ns = NULL;
+	struct nvm_dev *nvmdev;
+	struct nvme_command c = {};
+	struct nvme_ocssd_log log;
+	struct nvm_log_page log_page;
+	int ret;
+
+	c.common.opcode = nvme_admin_get_log_page;
+	c.common.cdw10[0] = cpu_to_le32(
+			(((sizeof(struct nvme_ocssd_log) / 4) - 1) << 16) |
+			 0xd0);
+
+	memset(&log, 0, sizeof(struct nvme_ocssd_log));
+
+	ret = nvme_submit_sync_cmd(ctrl->admin_q, &c, &log,
+						sizeof(struct nvme_ocssd_log));
+	if (ret)
+		return;
+
+	log_page.ppa.ppa = log.ppa_addr;
+	log_page.scope = log.lba_mask & NVM_LOGPAGE_STATE_MASK;
+	log_page.severity = log.state & NVM_LOGPAGE_SEVERITY_MASK;
+
+	mutex_lock(&ctrl->namespaces_mutex);
+	list_for_each_entry(iter, &ctrl->namespaces, list) {
+		if (iter->ns_id == log.nsid) {
+			ns = iter;
+			break;
+		}
+	}
+	mutex_unlock(&ctrl->namespaces_mutex);
+
+	if (!ns)
+		return;
+
+	nvmdev = ns->ndev;
+
+#ifdef CONFIG_NVM_DEBUG
+	nvm_print_log_page(&log);
+#endif
+
+	nvm_notify_log_page(nvmdev, log_page);
 }
 
 int nvme_nvm_register(struct nvme_ns *ns, char *disk_name, int node)
 {
 	struct request_queue *q = ns->queue;
 	struct nvm_dev *dev;
+
+	_nvme_nvm_check_size();
 
 	dev = nvm_alloc_dev(node);
 	if (!dev)
@@ -1082,6 +1173,9 @@ int nvme_nvm_ns_supported(struct nvme_ns *ns, struct nvme_id_ns *id)
 	/* XXX: this is poking into PCI structures from generic code! */
 	struct pci_dev *pdev = to_pci_dev(ctrl->dev);
 
+	if (!strncmp((char *)id->vs, "open-channel ssd", 16))
+		return 1;
+
 	/* QEMU NVMe simulator - PCI ID + Vendor specific bit */
 	if (pdev->vendor == PCI_VENDOR_ID_CNEX &&
 				pdev->device == PCI_DEVICE_ID_CNEX_QEMU &&
@@ -1126,14 +1220,14 @@ void nvm_check_write_cmd_correct(void *data)
 						NVM_IO_SCRAMBLE_ENABLE;
 	int min_write_pgs = 8;
 	int erase_planes = 2;
-	u64 pln_mask = 0x4;
-	u64 pln_sec_mask = 0x7;
-	u64 rest_mask = 0xFFFFFFF8;
+	u64 pln_mask = 0x40;
+	u64 pln_sec_mask = 0x70;
+	u64 rest_mask = 0xFFFFFF8F;
 
 	if (cmd->ph_rw.opcode == NVM_OP_PWRITE) {
 		int ppa_off = 0;
 		int i;
-		u64 *ppa_list, ppa1, ppa2, exp, exp2;
+		u64 *ppa_list, ppa1, ppa2, mask1, mask2, exp, exp2;
 
 		ppa_list = (u64*) phys_to_virt(le64_to_cpu(cmd->ph_rw.spba));
 
@@ -1144,12 +1238,15 @@ void nvm_check_write_cmd_correct(void *data)
 			pr_err("W ERROR - nppas:%d\n", nppas);
 
 next:
-		exp2 = ppa_list[ppa_off] & rest_mask;
+		mask1 = pln_sec_mask;
+		mask2 = rest_mask;
+
+		exp2 = ppa_list[ppa_off] & mask2;
 
 		for (i = ppa_off; i < ppa_off + min_write_pgs; i++) {
 			exp = i % min_write_pgs;
-			ppa1 = (ppa_list[i] & pln_sec_mask);
-			ppa2 = ppa_list[i] & rest_mask;
+			ppa1 = (ppa_list[i] & mask1) >> 4;
+			ppa2 = ppa_list[i] & mask2;
 
 			if (ppa2 != exp2) {
 				int j;
@@ -1191,7 +1288,7 @@ next:
 		if (flags != cmd_r_flags && flags != NVM_IO_SLC_MODE)
 			pr_err("R ERROR - flags:%d\n", flags);
 	} else if (cmd->ph_rw.opcode == NVM_OP_ERASE) {
-		u64 *ppa_list, ppa, exp;
+		u64 *ppa_list, ppa, mask, exp;
 		int i;
 
 		ppa_list = (u64*) phys_to_virt(le64_to_cpu(cmd->ph_rw.spba));
@@ -1203,9 +1300,10 @@ next:
 			pr_err("E ERROR - nppas:%d\n", flags);
 
 		/* Planes */
+		mask = pln_mask;
 		for (i = 0; i < nppas; i++) {
 			exp = i;
-			ppa = (ppa_list[i] & pln_mask) >> 2;
+			ppa = (ppa_list[i] & mask) >> 6;
 
 			if (ppa != exp) {
 				int j;

@@ -208,18 +208,18 @@ EXPORT_SYMBOL_GPL(nvme_requeue_req);
 struct request *nvme_alloc_request(struct request_queue *q,
 		struct nvme_command *cmd, unsigned int flags, int qid)
 {
+	unsigned op = nvme_is_write(cmd) ? REQ_OP_DRV_OUT : REQ_OP_DRV_IN;
 	struct request *req;
 
 	if (qid == NVME_QID_ANY) {
-		req = blk_mq_alloc_request(q, nvme_is_write(cmd), flags);
+		req = blk_mq_alloc_request(q, op, flags);
 	} else {
-		req = blk_mq_alloc_request_hctx(q, nvme_is_write(cmd), flags,
+		req = blk_mq_alloc_request_hctx(q, op, flags,
 				qid ? qid - 1 : 0);
 	}
 	if (IS_ERR(req))
 		return req;
 
-	req->cmd_type = REQ_TYPE_DRV_PRIV;
 	req->cmd_flags |= REQ_FAILFAST_DRIVER;
 	nvme_req(req)->cmd = cmd;
 
@@ -238,26 +238,38 @@ static inline void nvme_setup_flush(struct nvme_ns *ns,
 static inline int nvme_setup_discard(struct nvme_ns *ns, struct request *req,
 		struct nvme_command *cmnd)
 {
+	unsigned short segments = blk_rq_nr_discard_segments(req), n = 0;
 	struct nvme_dsm_range *range;
-	unsigned int nr_bytes = blk_rq_bytes(req);
+	struct bio *bio;
 
-	range = kmalloc(sizeof(*range), GFP_ATOMIC);
+	range = kmalloc_array(segments, sizeof(*range), GFP_ATOMIC);
 	if (!range)
 		return BLK_MQ_RQ_QUEUE_BUSY;
 
-	range->cattr = cpu_to_le32(0);
-	range->nlb = cpu_to_le32(nr_bytes >> ns->lba_shift);
-	range->slba = cpu_to_le64(nvme_block_nr(ns, blk_rq_pos(req)));
+	__rq_for_each_bio(bio, req) {
+		u64 slba = nvme_block_nr(ns, bio->bi_iter.bi_sector);
+		u32 nlb = bio->bi_iter.bi_size >> ns->lba_shift;
+
+		range[n].cattr = cpu_to_le32(0);
+		range[n].nlb = cpu_to_le32(nlb);
+		range[n].slba = cpu_to_le64(slba);
+		n++;
+	}
+
+	if (WARN_ON_ONCE(n != segments)) {
+		kfree(range);
+		return BLK_MQ_RQ_QUEUE_ERROR;
+	}
 
 	memset(cmnd, 0, sizeof(*cmnd));
 	cmnd->dsm.opcode = nvme_cmd_dsm;
 	cmnd->dsm.nsid = cpu_to_le32(ns->ns_id);
-	cmnd->dsm.nr = 0;
+	cmnd->dsm.nr = segments - 1;
 	cmnd->dsm.attributes = cpu_to_le32(NVME_DSMGMT_AD);
 
 	req->special_vec.bv_page = virt_to_page(range);
 	req->special_vec.bv_offset = offset_in_page(range);
-	req->special_vec.bv_len = sizeof(*range);
+	req->special_vec.bv_len = sizeof(*range) * segments;
 	req->rq_flags |= RQF_SPECIAL_PAYLOAD;
 
 	return BLK_MQ_RQ_QUEUE_OK;
@@ -309,17 +321,27 @@ int nvme_setup_cmd(struct nvme_ns *ns, struct request *req,
 {
 	int ret = BLK_MQ_RQ_QUEUE_OK;
 
-	if (req->cmd_type == REQ_TYPE_DRV_PRIV)
+	switch (req_op(req)) {
+	case REQ_OP_DRV_IN:
+	case REQ_OP_DRV_OUT:
 		memcpy(cmd, nvme_req(req)->cmd, sizeof(*cmd));
-	else if (req_op(req) == REQ_OP_FLUSH)
+		break;
+	case REQ_OP_FLUSH:
 		nvme_setup_flush(ns, cmd);
-	else if (req_op(req) == REQ_OP_DISCARD)
+		break;
+	case REQ_OP_DISCARD:
 		ret = nvme_setup_discard(ns, req, cmd);
-	else
+		break;
+	case REQ_OP_READ:
+	case REQ_OP_WRITE:
 		nvme_setup_rw(ns, req, cmd);
+		break;
+	default:
+		WARN_ON_ONCE(1);
+		return BLK_MQ_RQ_QUEUE_ERROR;
+	}
 
 	cmd->common.command_id = req->tag;
-
 	return ret;
 }
 EXPORT_SYMBOL_GPL(nvme_setup_cmd);
@@ -642,29 +664,6 @@ int nvme_get_log_page(struct nvme_ctrl *dev, struct nvme_smart_log **log)
 	return error;
 }
 
-int nvme_get_ocssd_log(struct nvme_ctrl *dev, struct nvme_ocssd_log **log)
-{
-	struct nvme_command c = { };
-	int error;
-
-	c.common.opcode = nvme_admin_get_log_page;
-	c.common.nsid = cpu_to_le32(0xFFFFFFFF);
-	c.common.cdw10[0] = cpu_to_le32(
-			(((sizeof(struct nvme_ocssd_log) / 4) - 1) << 16) |
-			 0xd0);
-
-	*log = kmalloc(sizeof(struct nvme_ocssd_log), GFP_KERNEL);
-	if (!*log)
-		return -ENOMEM;
-	memset(*log, 0, sizeof(struct nvme_ocssd_log));
-
-	error = nvme_submit_sync_cmd(dev->admin_q, &c, *log,
-			sizeof(struct nvme_ocssd_log));
-	if (error)
-		kfree(*log);
-	return error;
-}
-
 int nvme_set_queue_count(struct nvme_ctrl *ctrl, int *count)
 {
 	u32 q_count = (*count - 1) | ((*count - 1) << 16);
@@ -811,6 +810,9 @@ static int nvme_ioctl(struct block_device *bdev, fmode_t mode,
 		if (ns->ndev)
 			return nvme_nvm_ioctl(ns, cmd, arg);
 #endif
+		if (is_sed_ioctl(cmd))
+			return sed_ioctl(ns->ctrl->opal_dev, cmd,
+					 (void __user *) arg);
 		return -ENOTTY;
 	}
 }
@@ -888,6 +890,9 @@ static void nvme_config_discard(struct nvme_ns *ns)
 	struct nvme_ctrl *ctrl = ns->ctrl;
 	u32 logical_block_size = queue_logical_block_size(ns->queue);
 
+	BUILD_BUG_ON(PAGE_SIZE / sizeof(struct nvme_dsm_range) <
+			NVME_DSM_MAX_RANGES);
+
 	if (ctrl->quirks & NVME_QUIRK_DISCARD_ZEROES)
 		ns->queue->limits.discard_zeroes_data = 1;
 	else
@@ -896,6 +901,7 @@ static void nvme_config_discard(struct nvme_ns *ns)
 	ns->queue->limits.discard_alignment = logical_block_size;
 	ns->queue->limits.discard_granularity = logical_block_size;
 	blk_queue_max_discard_sectors(ns->queue, UINT_MAX);
+	blk_queue_max_discard_segments(ns->queue, NVME_DSM_MAX_RANGES);
 	queue_flag_set_unlocked(QUEUE_FLAG_DISCARD, ns->queue);
 }
 
@@ -1078,6 +1084,28 @@ static const struct pr_ops nvme_pr_ops = {
 	.pr_clear	= nvme_pr_clear,
 };
 
+#ifdef CONFIG_BLK_SED_OPAL
+int nvme_sec_submit(void *data, u16 spsp, u8 secp, void *buffer, size_t len,
+		bool send)
+{
+	struct nvme_ctrl *ctrl = data;
+	struct nvme_command cmd;
+
+	memset(&cmd, 0, sizeof(cmd));
+	if (send)
+		cmd.common.opcode = nvme_admin_security_send;
+	else
+		cmd.common.opcode = nvme_admin_security_recv;
+	cmd.common.nsid = 0;
+	cmd.common.cdw10[0] = cpu_to_le32(((u32)secp) << 24 | ((u32)spsp) << 8);
+	cmd.common.cdw10[1] = cpu_to_le32(len);
+
+	return __nvme_submit_sync_cmd(ctrl->admin_q, &cmd, NULL, buffer, len,
+				      ADMIN_TIMEOUT, NVME_QID_ANY, 1, 0);
+}
+EXPORT_SYMBOL_GPL(nvme_sec_submit);
+#endif /* CONFIG_BLK_SED_OPAL */
+
 static const struct block_device_operations nvme_fops = {
 	.owner		= THIS_MODULE,
 	.ioctl		= nvme_ioctl,
@@ -1257,6 +1285,7 @@ int nvme_init_identify(struct nvme_ctrl *ctrl)
 		return -EIO;
 	}
 
+	ctrl->oacs = le16_to_cpu(id->oacs);
 	ctrl->vid = le16_to_cpu(id->vid);
 	ctrl->oncs = le16_to_cpup(&id->oncs);
 	atomic_set(&ctrl->abort_limit, id->acl + 1);
@@ -1897,31 +1926,6 @@ static void nvme_async_event_work(struct work_struct *work)
 	spin_unlock_irq(&ctrl->lock);
 }
 
-void nvme_ocssd_log_pr(struct nvme_ocssd_log *log)
-{
-	pr_info("cnt(%llu), ppa(0x%llx), nsid(%u), st(0x%05x), msk(0x%03x)\n",
-		log->notification_count, log->ppa_addr, log->nsid, log->state,
-		log->lba_mask);
-}
-
-static void nvme_ocssd_work(struct work_struct *work)
-{
-	int error;
-	struct nvme_ocssd_log *log = NULL;
-	struct nvme_ctrl *ctrl =
-		container_of(work, struct nvme_ctrl, ocssd_work);
-
-	error = nvme_get_ocssd_log(ctrl, &log);
-	if (error) {
-		pr_crit("nvme_ocssd_work: sigh... error(%d)\n", error);
-		return;
-	}
-
-	nvme_ocssd_log_pr(log);
-
-	kfree(log);
-}
-
 void nvme_complete_async_event(struct nvme_ctrl *ctrl, __le16 status,
 		union nvme_result *res)
 {
@@ -1953,7 +1957,7 @@ void nvme_complete_async_event(struct nvme_ctrl *ctrl, __le16 status,
 	}
 
 	if (result & 0xd00007)
-		schedule_work(&ctrl->ocssd_work);
+		schedule_work(&ctrl->vendor_async_event_work);
 }
 EXPORT_SYMBOL_GPL(nvme_complete_async_event);
 
@@ -1995,8 +1999,8 @@ static void nvme_release_instance(struct nvme_ctrl *ctrl)
 
 void nvme_uninit_ctrl(struct nvme_ctrl *ctrl)
 {
-	flush_work(&ctrl->ocssd_work);
 	flush_work(&ctrl->async_event_work);
+	flush_work(&ctrl->vendor_async_event_work);
 	flush_work(&ctrl->scan_work);
 	nvme_remove_namespaces(ctrl);
 
@@ -2045,7 +2049,7 @@ int nvme_init_ctrl(struct nvme_ctrl *ctrl, struct device *dev,
 	ctrl->quirks = quirks;
 	INIT_WORK(&ctrl->scan_work, nvme_scan_work);
 	INIT_WORK(&ctrl->async_event_work, nvme_async_event_work);
-	INIT_WORK(&ctrl->ocssd_work, nvme_ocssd_work);
+	INIT_WORK(&ctrl->vendor_async_event_work, nvme_vendor_async_event_work);
 
 	ret = nvme_set_instance(ctrl);
 	if (ret)

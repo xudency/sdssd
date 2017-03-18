@@ -17,47 +17,27 @@
 
 #include "pblk.h"
 
-/*
- * Copy data from current bio to write buffer. This if necessary to guarantee
- * that (i) writes to the media at issued at the right granularity and (ii) that
- * memory-specific constrains are respected (e.g., TLC memories need to write
- * upper, medium and lower pages to guarantee that data has been persisted).
- *
- * This path is exclusively taken by user I/O.
- *
- * return: 1 if bio has been written to buffer, 0 otherwise.
- */
 int pblk_write_to_cache(struct pblk *pblk, struct bio *bio, unsigned long flags)
 {
-	sector_t laddr = pblk_get_laddr(bio);
+	sector_t lba = pblk_get_lba(bio);
 	struct pblk_w_ctx w_ctx;
 	int nr_entries = pblk_get_secs(bio);
-	unsigned long bpos, pos;
-	unsigned int i;
-	int ret = NVM_IO_DONE;
-
-	if (bio->bi_opf & REQ_PREFLUSH) {
-#ifdef CONFIG_NVM_DEBUG
-		atomic_inc(&pblk->nr_flush);
-#endif
-		if (pblk_rb_sync_point_set(&pblk->rwb, bio))
-			ret = NVM_IO_OK;
-
-		if (!bio_has_data(bio)) {
-			pblk_write_kick(pblk);
-			goto out;
-		}
-	}
+	unsigned int bpos, pos;
+	int i, ret;
 
 	/* Update the write buffer head (mem) with the entries that we can
 	 * write. The write in itself cannot fail, so there is no need to
 	 * rollback from here on.
 	 */
 retry:
-	if (!pblk_rb_may_write_user(&pblk->rwb, nr_entries, &bpos)) {
+	ret = pblk_rb_may_write_user(&pblk->rwb, bio, nr_entries, &bpos);
+	if (ret == NVM_IO_REQUEUE) {
 		io_schedule();
 		goto retry;
 	}
+
+	if (unlikely(!bio_has_data(bio)))
+		goto out;
 
 	w_ctx.flags = flags;
 	w_ctx.paddr = 0;
@@ -67,7 +47,7 @@ retry:
 		void *data = bio_data(bio);
 		struct ppa_addr ppa;
 
-		w_ctx.lba = laddr + i;
+		w_ctx.lba = lba + i;
 
 		pos = pblk_rb_wrap_pos(&pblk->rwb, bpos + i);
 		ppa = pblk_rb_write_entry(&pblk->rwb, data, w_ctx, pos);
@@ -81,10 +61,8 @@ retry:
 	atomic_add(nr_entries, &pblk->req_writes);
 #endif
 
-	if (bio->bi_opf & REQ_PREFLUSH)
-		pblk_write_kick(pblk);
-
 out:
+	pblk_write_kick(pblk);
 	return ret;
 }
 
@@ -97,9 +75,8 @@ int pblk_write_gc_to_cache(struct pblk *pblk, void *data, u64 *lba_list,
 			   struct pblk_line *gc_line, unsigned long flags)
 {
 	struct pblk_w_ctx w_ctx;
-	unsigned long bpos, pos;
-	unsigned int valid_entries;
-	unsigned int i;
+	unsigned int bpos, pos;
+	int i, valid_entries;
 
 	/* Update the write buffer head (mem) with the entries that we can
 	 * write. The write in itself cannot fail, so there is no need to

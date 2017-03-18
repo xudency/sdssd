@@ -52,11 +52,7 @@ static int pblk_rw_io(struct request_queue *q, struct pblk *pblk,
 	if (unlikely(pblk_get_secs(bio) >= pblk_rl_sysfs_rate_show(&pblk->rl)))
 		blk_queue_split(q, &bio, q->bio_split);
 
-	ret = pblk_write_to_cache(pblk, bio, PBLK_IOTYPE_USER);
-	BUG_ON(bio_flagged(bio, BIO_CLONED)); /* TODO: Remove me */
-	/*	bio_put(bio); */
-
-	return ret;
+	return pblk_write_to_cache(pblk, bio, PBLK_IOTYPE_USER);
 }
 
 static blk_qc_t pblk_make_rq(struct request_queue *q, struct bio *bio)
@@ -146,7 +142,7 @@ static int pblk_set_ppaf(struct pblk *pblk)
 	/* Re-calculate channel and lun format to adapt to configuration */
 	power_len = get_count_order(geo->nr_chnls);
 	if (1 << power_len != geo->nr_chnls) {
-		pr_err("pblk: supports only power-of-two CH config.\n");
+		pr_err("pblk: supports only power-of-two channel config.\n");
 		return -EINVAL;
 	}
 	ppaf.ch_len = power_len;
@@ -164,17 +160,69 @@ static int pblk_set_ppaf(struct pblk *pblk)
 	pblk->ppaf.lun_offset = pblk->ppaf.ch_offset + ppaf.ch_len;
 	pblk->ppaf.pg_offset = pblk->ppaf.lun_offset + ppaf.lun_len;
 	pblk->ppaf.blk_offset = pblk->ppaf.pg_offset + ppaf.pg_len;
-	pblk->ppaf.sec_mask = (1 << ppaf.sect_len) - 1;
-	pblk->ppaf.pln_mask = ((1 << ppaf.pln_len) - 1) <<
+	pblk->ppaf.sec_mask = (1ULL << ppaf.sect_len) - 1;
+	pblk->ppaf.pln_mask = ((1ULL << ppaf.pln_len) - 1) <<
 							pblk->ppaf.pln_offset;
-	pblk->ppaf.ch_mask = ((1 << ppaf.ch_len) - 1) <<
+	pblk->ppaf.ch_mask = ((1ULL << ppaf.ch_len) - 1) <<
 							pblk->ppaf.ch_offset;
-	pblk->ppaf.lun_mask = ((1 << ppaf.lun_len) -1) <<
+	pblk->ppaf.lun_mask = ((1ULL << ppaf.lun_len) - 1) <<
 							pblk->ppaf.lun_offset;
-	pblk->ppaf.pg_mask = ((1 << ppaf.pg_len) - 1) <<
+	pblk->ppaf.pg_mask = ((1ULL << ppaf.pg_len) - 1) <<
 							pblk->ppaf.pg_offset;
-	pblk->ppaf.blk_mask = ((1 << ppaf.blk_len) - 1) <<
+	pblk->ppaf.blk_mask = ((1ULL << ppaf.blk_len) - 1) <<
 							pblk->ppaf.blk_offset;
+
+	return 0;
+}
+
+static int pblk_init_global_caches(struct pblk *pblk)
+{
+	down_write(&pblk_lock);
+	pblk_blk_ws_cache = kmem_cache_create("pblk_blk_ws",
+				sizeof(struct pblk_line_ws), 0, 0, NULL);
+	if (!pblk_blk_ws_cache) {
+		up_write(&pblk_lock);
+		return -ENOMEM;
+	}
+
+	pblk_rec_cache = kmem_cache_create("pblk_rec",
+				sizeof(struct pblk_rec_ctx), 0, 0, NULL);
+	if (!pblk_rec_cache) {
+		kmem_cache_destroy(pblk_blk_ws_cache);
+		up_write(&pblk_lock);
+		return -ENOMEM;
+	}
+
+	pblk_r_rq_cache = kmem_cache_create("pblk_r_rq", pblk_r_rq_size,
+				0, 0, NULL);
+	if (!pblk_r_rq_cache) {
+		kmem_cache_destroy(pblk_blk_ws_cache);
+		kmem_cache_destroy(pblk_rec_cache);
+		up_write(&pblk_lock);
+		return -ENOMEM;
+	}
+
+	pblk_w_rq_cache = kmem_cache_create("pblk_w_rq", pblk_w_rq_size,
+				0, 0, NULL);
+	if (!pblk_w_rq_cache) {
+		kmem_cache_destroy(pblk_blk_ws_cache);
+		kmem_cache_destroy(pblk_rec_cache);
+		kmem_cache_destroy(pblk_r_rq_cache);
+		up_write(&pblk_lock);
+		return -ENOMEM;
+	}
+
+	pblk_line_meta_cache = kmem_cache_create("pblk_line_m",
+				pblk->lm.sec_bitmap_len, 0, 0, NULL);
+	if (!pblk_line_meta_cache) {
+		kmem_cache_destroy(pblk_blk_ws_cache);
+		kmem_cache_destroy(pblk_rec_cache);
+		kmem_cache_destroy(pblk_r_rq_cache);
+		kmem_cache_destroy(pblk_w_rq_cache);
+		up_write(&pblk_lock);
+		return -ENOMEM;
+	}
+	up_write(&pblk_lock);
 
 	return 0;
 }
@@ -204,54 +252,8 @@ static int pblk_core_init(struct pblk *pblk)
 		return -EINVAL;
 	}
 
-	down_write(&pblk_lock);
-	if (!pblk_blk_ws_cache) {
-		pblk_blk_ws_cache = kmem_cache_create("pblk_blk_ws",
-				sizeof(struct pblk_line_ws), 0, 0, NULL);
-		if (!pblk_blk_ws_cache) {
-			up_write(&pblk_lock);
-			return -ENOMEM;
-		}
-
-		pblk_rec_cache = kmem_cache_create("pblk_rec",
-				sizeof(struct pblk_rec_ctx), 0, 0, NULL);
-		if (!pblk_rec_cache) {
-			kmem_cache_destroy(pblk_blk_ws_cache);
-			up_write(&pblk_lock);
-			return -ENOMEM;
-		}
-
-		pblk_r_rq_cache = kmem_cache_create("pblk_r_rq", pblk_r_rq_size,
-				0, 0, NULL);
-		if (!pblk_r_rq_cache) {
-			kmem_cache_destroy(pblk_blk_ws_cache);
-			kmem_cache_destroy(pblk_rec_cache);
-			up_write(&pblk_lock);
-			return -ENOMEM;
-		}
-
-		pblk_w_rq_cache = kmem_cache_create("pblk_w_rq", pblk_w_rq_size,
-				0, 0, NULL);
-		if (!pblk_w_rq_cache) {
-			kmem_cache_destroy(pblk_blk_ws_cache);
-			kmem_cache_destroy(pblk_rec_cache);
-			kmem_cache_destroy(pblk_r_rq_cache);
-			up_write(&pblk_lock);
-			return -ENOMEM;
-		}
-
-		pblk_line_meta_cache = kmem_cache_create("pblk_blk_m",
-				pblk->lm.sec_bitmap_len, 0, 0, NULL);
-		if (!pblk_line_meta_cache) {
-			kmem_cache_destroy(pblk_blk_ws_cache);
-			kmem_cache_destroy(pblk_rec_cache);
-			kmem_cache_destroy(pblk_r_rq_cache);
-			kmem_cache_destroy(pblk_w_rq_cache);
-			up_write(&pblk_lock);
-			return -ENOMEM;
-		}
-	}
-	up_write(&pblk_lock);
+	if (pblk_init_global_caches(pblk))
+		return -ENOMEM;
 
 	pblk->page_pool = mempool_create_page_pool(PAGE_POOL_SIZE, 0);
 	if (!pblk->page_pool)
@@ -274,15 +276,15 @@ static int pblk_core_init(struct pblk *pblk)
 	if (!pblk->w_rq_pool)
 		goto free_r_rq_pool;
 
-	// JAVIER: Rename to line_meta_pool
-	pblk->blk_meta_pool = mempool_create_slab_pool(16, pblk_line_meta_cache);
-	if (!pblk->blk_meta_pool)
+	pblk->line_meta_pool =
+			mempool_create_slab_pool(16, pblk_line_meta_cache);
+	if (!pblk->line_meta_pool)
 		goto free_w_rq_pool;
 
 	pblk->kw_wq = alloc_workqueue("pblk-writer",
 					WQ_MEM_RECLAIM | WQ_UNBOUND, 1);
 	if (!pblk->kw_wq)
-		goto free_blk_meta_pool;
+		goto free_line_meta_pool;
 
 	if (pblk_set_ppaf(pblk))
 		goto free_kw_wq;
@@ -295,8 +297,8 @@ static int pblk_core_init(struct pblk *pblk)
 
 free_kw_wq:
 	destroy_workqueue(pblk->kw_wq);
-free_blk_meta_pool:
-	mempool_destroy(pblk->blk_meta_pool);
+free_line_meta_pool:
+	mempool_destroy(pblk->line_meta_pool);
 free_w_rq_pool:
 	mempool_destroy(pblk->w_rq_pool);
 free_r_rq_pool:
@@ -315,12 +317,20 @@ static void pblk_core_free(struct pblk *pblk)
 	if (pblk->kw_wq)
 		destroy_workqueue(pblk->kw_wq);
 
+	pblk_rwb_free(pblk);
+
 	mempool_destroy(pblk->page_pool);
 	mempool_destroy(pblk->line_ws_pool);
 	mempool_destroy(pblk->rec_pool);
 	mempool_destroy(pblk->r_rq_pool);
 	mempool_destroy(pblk->w_rq_pool);
-	mempool_destroy(pblk->blk_meta_pool);
+	mempool_destroy(pblk->line_meta_pool);
+
+	kmem_cache_destroy(pblk_blk_ws_cache);
+	kmem_cache_destroy(pblk_rec_cache);
+	kmem_cache_destroy(pblk_r_rq_cache);
+	kmem_cache_destroy(pblk_w_rq_cache);
+	kmem_cache_destroy(pblk_line_meta_cache);
 }
 
 static void pblk_luns_free(struct pblk *pblk)
@@ -334,7 +344,7 @@ static void pblk_lines_free(struct pblk *pblk)
 	struct pblk_line *line;
 	int i;
 
-	spin_lock(&l_mg->lock);
+	spin_lock(&l_mg->free_lock);
 	for (i = 0; i < l_mg->nr_lines; i++) {
 		line = &pblk->lines[i];
 
@@ -342,7 +352,7 @@ static void pblk_lines_free(struct pblk *pblk)
 		kfree(line->blk_bitmap);
 		kfree(line->erase_bitmap);
 	}
-	spin_unlock(&l_mg->lock);
+	spin_unlock(&l_mg->free_lock);
 }
 
 static void pblk_line_meta_free(struct pblk *pblk)
@@ -406,9 +416,9 @@ static int pblk_bb_line(struct pblk *pblk, struct pblk_line *line)
 		return -ENOMEM;
 
 	line->erase_bitmap = kzalloc(lm->blk_bitmap_len, GFP_KERNEL);
-	if (!line->blk_bitmap) {
+	if (!line->erase_bitmap) {
 		kfree(line->blk_bitmap);
-		return - ENOMEM;
+		return -ENOMEM;
 	}
 
 	for (i = 0; i < lm->blk_per_line; i++) {
@@ -432,7 +442,7 @@ static int pblk_luns_init(struct pblk *pblk, struct ppa_addr *luns)
 
 	/* TODO: Implement unbalanced LUN support */
 	if (geo->luns_per_chnl < 0) {
-		pr_err("pblk: unbalanced LUN config. not supported yet\n");
+		pr_err("pblk: unbalanced LUN config.\n");
 		return -EINVAL;
 	}
 
@@ -440,7 +450,6 @@ static int pblk_luns_init(struct pblk *pblk, struct ppa_addr *luns)
 	if (!pblk->luns)
 		return -ENOMEM;
 
-	/* 1:1 mapping */
 	for (i = 0; i < geo->nr_luns; i++) {
 		/* Stripe across channels */
 		int ch = i % geo->nr_chnls;
@@ -468,35 +477,22 @@ static int pblk_lines_configure(struct pblk *pblk)
 	struct pblk_line *line;
 	int ret = 0;
 
-	// TODO: Enable when we have metadata model for log lines
-	/* First line is always used for FTL Log */
-	/* log_line = pblk_line_get_first_log(pblk); */
-	/* if (!log_line) { */
-		/* pr_err("pblk: line list corrupted\n"); */
-		/* ret = -EFAULT; */
-		/* goto out; */
-	/* } */
-
 	/* Configure next line for user data */
 	line = pblk_line_get_first_data(pblk);
 	if (!line) {
 		pr_err("pblk: line list corrupted\n");
 		ret = -EFAULT;
-		/* pblk_line_put(pblk, log_line); */
+		goto out;
 	}
 
 	line = pblk_line_get_next_data(pblk);
 	if (!line) {
 		struct pblk_line_mgmt *l_mg = &pblk->l_mg;
 
-		pblk_line_free(pblk, l_mg->data_line);
+		kref_put(&l_mg->data_line->ref, pblk_line_put);
 		pr_debug("pblk: starting instance with single data line\n");
 		goto out;
 	}
-
-	/* line = pblk_line_get_next_log(pblk); */
-	/* if (!line) */
-		/* pr_debug("pblk: starting instance with single log line\n"); */
 
 out:
 	return ret;
@@ -530,6 +526,8 @@ static int pblk_lines_init(struct pblk *pblk)
 	lm->blk_bitmap_len = BITS_TO_LONGS(geo->nr_luns) * sizeof(long);
 	lm->sec_bitmap_len = BITS_TO_LONGS(lm->sec_per_line) * sizeof(long);
 	lm->lun_bitmap_len = BITS_TO_LONGS(geo->nr_luns) * sizeof(long);
+	lm->high_thrs = lm->sec_per_line / 2;
+	lm->mid_thrs = lm->sec_per_line / 4;
 
 	/* Calculate necessary pages for smeta. See comment over struct
 	 * line_smeta definition
@@ -644,8 +642,20 @@ add_emeta_page:
 		bitmap_set(l_mg->bb_template, i, geo->sec_per_pl);
 
 	INIT_LIST_HEAD(&l_mg->free_list);
-	INIT_LIST_HEAD(&l_mg->closed_list);
-	spin_lock_init(&l_mg->lock);
+	INIT_LIST_HEAD(&l_mg->corrupt_list);
+	INIT_LIST_HEAD(&l_mg->bad_list);
+	INIT_LIST_HEAD(&l_mg->gc_full_list);
+	INIT_LIST_HEAD(&l_mg->gc_high_list);
+	INIT_LIST_HEAD(&l_mg->gc_mid_list);
+	INIT_LIST_HEAD(&l_mg->gc_low_list);
+	INIT_LIST_HEAD(&l_mg->gc_empty_list);
+
+	l_mg->gc_lists[0] = &l_mg->gc_high_list;
+	l_mg->gc_lists[1] = &l_mg->gc_mid_list;
+	l_mg->gc_lists[2] = &l_mg->gc_low_list;
+
+	spin_lock_init(&l_mg->free_lock);
+	spin_lock_init(&l_mg->gc_lock);
 
 	pblk->rl.free_blocks = geo->blks_per_lun * geo->nr_luns;
 	pblk->capacity = geo->sec_per_lun * geo->nr_luns;
@@ -663,6 +673,7 @@ add_emeta_page:
 		line->id = i;
 		line->type = PBLK_LINETYPE_FREE;
 		line->state = PBLK_LINESTATE_FREE;
+		line->gc_group = PBLK_LINEGC_NONE;
 		spin_lock_init(&line->lock);
 
 		nr_bad_blks = pblk_bb_line(pblk, line);
@@ -690,7 +701,6 @@ add_emeta_page:
 		kfree(pblk->luns[i].bb_list);
 
 	return 0;
-
 fail_free_lines:
 	kfree(pblk->lines);
 fail_free_bb_aux:
@@ -729,13 +739,12 @@ static void pblk_writer_stop(struct pblk *pblk)
 
 static void pblk_free(struct pblk *pblk)
 {
+	pblk_writer_stop(pblk);
 	pblk_luns_free(pblk);
 	pblk_lines_free(pblk);
 	pblk_line_meta_free(pblk);
 	pblk_core_free(pblk);
 	pblk_l2p_free(pblk);
-	pblk_writer_stop(pblk);
-	pblk_rwb_free(pblk);
 
 	kfree(pblk);
 }
@@ -743,7 +752,6 @@ static void pblk_free(struct pblk *pblk)
 static void pblk_tear_down(struct pblk *pblk)
 {
 	pblk_flush_writer(pblk);
-	/* pblk_pad_open_blks(pblk); */ //JAVIER
 	pblk_rb_sync_l2p(&pblk->rwb);
 
 	if (pblk_rb_tear_down_check(&pblk->rwb)) {
@@ -751,11 +759,7 @@ static void pblk_tear_down(struct pblk *pblk)
 		return;
 	}
 
-	/* pblk_free_blks(pblk); */ //JAVIER
-
 	pr_debug("pblk: consistent tear down\n");
-
-	/* TODO: Save FTL snapshot for fast recovery */
 }
 
 static void pblk_exit(void *private)
@@ -763,7 +767,7 @@ static void pblk_exit(void *private)
 	struct pblk *pblk = private;
 
 	down_write(&pblk_lock);
-	flush_workqueue(pblk->krqd_wq);
+	flush_workqueue(pblk->gc_wq);
 	pblk_tear_down(pblk);
 	pblk_gc_exit(pblk);
 	pblk_free(pblk);
@@ -803,7 +807,6 @@ static void *pblk_init(struct nvm_tgt_dev *dev, struct gendisk *tdisk)
 
 	spin_lock_init(&pblk->trans_lock);
 	spin_lock_init(&pblk->lock);
-	INIT_WORK(&pblk->ws_gc, pblk_gc_run);
 
 #ifdef CONFIG_NVM_DEBUG
 	atomic_set(&pblk->inflight_writes, 0);
@@ -876,7 +879,7 @@ static void *pblk_init(struct nvm_tgt_dev *dev, struct gendisk *tdisk)
 	tqueue->limits.discard_zeroes_data = 0;
 	queue_flag_set_unlocked(QUEUE_FLAG_DISCARD, tqueue);
 
-	pr_info("pblk init: luns:%u, lines:%d, secs:%llu, buf entries:%lu\n",
+	pr_info("pblk init: luns:%u, lines:%d, secs:%llu, buf entries:%u\n",
 			geo->nr_luns, pblk->l_mg.nr_lines,
 			(unsigned long long)pblk->rl.nr_secs,
 			pblk->rwb.nr_entries);
@@ -901,19 +904,34 @@ fail:
 	return ERR_PTR(ret);
 }
 
+static void pblk_notify_log_page(void *private, struct nvm_log_page log_page)
+{
+	struct pblk *pblk = private;
+
+#ifdef CONFIG_PBLK_AER_DEBUG
+	printk(KERN_CRIT "pblk: catch log page: scope:%d, severity:%d\n",
+					log_page.scope, log_page.severity);
+	print_ppa(&log_page.ppa, "LOG PPA", log_page.ppa.ppa);
+#endif
+
+	pblk_gc_log_page(pblk, log_page);
+}
+
 /* physical block device target */
 static struct nvm_tgt_type tt_pblk = {
-	.name		= "pblk",
-	.version	= {1, 0, 0},
+	.name			= "pblk",
+	.version		= {1, 0, 0},
 
-	.make_rq	= pblk_make_rq,
-	.capacity	= pblk_capacity,
+	.make_rq		= pblk_make_rq,
+	.capacity		= pblk_capacity,
 
-	.init		= pblk_init,
-	.exit		= pblk_exit,
+	.init			= pblk_init,
+	.exit			= pblk_exit,
 
-	.sysfs_init	= pblk_sysfs_init,
-	.sysfs_exit	= pblk_sysfs_exit,
+	.sysfs_init		= pblk_sysfs_init,
+	.sysfs_exit		= pblk_sysfs_exit,
+
+	.notify_log_page	= pblk_notify_log_page,
 };
 
 static int __init pblk_module_init(void)

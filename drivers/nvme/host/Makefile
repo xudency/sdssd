@@ -1,17 +1,17 @@
-obj-$(CONFIG_NVME_CORE)			+= nvme-core.o
-obj-$(CONFIG_BLK_DEV_NVME)		+= nvme.o
-obj-$(CONFIG_NVME_FABRICS)		+= nvme-fabrics.o
-obj-$(CONFIG_NVME_RDMA)			+= nvme-rdma.o
-obj-$(CONFIG_NVME_FC)			+= nvme-fc.o
+  PWD := $(shell pwd)
+  KVER := $(shell uname -r)
+  KDIR := /lib/modules/$(KVER)/build
+  # ccflags-y += -Werror
+  
+  ## nvme.ko
+  nvme-objs := pci.o
+  obj-m  = nvme.o
 
-nvme-core-y				:= core.o
-nvme-core-$(CONFIG_BLK_DEV_NVME_SCSI)	+= scsi.o
-nvme-core-$(CONFIG_NVM)			+= lightnvm.o
+  ## nvme-core.ko
+  nvme-core-objs := core.o lightnvm.o
+  obj-m += nvme-core.o
 
-nvme-y					+= pci.o
-
-nvme-fabrics-y				+= fabrics.o
-
-nvme-rdma-y				+= rdma.o
-
-nvme-fc-y				+= fc.o
+all:
+	$(MAKE) $(ccflags-y) -C $(KDIR) M=$(PWD) modules
+clean:
+	$(MAKE) $(ccflags-y) -C $(KDIR) M=$(PWD) clean

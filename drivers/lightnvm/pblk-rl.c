@@ -14,7 +14,6 @@
  *
  * pblk-rl.c - pblk's rate limiter for user I/O
  *
- * JAVIER: TODO: Convert block calculations to line calculations
  */
 
 #include "pblk.h"
@@ -24,26 +23,16 @@ static void pblk_rl_kick_u_timer(struct pblk_rl *rl)
 	mod_timer(&rl->u_timer, jiffies + msecs_to_jiffies(5000));
 }
 
-int pblk_rl_user_may_in(struct pblk_rl *rl, int nr_entries)
+int pblk_rl_user_may_insert(struct pblk_rl *rl, int nr_entries)
 {
 #ifdef CONFIG_NVM_DEBUG
 	lockdep_assert_held(rl->lock);
 #endif
 
-	if (rl->rb_user_cnt + nr_entries > rl->rb_user_max) {
-		if (rl->rb_gc_cnt) {
-			struct pblk *pblk = container_of(rl, struct pblk, rl);
-
-			pblk_gc_kick(pblk);
-		}
-
-		return 0;
-	}
-
-	return 1;
+	return (!(rl->rb_user_cnt + nr_entries > rl->rb_user_max));
 }
 
-int pblk_rl_gc_may_in(struct pblk_rl *rl, int nr_entries)
+int pblk_rl_gc_may_insert(struct pblk_rl *rl, int nr_entries)
 {
 	int rb_user_active;
 
@@ -51,24 +40,10 @@ int pblk_rl_gc_may_in(struct pblk_rl *rl, int nr_entries)
 	lockdep_assert_held(rl->lock);
 #endif
 
-	rb_user_active = READ_ONCE(rl->rb_user_active);
-
 	/* If there is no user I/O let GC take over space on the write buffer */
-	if (rl->rb_gc_cnt + nr_entries > rl->rb_gc_max && rb_user_active)
-		return 0;
-
-	return 1;
-}
-
-static void pblk_write_should_kick(struct pblk_rl *rl, int nr_entries)
-{
-	struct pblk *pblk = container_of(rl, struct pblk, rl);
-
-	rl->write_cnt += nr_entries;
-	if (rl->write_cnt > PBLK_KICK_SECTS) {
-		rl->write_cnt -= PBLK_KICK_SECTS;
-		pblk_write_kick(pblk);
-	}
+	rb_user_active = READ_ONCE(rl->rb_user_active);
+	return (!(rl->rb_gc_cnt + nr_entries >
+					rl->rb_gc_max && rb_user_active));
 }
 
 void pblk_rl_user_in(struct pblk_rl *rl, int nr_entries)
@@ -78,11 +53,10 @@ void pblk_rl_user_in(struct pblk_rl *rl, int nr_entries)
 #endif
 
 	rl->rb_user_cnt += nr_entries;
+	/* Release user I/O state. Protect from GC */
 	smp_store_release(&rl->rb_user_active, 1);
 	pblk_rl_kick_u_timer(rl);
-	pblk_write_should_kick(rl, nr_entries);
 }
-
 
 void pblk_rl_gc_in(struct pblk_rl *rl, int nr_entries)
 {
@@ -91,7 +65,6 @@ void pblk_rl_gc_in(struct pblk_rl *rl, int nr_entries)
 #endif
 
 	rl->rb_gc_cnt += nr_entries;
-	pblk_write_should_kick(rl, nr_entries);
 }
 
 void pblk_rl_out(struct pblk_rl *rl, int nr_user, int nr_gc)
@@ -114,10 +87,7 @@ enum {
  * number of free blocks on each LUN when GC kicks in.
  *
  * Only the total number of free blocks is used to configure the rate limiter.
- *
- * TODO: Simplify calculations
  */
-
 static int pblk_rl_update_rates(struct pblk_rl *rl, unsigned long max)
 {
 	unsigned int high = 1 << rl->high_pw;
@@ -211,17 +181,11 @@ int pblk_rl_sysfs_rate_show(struct pblk_rl *rl)
 	return rl->rb_user_max;
 }
 
-int pblk_rl_sysfs_rate_store(struct pblk_rl *rl, int value)
-{
-	rl->rb_user_max = value;
-
-	return 0;
-}
-
 static void pblk_rl_u_timer(unsigned long data)
 {
 	struct pblk_rl *rl = (struct pblk_rl *)data;
 
+	/* Release user I/O state. Protect from GC */
 	smp_store_release(&rl->rb_user_active, 0);
 }
 
@@ -230,7 +194,6 @@ void pblk_rl_free(struct pblk_rl *rl)
 	del_timer(&rl->u_timer);
 }
 
-/* TODO: Update values correctly on power up recovery */
 void pblk_rl_init(struct pblk_rl *rl, int budget, spinlock_t *lock)
 {
 	unsigned int rb_windows;
@@ -248,11 +211,9 @@ void pblk_rl_init(struct pblk_rl *rl, int budget, spinlock_t *lock)
 	rl->rb_user_cnt = 0;
 	rl->rb_gc_max = 0;
 	rl->rb_gc_cnt = 0;
-	rl->write_cnt = 0;
 
 	setup_timer(&rl->u_timer, pblk_rl_u_timer, (unsigned long)rl);
 	rl->rb_user_active = 0;
 
 	rl->lock = lock;
 }
-

@@ -19,17 +19,7 @@
 #include <linux/kref.h>
 #include <linux/blk-mq.h>
 #include <linux/lightnvm.h>
-
-struct nvme_ocssd_log {
-	u64	notification_count;
-	u64	ppa_addr;
-	u32	nsid;
-	u16	state			:5;
-	u16	rsvd_state		:11;
-	u8	lba_mask		:3;
-	u8	lba_state		:5;
-	u8	rsvd_23_63[41];
-};
+#include <linux/sed-opal.h>
 
 enum {
 	/*
@@ -136,6 +126,8 @@ struct nvme_ctrl {
 	struct list_head node;
 	struct ida ns_ida;
 
+	struct opal_dev *opal_dev;
+
 	char name[12];
 	char serial[20];
 	char model[40];
@@ -148,6 +140,7 @@ struct nvme_ctrl {
 	u32 max_hw_sectors;
 	u16 oncs;
 	u16 vid;
+	u16 oacs;
 	atomic_t abort_limit;
 	u8 event_limit;
 	u8 vwc;
@@ -159,7 +152,7 @@ struct nvme_ctrl {
 	unsigned long quirks;
 	struct work_struct scan_work;
 	struct work_struct async_event_work;
-	struct work_struct ocssd_work;
+	struct work_struct vendor_async_event_work;
 	struct delayed_work ka_work;
 
 	/* Fabrics only */
@@ -279,6 +272,9 @@ int nvme_init_identify(struct nvme_ctrl *ctrl);
 void nvme_queue_scan(struct nvme_ctrl *ctrl);
 void nvme_remove_namespaces(struct nvme_ctrl *ctrl);
 
+int nvme_sec_submit(void *data, u16 spsp, u8 secp, void *buffer, size_t len,
+		bool send);
+
 #define NVME_NR_AERS	1
 void nvme_complete_async_event(struct nvme_ctrl *ctrl, __le16 status,
 		union nvme_result *res);
@@ -317,6 +313,7 @@ int nvme_set_features(struct nvme_ctrl *dev, unsigned fid, unsigned dword11,
 int nvme_set_queue_count(struct nvme_ctrl *ctrl, int *count);
 void nvme_start_keep_alive(struct nvme_ctrl *ctrl);
 void nvme_stop_keep_alive(struct nvme_ctrl *ctrl);
+void nvme_vendor_async_event_work(struct work_struct *);
 
 struct sg_io_hdr;
 

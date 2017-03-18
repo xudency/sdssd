@@ -13,13 +13,15 @@
  *
  * fscftl initialization.
  */
+#include <linux/module.h>
+#include <linux/moduleparam.h>
 
 static int __init fscftl_module_init(void)
 {
 	return 0;
 }
 
-static void fscftl_module_exit(void)
+static void __exit fscftl_module_exit(void)
 {
 	return;
 }
