@@ -21,6 +21,8 @@
 #include <linux/lightnvm.h>
 #include <linux/sed-opal.h>
 
+#define FSCFTL 1
+
 enum {
 	/*
 	 * Driver internal status code for commands that were cancelled due

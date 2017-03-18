@@ -1,0 +1,12 @@
+write a char device driver and mknod in /dev/*  
+
+init flow
+1) _register_chrdev()   //allocate a major device-number
+2) class_create()
+3) device_create_with_groups
+
+
+exit flow
+1)device_destory()
+2) class_destory()
+3) _unregister_chrdev()

@@ -88,7 +88,7 @@ struct nvme_dev {
 	unsigned queue_count;
 	unsigned online_queues;
 	unsigned max_qid;
-	int q_depth;
+	int q_depth;			// 1-based
 	u32 db_stride;
 	void __iomem *bar;
 	struct work_struct reset_work;
@@ -1101,7 +1101,13 @@ static void nvme_init_queue(struct nvme_queue *nvmeq, u16 qid)
 	nvmeq->sq_tail = 0;
 	nvmeq->cq_head = 0;
 	nvmeq->cq_phase = 1;
+
+	//SQTDB
 	nvmeq->q_db = &dev->dbs[qid * 2 * dev->db_stride];
+
+	//CDHDB
+	//nvmeq->qdb + nvmeq->dev->db_stride
+
 	memset((void *)nvmeq->cqes, 0, CQ_SIZE(nvmeq->q_depth));
 	dev->online_queues++;
 	spin_unlock_irq(&nvmeq->q_lock);
@@ -1126,6 +1132,9 @@ static int nvme_create_queue(struct nvme_queue *nvmeq, int qid)
 		goto release_sq;
 
 	nvme_init_queue(nvmeq, qid);
+
+	printk("create nvme io queue %d\n", nvmeq->qid);
+	
 	return result;
 
  release_sq:
@@ -1236,9 +1245,13 @@ static int nvme_configure_admin_queue(struct nvme_dev *dev)
 	lo_hi_writeq(nvmeq->sq_dma_addr, dev->bar + NVME_REG_ASQ);
 	lo_hi_writeq(nvmeq->cq_dma_addr, dev->bar + NVME_REG_ACQ);
 
+	printk("nvme admin queue configure success\n");
+
 	result = nvme_enable_ctrl(&dev->ctrl, cap);
 	if (result)
 		return result;
+
+	printk("power on success\n");
 
 	nvmeq->cq_vector = 0;
 	result = queue_request_irq(nvmeq);
@@ -1301,7 +1314,8 @@ static void nvme_watchdog_timer(unsigned long data)
 	u32 csts = readl(dev->bar + NVME_REG_CSTS);
 
 	/* Skip controllers under certain specific conditions. */
-	if (nvme_should_reset(dev, csts)) {
+	if (nvme_should_reset(dev, csts)) {		
+		printk("nvme_watchdog_timer goto Reset Controller ...\n");
 		if (!nvme_reset(dev))
 			nvme_warn_reset(dev, csts);
 		return;
@@ -1584,6 +1598,7 @@ static int nvme_dev_add(struct nvme_dev *dev)
 
 static int nvme_pci_enable(struct nvme_dev *dev)
 {
+	u32 vs;
 	u64 cap;
 	int result = -ENOMEM;
 	struct pci_dev *pdev = to_pci_dev(dev->dev);
@@ -1636,7 +1651,8 @@ static int nvme_pci_enable(struct nvme_dev *dev)
 	 * NULL as final argument to sysfs_add_file_to_group.
 	 */
 
-	if (readl(dev->bar + NVME_REG_VS) >= NVME_VS(1, 2, 0)) {
+	vs = readl(dev->bar + NVME_REG_VS);
+	if (vs >= NVME_VS(1, 2, 0)) {
 		dev->cmb = nvme_map_cmb(dev);
 
 		if (dev->cmbsz) {
@@ -1646,6 +1662,8 @@ static int nvme_pci_enable(struct nvme_dev *dev)
 					 "failed to add sysfs attribute for CMB\n");
 		}
 	}
+	
+	printk("NVMe spec Version %d.%d\n", (vs >> 16), (vs >> 8) & 0xff);
 
 	pci_enable_pcie_error_reporting(pdev);
 	pci_save_state(pdev);
@@ -1925,6 +1943,8 @@ static int nvme_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	int node, result = -ENOMEM;
 	struct nvme_dev *dev;
 
+	printk("Controller Class code:0x%08x\n", id->class);
+
 	node = dev_to_node(&pdev->dev);
 	if (node == NUMA_NO_NODE)
 		set_dev_node(&pdev->dev, first_memory_node);
@@ -1939,6 +1959,9 @@ static int nvme_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	dev->dev = get_device(&pdev->dev);
 	pci_set_drvdata(pdev, dev);
+
+ 	//struct pci_dev *pdev = to_pci_dev(dev->dev);
+ 	//struct nvme_dev *dev = pci_get_drvdata(pdev);
 
 	result = nvme_dev_map(dev);
 	if (result)
@@ -2127,6 +2150,8 @@ static const struct pci_device_id nvme_id_table[] = {
 	{ PCI_DEVICE(0x1c5f, 0x0540),	/* Memblaze Pblaze4 adapter */
 		.driver_data = NVME_QUIRK_DELAY_BEFORE_CHK_RDY, },
 	{ PCI_DEVICE_CLASS(PCI_CLASS_STORAGE_EXPRESS, 0xffffff) },
+
+									/* CNEXLabs WestLake Controller */
 	{ PCI_DEVICE_CLASS(PCI_CLASS_STORAGE_EXPRESSWL, 0xffffff) },
 	{ PCI_DEVICE(PCI_VENDOR_ID_APPLE, 0x2001) },
 	{ 0, }

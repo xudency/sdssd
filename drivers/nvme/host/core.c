@@ -1878,12 +1878,19 @@ static void nvme_scan_work(struct work_struct *work)
 
 void nvme_queue_scan(struct nvme_ctrl *ctrl)
 {
+#if FSCFTL
+	printk("FSCFTL(Host-based FTL),PPA mode\n");
+#else
 	/*
 	 * Do not queue new scan work when a controller is reset during
 	 * removal.
 	 */
+	printk("Normal LBA mode(device-based FTL)\n");
+
 	if (ctrl->state == NVME_CTRL_LIVE)
 		schedule_work(&ctrl->scan_work);
+
+#endif
 }
 EXPORT_SYMBOL_GPL(nvme_queue_scan);
 
@@ -1931,6 +1938,8 @@ void nvme_complete_async_event(struct nvme_ctrl *ctrl, __le16 status,
 {
 	u32 result = le32_to_cpu(res->u32);
 	bool done = true;
+
+	printk("Async event completion\n");
 
 	switch (le16_to_cpu(status) >> 1) {
 	case NVME_SC_SUCCESS:
