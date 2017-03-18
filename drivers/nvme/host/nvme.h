@@ -21,7 +21,11 @@
 #include <linux/lightnvm.h>
 #include <linux/sed-opal.h>
 
-#define FSCFTL 1
+/* 
+ * if your SSD is device-base FTL set it 0 
+ * if you implement FTL in Host-side please set it 1
+ */
+#define FSCFTL_ON 1
 
 enum {
 	/*

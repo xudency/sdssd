@@ -1878,7 +1878,7 @@ static void nvme_scan_work(struct work_struct *work)
 
 void nvme_queue_scan(struct nvme_ctrl *ctrl)
 {
-#if FSCFTL
+#if FSCFTL_ON
 	printk("FSCFTL(Host-based FTL),PPA mode\n");
 #else
 	/*
