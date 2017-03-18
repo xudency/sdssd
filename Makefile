@@ -6,6 +6,7 @@ SUBDIR += drivers/fscftl
 all:
 	$(foreach N,$(SUBDIR),make -C $(N);)
 	
+	cp drivers/nvme/host/nvme-core.ko $(PWD)/
 	cp drivers/nvme/host/nvme.ko $(PWD)/
 	cp drivers/fscftl/fscftl.ko $(PWD)/
 
