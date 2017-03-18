@@ -21,6 +21,10 @@
 #include "hwcfg/cfg/flash_cfg.h"
 #include "../nvme/host/nvme.h"
 
+static char exdev_name[8] = "nvme0";
+module_param_string(name, exdev_name, sizeof(exdev_name), S_IRWXUGO);
+
+
 // Move to fscftl.h
 enum {
 	NVME_PLANE_SNGL	= 0,
@@ -63,8 +67,8 @@ void set_bb_tbl(u32 blk, u32 lun, u32 ch)
 	return;
 }
 
-int rdpparaw_sync(struct physical_address *ppa, u16 nppa, u16 ctrl, 
-			  	  void *databuf, void *metabuf)
+int rdpparaw_sync(struct nvm_exdev *exdev, struct physical_address *ppa, 
+                      u16 nppa, u16 ctrl, void *databuf, void *metabuf)
 {
 	struct nvme_ppa_command ppa_cmd;
 	struct request_queue *q;		// How get from
@@ -86,7 +90,7 @@ int rdpparaw_sync(struct physical_address *ppa, u16 nppa, u16 ctrl,
  * return  1:  badblock
  * return -1:  Error
  */
-int micron_flash_bb_eval(u32 blk, u32 lun, u32 ch)
+int micron_flash_bb_eval(struct nvm_exdev *exdev, u32 blk, u32 lun, u32 ch)
 {
 	int result = 0;
 	u32 pl;
@@ -117,7 +121,7 @@ int micron_flash_bb_eval(u32 blk, u32 lun, u32 ch)
 		ppalist[pl].nand.pg = 0;
 	}
 	
-	rdpparaw_sync(ppalist, CFG_NAND_PLANE_NUM, NVME_PLANE_SNGL, databuf, metabuf);
+	rdpparaw_sync(exdev, ppalist, CFG_NAND_PLANE_NUM, NVME_PLANE_SNGL, databuf, metabuf);
 
 	for(pl = 0; pl < CFG_NAND_PLANE_NUM; pl++) {
 		u8 *data = (u8 *)((u8 *)databuf + pl*CFG_NAND_EP_SIZE);
@@ -136,7 +140,7 @@ int micron_flash_bb_eval(u32 blk, u32 lun, u32 ch)
 }
 
 
-void fscftl_bbt_discovery(u8 flashtype)
+void fscftl_bbt_discovery(struct nvm_exdev *exdev)
 {
 	u32 blk, lun, ch;
 	
@@ -144,9 +148,9 @@ void fscftl_bbt_discovery(u8 flashtype)
 		for(lun = 0; lun < CFG_NAND_LUN_NUM; lun++) {			
 			for(ch = 0; ch < CFG_NAND_CHANNEL_NUM; ch++) {
 				if (!strcmp(FLASH_TYPE, "2TB_MC_L95B")) {
-					micron_flash_bb_eval(blk, lun, ch);
+					micron_flash_bb_eval(exdev, blk, lun, ch);
 				} else if (!strcmp(FLASH_TYPE, "2TB_TH58TFG9DFK")) {
-					//tsb_flash_bb_eval(blk, lun, ch);
+					//tsb_flash_bb_eval(exdev, blk, lun, ch);
 				} else {
 					printk("flashtype:%s invalid", FLASH_TYPE);
 				}				
@@ -159,6 +163,13 @@ static int __init fscftl_module_init(void)
 {
 	printk("NandFlash type: %s\n", FLASH_TYPE);
 
+    struct nvm_exdev *exdev;
+   
+    exdev = nvm_find_exdev(exdev_name);
+    if (exdev == NULL)
+        return -ENODEV;
+
+    fscftl_bbt_discovery(exdevd);
 
 	return 0;
 }

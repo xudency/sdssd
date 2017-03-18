@@ -2027,12 +2027,12 @@ static void nvme_remove(struct pci_dev *pdev)
 	nvme_change_ctrl_state(&dev->ctrl, NVME_CTRL_DELETING);
 
 	pci_set_drvdata(pdev, NULL);
-
+    
 	if (!pci_device_is_present(pdev))
 		nvme_change_ctrl_state(&dev->ctrl, NVME_CTRL_DEAD);
 
 	flush_work(&dev->reset_work);
-	nvme_uninit_ctrl(&dev->ctrl);
+    nvme_uninit_ctrl(&dev->ctrl);
 	nvme_dev_disable(dev, true);
 	nvme_dev_remove_admin(dev);
 	nvme_free_queues(dev, 0);

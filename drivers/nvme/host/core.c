@@ -1879,17 +1879,14 @@ static void nvme_scan_work(struct work_struct *work)
 void nvme_queue_scan(struct nvme_ctrl *ctrl)
 {
 #if FSCFTL_ON
-	printk("FSCFTL(Host-based FTL),PPA mode\n");
+    return;
 #else
 	/*
 	 * Do not queue new scan work when a controller is reset during
 	 * removal.
 	 */
-	printk("Normal LBA mode(device-based FTL)\n");
-
 	if (ctrl->state == NVME_CTRL_LIVE)
 		schedule_work(&ctrl->scan_work);
-
 #endif
 }
 EXPORT_SYMBOL_GPL(nvme_queue_scan);
@@ -2011,6 +2008,8 @@ void nvme_uninit_ctrl(struct nvme_ctrl *ctrl)
 	flush_work(&ctrl->async_event_work);
 	flush_work(&ctrl->vendor_async_event_work);
 	flush_work(&ctrl->scan_work);
+
+    nvm_exdev_unregister(ctrl);
 	nvme_remove_namespaces(ctrl);
 
 	device_destroy(nvme_class, MKDEV(nvme_char_major, ctrl->instance));
@@ -2078,6 +2077,12 @@ int nvme_init_ctrl(struct nvme_ctrl *ctrl, struct device *dev,
 	spin_lock(&dev_list_lock);
 	list_add_tail(&ctrl->node, &nvme_ctrl_list);
 	spin_unlock(&dev_list_lock);
+
+    if (nvm_exdev_register(ctrl)) {
+        printk("nvm exdev register fail\n");
+        ret = -ENOMEM;
+        goto out_release_instance;
+    }
 
 	return 0;
 out_release_instance:

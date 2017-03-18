@@ -1321,3 +1321,96 @@ next:
 #else /* CONFIG_NVM_DEBUG */
 void nvm_check_write_cmd_correct(void *data) {}
 #endif
+
+
+/////////// drivers/nvme/host/exppa.c
+/////////// include/linux/exppa.h
+#if FSCFTL_ON
+
+struct nvm_exdev {
+	struct list_head devices;
+    u32 magic_dw;
+    int node;
+    char name[8];
+    struct nvme_dev  *ndev;
+    struct nvme_ctrl *ctrl;
+    struct pci_dev   *pdev;
+};
+
+static LIST_HEAD(nvm_exdev_list);
+static DECLARE_RWSEM(nvm_exdev_lock);
+
+// exdev expose ppa device 
+static inline struct nvm_exdev *to_nvm_exdev(struct nvme_ctrl *ctrl)
+{
+	return container_of(ctrl, struct nvm_exdev, ctrl);
+}
+
+int nvm_exdev_register(struct nvme_ctrl *ctrl)
+{
+    int node;
+    struct nvm_exdev *exdev;
+    struct nvme_dev *ndev;
+    struct pci_dev *pdev;
+        
+	node = dev_to_node(ctrl->dev);
+    ndev = to_nvme_dev(ctrl);
+    pdev = to_pci_dev(ndev->dev);
+
+	exdev = kzalloc_node(sizeof(struct nvm_exdev), GFP_KERNEL, node);
+    if (!exdev)
+        return -ENOMEM;
+
+    exdev->magic_dw = 0xdc14dc14;   //FSCFTL
+    exdev->node = node;
+    exdev->ndev = ndev;
+    exdev->ctrl = ctrl;
+    exdev->pdev = pdev;
+	scnprintf(exdev->name, sizeof(exdev->name), "nvme%d", ctrl->instance);
+
+	down_write(&nvm_exdev_lock);
+	list_add(&exdev->devices, &nvm_exdev_list);
+	up_write(&nvm_exdev_lock);
+
+	printk("Ergister FSCFTL underlying exdev:%s\n", exdev->name);
+
+    return 0;
+}
+
+void nvm_exdev_unregister(struct nvme_ctrl *ctrl)
+{
+    struct nvm_exdev *exdev = to_nvm_exdev(ctrl);
+
+	down_write(&nvm_exdev_lock);
+	list_del(&exdev->devices);
+	up_write(&nvm_exdev_lock);
+
+    kfree(exdev);
+}
+
+static struct nvm_dev *nvm_find_exdev(const char *name)
+{
+	struct nvm_exdev *dev;
+
+	list_for_each_entry(dev, &nvm_exdev_list, devices)
+		if (!strcmp(name, dev->name))
+			return dev;
+
+    printk("Can't find exposs ppa device:%s", name);
+	return NULL;
+}
+EXPORT_SYMBOL(nvm_find_exdev);
+
+#else
+
+int nvm_exdev_register(struct nvme_ctrl *ctrl)
+{
+    return 0;   
+}
+
+void nvm_exdev_unregister(struct nvme_ctrl *ctrl)
+{
+    return 0;
+}
+
+#endif
