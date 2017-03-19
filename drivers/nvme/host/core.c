@@ -1878,16 +1878,20 @@ static void nvme_scan_work(struct work_struct *work)
 
 void nvme_queue_scan(struct nvme_ctrl *ctrl)
 {
-#if FSCFTL_ON
-    return;
-#else
+	#if FSCFTL_ON
+
+	return;
+
+	#else
+
 	/*
 	 * Do not queue new scan work when a controller is reset during
 	 * removal.
 	 */
 	if (ctrl->state == NVME_CTRL_LIVE)
 		schedule_work(&ctrl->scan_work);
-#endif
+
+	#endif
 }
 EXPORT_SYMBOL_GPL(nvme_queue_scan);
 

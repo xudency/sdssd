@@ -17,13 +17,11 @@
 #include <linux/moduleparam.h>
 #include <linux/slab.h>
 
-#include "linux/lightnvm.h"
 #include "hwcfg/cfg/flash_cfg.h"
 #include "../nvme/host/nvme.h"
 
-static char exdev_name[8] = "nvme0";
-module_param_string(name, exdev_name, sizeof(exdev_name), S_IRWXUGO);
-
+static char exdev_name[8];
+module_param_string(devname, exdev_name, 8, 0);
 
 // Move to fscftl.h
 enum {
@@ -71,7 +69,7 @@ int rdpparaw_sync(struct nvm_exdev *exdev, struct physical_address *ppa,
                       u16 nppa, u16 ctrl, void *databuf, void *metabuf)
 {
 	struct nvme_ppa_command ppa_cmd;
-	struct request_queue *q;		// How get from
+	struct request_queue *q = exdev->ctrl->admin_q;		// How get from
 
 	ppa_cmd.opcode = NVM_OP_RDRAW;
 	ppa_cmd.nsid = 1;
@@ -161,15 +159,18 @@ void fscftl_bbt_discovery(struct nvm_exdev *exdev)
 
 static int __init fscftl_module_init(void)
 {
-	printk("NandFlash type: %s\n", FLASH_TYPE);
-
     struct nvm_exdev *exdev;
-   
-    exdev = nvm_find_exdev(exdev_name);
+
+	printk("NandFlash type:%s\n", FLASH_TYPE);
+	printk("goto find expose nvme device:%s\n", exdev_name);
+
+	exdev = nvm_find_exdev(exdev_name);
     if (exdev == NULL)
         return -ENODEV;
 
-    fscftl_bbt_discovery(exdevd);
+	printk("find exdev:%s  magic_dw:0x%x\n", exdev->name, exdev->magic_dw);
+
+    //fscftl_bbt_discovery(exdev);
 
 	return 0;
 }

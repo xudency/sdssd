@@ -1323,28 +1323,11 @@ void nvm_check_write_cmd_correct(void *data) {}
 #endif
 
 
+////////////////////////////expose ppa nvme ssd extend/////////////
 /////////// drivers/nvme/host/exppa.c
-/////////// include/linux/exppa.h
-#if FSCFTL_ON
-
-struct nvm_exdev {
-	struct list_head devices;
-    u32 magic_dw;
-    int node;
-    char name[8];
-    struct nvme_dev  *ndev;
-    struct nvme_ctrl *ctrl;
-    struct pci_dev   *pdev;
-};
-
+/////////// drivers/nvme/host/nvme.h
 static LIST_HEAD(nvm_exdev_list);
 static DECLARE_RWSEM(nvm_exdev_lock);
-
-// exdev expose ppa device 
-static inline struct nvm_exdev *to_nvm_exdev(struct nvme_ctrl *ctrl)
-{
-	return container_of(ctrl, struct nvm_exdev, ctrl);
-}
 
 int nvm_exdev_register(struct nvme_ctrl *ctrl)
 {
@@ -1388,7 +1371,7 @@ void nvm_exdev_unregister(struct nvme_ctrl *ctrl)
     kfree(exdev);
 }
 
-static struct nvm_dev *nvm_find_exdev(const char *name)
+struct nvm_exdev *nvm_find_exdev(const char *name)
 {
 	struct nvm_exdev *dev;
 
@@ -1401,16 +1384,3 @@ static struct nvm_dev *nvm_find_exdev(const char *name)
 }
 EXPORT_SYMBOL(nvm_find_exdev);
 
-#else
-
-int nvm_exdev_register(struct nvme_ctrl *ctrl)
-{
-    return 0;   
-}
-
-void nvm_exdev_unregister(struct nvme_ctrl *ctrl)
-{
-    return 0;
-}
-
-#endif

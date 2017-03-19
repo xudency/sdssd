@@ -21,7 +21,9 @@
 #include <linux/lightnvm.h>
 #include <linux/sed-opal.h>
 
-#define CONFIG_NVM
+//#ifndef CONFIG_NVM
+//#define CONFIG_NVM
+//#endif
 
 /* 
  * if your SSD is device-base FTL set it 0 
@@ -118,6 +120,12 @@ enum nvme_ctrl_state {
 	NVME_CTRL_DEAD,
 };
 
+struct nvme_dev;
+struct nvme_queue;
+struct nvme_ctrl;
+struct nvme_ns;
+struct nvme_queue;
+
 struct nvme_ctrl {
 	enum nvme_ctrl_state state;
 	spinlock_t lock;
@@ -202,6 +210,82 @@ struct nvme_ns {
 	u32 mode_select_block_len;
 };
 
+/*
+ * Represents an NVM Express device.  Each nvme_dev is a PCI function.
+ */
+struct nvme_dev {
+	struct nvme_queue **queues;
+	struct blk_mq_tag_set tagset;
+	struct blk_mq_tag_set admin_tagset;
+	u32 __iomem *dbs;
+	struct device *dev;
+	struct dma_pool *prp_page_pool;
+	struct dma_pool *prp_small_pool;
+	unsigned queue_count;
+	unsigned online_queues;
+	unsigned max_qid;
+	int q_depth;			// 1-based
+	u32 db_stride;
+	void __iomem *bar;
+	struct work_struct reset_work;
+	struct work_struct remove_work;
+	struct timer_list watchdog_timer;
+	struct mutex shutdown_lock;
+	bool subsystem;
+	void __iomem *cmb;
+	dma_addr_t cmb_dma_addr;
+	u64 cmb_size;
+	u32 cmbsz;
+	u32 cmbloc;
+	struct nvme_ctrl ctrl;
+	struct completion ioq_wait;
+};
+
+/*
+ * An NVM Express queue.  Each device has at least two (one for admin
+ * commands and one for I/O commands).
+ */
+struct nvme_queue {
+	struct device *q_dmadev;
+	struct nvme_dev *dev;
+	char irqname[24];	/* nvme4294967295-65535\0 */
+	spinlock_t q_lock;
+	struct nvme_command *sq_cmds;
+	struct nvme_command __iomem *sq_cmds_io;
+	volatile struct nvme_completion *cqes;
+	struct blk_mq_tags **tags;
+	dma_addr_t sq_dma_addr;
+	dma_addr_t cq_dma_addr;
+	u32 __iomem *q_db;
+	u16 q_depth;
+	s16 cq_vector;
+	u16 sq_tail;
+	u16 cq_head;
+	u16 qid;
+	u8 cq_phase;
+	u8 cqe_seen;
+};
+
+/*
+ * The nvme_iod describes the data in an I/O, including the list of PRP
+ * entries.  You can't see it in this data structure because C doesn't let
+ * me express that.  Use nvme_init_iod to ensure there's enough space
+ * allocated to store the PRP list.
+ */
+struct nvme_iod {
+	struct nvme_request req;
+	struct nvme_queue *nvmeq;
+	int aborted;
+	int npages;		/* In the PRP list. 0 means small pool in use */
+	int nents;		/* Used in scatterlist */
+	int length;		/* Of data, in bytes */
+	dma_addr_t first_dma;
+	struct scatterlist meta_sg; /* metadata requires single contiguous buffer */
+	struct scatterlist *sg;
+	struct scatterlist inline_sg[0];
+};
+
+
 struct nvme_ctrl_ops {
 	const char *name;
 	struct module *module;
@@ -264,6 +348,12 @@ static inline bool nvme_req_needs_retry(struct request *req, u16 status)
 		(jiffies - req->start_time) < req->timeout &&
 		req->retries < nvme_max_retries;
 }
+
+static inline struct nvme_dev *to_nvme_dev(struct nvme_ctrl *ctrl)
+{
+	return container_of(ctrl, struct nvme_dev, ctrl);
+}
+
 
 void nvme_cancel_request(struct request *req, void *data, bool reserved);
 bool nvme_change_ctrl_state(struct nvme_ctrl *ctrl,
@@ -367,5 +457,47 @@ static inline struct nvme_ns *nvme_get_ns_from_dev(struct device *dev)
 
 int __init nvme_core_init(void);
 void nvme_core_exit(void);
+
+
+///////////////////////////////Expose ppa NVMe SSD device////////////////
+#if FSCFTL_ON
+
+struct nvm_exdev {
+	struct list_head devices;
+    u32 magic_dw;
+    int node;
+    char name[8];
+    struct nvme_dev  *ndev;
+    struct nvme_ctrl *ctrl;
+    struct pci_dev   *pdev;
+};
+
+static inline struct nvm_exdev *to_nvm_exdev(struct nvme_ctrl *ctrl)
+{
+	return container_of(&ctrl, struct nvm_exdev, ctrl);
+}
+
+
+extern int nvm_exdev_register(struct nvme_ctrl *ctrl);
+extern void nvm_exdev_unregister(struct nvme_ctrl *ctrl);
+extern struct nvm_exdev *nvm_find_exdev(const char *name);
+
+#else
+
+int nvm_exdev_register(struct nvme_ctrl *ctrl)
+{
+    return 0;   
+}
+
+void nvm_exdev_unregister(struct nvme_ctrl *ctrl)
+{
+    return 0;
+}
+
+
+
+#endif
+/////////////////////////////////////////////////////
+
 
 #endif /* _NVME_H */

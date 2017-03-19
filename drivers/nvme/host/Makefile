@@ -1,7 +1,7 @@
   PWD := $(shell pwd)
   KVER := $(shell uname -r)
   KDIR := /lib/modules/$(KVER)/build
-  # ccflags-y += -Werror
+  #ccflags-y += -DEXPORT_SYMTAB
   
   ## nvme.ko
   nvme-objs := pci.o
