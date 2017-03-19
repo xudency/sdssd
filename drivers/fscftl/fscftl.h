@@ -2,8 +2,18 @@
 #define FSCFTL_H_
 
 #include "../nvme/host/nvme.h"
+#include "hwcfg/cfg/flash_cfg.h"
 
-// TODO don't define fix value, should read from HW register
+//don't define fix value, should read from HW register
+#define MAX_PPA_PER_CMD		64   // due to cqe 64 bit
+
+/* Bootblk+SYSTBL+BB+GC+SpecialPPA(XOR FistPage Ftllog) */
+//#define OP_CAPACITY		(CAPACITY - USER_CAPACITY)
+/* User data Byte */
+#define USER_CAPACITY   ((CAPACITY*8)/11)
+
+#define MAX_USER_LBA	(USER_CAPACITY/CFG_NAND_EP_SIZE)
+
 #define NAND_RAW_SIZE 		304
 #define NAND_META_SIZE 		16
 
@@ -39,8 +49,16 @@ struct nvme_ppa_command {
 	__le64			resv;
 };
 
-/* extern fn */
+// expose PPA namespace
+struct nvm_exns {
+	struct list_head list;	// linked in nvm_exdev->exns
+	struct request_queue *queue;
+	struct gendisk *disk;
+	struct nvm_exdev *ndev;
+	int instance;
+};
 
+/* extern fn */
 void nvm_create_exns(struct nvm_exdev *exdev);
 void nvm_delete_exns(struct nvm_exdev *exdev);
 
