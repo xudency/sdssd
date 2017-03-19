@@ -23,6 +23,10 @@ static blk_qc_t fscftl_make_rq(struct request_queue *q, struct bio *bio)
 	return BLK_QC_T_NONE;
 }
 
+//nvme_dev;
+//nvme_ctrl;
+//nvm_exdev;
+//nvm_exns;
 void nvm_create_exns(struct nvm_exdev *exdev)
 {
 	int nsid;

@@ -480,7 +480,6 @@ static inline struct nvm_exdev *to_nvm_exdev(struct nvme_ctrl *ctrl)
 	return container_of(&ctrl, struct nvm_exdev, ctrl);
 }
 
-
 extern int nvm_exdev_register(struct nvme_ctrl *ctrl);
 extern void nvm_exdev_unregister(struct nvme_ctrl *ctrl);
 extern struct nvm_exdev *nvm_find_exdev(const char *name);
@@ -497,10 +496,7 @@ void nvm_exdev_unregister(struct nvme_ctrl *ctrl)
     return 0;
 }
 
-
-
 #endif
 /////////////////////////////////////////////////////
-
 
 #endif /* _NVME_H */
