@@ -27,9 +27,9 @@ static blk_qc_t fscftl_make_rq(struct request_queue *q, struct bio *bio)
 //nvme_ctrl;
 //nvm_exdev;
 //nvm_exns;
-void nvm_create_exns(struct nvm_exdev *exdev)
+int nvm_create_exns(struct nvm_exdev *exdev)
 {
-	int nsid;
+	int result, nsid;
 	sector_t capacity;
 	struct gendisk *disk;	
 	struct request_queue *rqueue;
@@ -39,7 +39,7 @@ void nvm_create_exns(struct nvm_exdev *exdev)
 
 	exns = kzalloc_node(sizeof(*exns), GFP_KERNEL, node);
 	if (!exns)
-		return;
+		return -ENOMEM;
 
 	nsid = idr_alloc(&exdev->nsid_idr, exns, 1, 0, GFP_KERNEL);
 	if (nsid < 0)
@@ -102,7 +102,7 @@ void nvm_create_exns(struct nvm_exdev *exdev)
 	list_add(&exns->list, &exdev->exns);
 	mutex_unlock(&exdev->nslist_mutex);
 
-	return;
+	return 0;
 
 out_put_disk:
 	put_disk(disk);
@@ -110,7 +110,7 @@ out_remove_idr:
 	idr_remove(&exdev->nsid_idr, exns->instance);
 out_free_ns:
 	kfree(exns);
-	return;
+	return -EFAULT;
 }
 
 void nvm_delete_exns(struct nvm_exdev *exdev)

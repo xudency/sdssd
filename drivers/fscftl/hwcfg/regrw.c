@@ -2,6 +2,8 @@
 #include "../../nvme/host/nvme.h"
 
 
+// set HW controller, Refernce Controller Vendor Program Guide  
+// Actually this should do in Firmware
 void ctrl_reg_setup(struct nvme_ctrl *ctrl)
 {
     u32 regval;

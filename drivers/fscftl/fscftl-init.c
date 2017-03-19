@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2017 Group XX
- * Initial release: 
+ * Initial release: Dengcai Xu <dxu@cnexlabs.com>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version
@@ -28,6 +28,72 @@ module_param(mcp, bool, 0644);
 static char exdev_name[8] = "nvme0";
 module_param_string(devname, exdev_name, 8, 0);
 
+// inherit interface from Lightnvm Subsystem and pblk
+
+//example
+void nvm_wrppa(struct nvm_exdev *dev)
+{
+	struct nvm_rq rqd;
+
+	memset(&rqd, 0, sizeof(struct nvm_rq));
+
+    // fullfill rqd.xx
+    rqd.opcode = NVM_OP_ERASE;
+	rqd.end_io = nvm_end_io_sync;
+	rqd.private = &wait;
+    
+    dev->ops->submit_io(dev, &rqd);
+
+	//wait_for_completion_io(&wait);
+
+    return;
+}
+
+// copy from nvme_nvm_submit_io
+static int nvm_submit_ppa(struct nvm_exdev *dev, struct nvm_rq *rqd)
+{
+	struct request_queue *q = dev->q;  //this is underlying device(nvme0n1) q
+	struct nvme_ns *ns = q->queuedata;
+	struct request *rq;
+	struct bio *bio = rqd->bio;
+	struct nvme_nvm_command *cmd;
+
+	cmd = kzalloc(sizeof(struct nvme_nvm_command), GFP_KERNEL);
+	if (!cmd)
+		return -ENOMEM;
+
+	rq = nvme_alloc_request(q, (struct nvme_command *)cmd, 0, NVME_QID_ANY);
+	if (IS_ERR(rq)) {
+		kfree(cmd);
+		return -ENOMEM;
+	}
+	rq->cmd_flags &= ~REQ_FAILFAST_DRIVER;
+
+	if (bio) {
+		rq->ioprio = bio_prio(bio);
+		rq->__data_len = bio->bi_iter.bi_size;
+		rq->bio = rq->biotail = bio;
+		if (bio_has_data(bio))
+			rq->nr_phys_segments = bio_phys_segments(q, bio);
+	} else {
+		rq->ioprio = IOPRIO_PRIO_VALUE(IOPRIO_CLASS_BE, IOPRIO_NORM);
+		rq->__data_len = 0;
+	}
+
+	nvme_nvm_rqtocmd(rq, rqd, ns, cmd);
+
+	rq->end_io_data = rqd;
+
+	blk_execute_rq_nowait(q, NULL, rq, 0, nvme_nvm_end_io);
+
+	return 0;
+}
+
+static const struct nvme_ppa_ops exdev_ppa_ops = {
+	.name			 = "exppassd",
+	.module			 = THIS_MODULE,
+	.submit_io       = nvm_submit_ppa,
+};
 
 int fscftl_setup(void)
 {
@@ -53,8 +119,8 @@ static int __init fscftl_module_init(void)
 
 	printk("find exdev:%s  magic_dw:0x%x\n", exdev->name, exdev->magic_dw);
 
-    // set HW controller, Ref Controller Vendor Program Guide  
-    // Actually this should do in Firmware
+    exdev->ops = &exdev_ppa_ops;
+
     ctrl_reg_setup(ctrl);
 
     ret = fscftl_setup();
@@ -69,7 +135,9 @@ static int __init fscftl_module_init(void)
             goto err_cleanup;
     }
 
-	nvm_create_exns(exdev);
+	ret = nvm_create_exns(exdev);
+    if (ret)
+        goto err_cleanup;
 
 	return 0;
 

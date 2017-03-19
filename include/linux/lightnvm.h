@@ -271,8 +271,8 @@ struct nvm_rq {
 	void *meta_list;
 	dma_addr_t dma_meta_list;
 
-	struct completion *wait;
-	nvm_end_io_fn *end_io;
+	struct completion *wait;  //ctx
+	nvm_end_io_fn *end_io;    //fn
 
 	uint8_t opcode;
 	uint16_t nr_ppas;

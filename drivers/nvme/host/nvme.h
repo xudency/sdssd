@@ -468,11 +468,18 @@ struct nvm_exdev {
     u32 magic_dw;
     int node;
     char name[8];
+    struct nvme_ppa_ops *ops;
     struct nvme_dev  *ndev;
     struct nvme_ctrl *ctrl;
     struct pci_dev   *pdev;
 	struct idr nsid_idr;
 	struct mutex nslist_mutex;
+};
+
+struct nvme_ppa_ops {
+	const char *name;
+	struct module *module;
+    int (*submit_io)(struct nvm_exdev *exdev, struct nvm_rq *rqd);
 };
 
 static inline struct nvm_exdev *to_nvm_exdev(struct nvme_ctrl *ctrl)

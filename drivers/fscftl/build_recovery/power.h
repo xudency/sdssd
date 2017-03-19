@@ -8,6 +8,7 @@ enum power_down_flag {
     POWER_DOWN_UNSAFE = 0x7755,      // last time not do power down, need do crash recovery
 };
 
+int crash_recovery(void);
 int do_manufactory_init(struct nvm_exdev * exdev);
 int try_recovery_systbl(void);
 void flush_down_systbl(void);

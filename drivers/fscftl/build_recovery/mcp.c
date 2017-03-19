@@ -7,7 +7,15 @@ void set_bb_tbl(u32 blk, u32 lun, u32 ch)
 	return;
 }
 
-// Move to datapath/ppaops.c
+// TODO::  ppaops.c
+
+// these method define in a struct pointer
+//rdppa_sync
+//rdpparw_sync
+//wrppa_sync
+//wrpparaw_sync
+//ersppa_sync
+
 int rdpparaw_sync(struct nvm_exdev *exdev, struct physical_address *ppa, 
                       u16 nppa, u16 ctrl, void *databuf, void *metabuf)
 {
@@ -105,7 +113,6 @@ void fscftl_bbt_discovery(struct nvm_exdev *exdev)
 	}
 }
 
-
 int do_manufactory_init(struct nvm_exdev * exdev)
 {
     sweepup_disk(exdev);
@@ -114,8 +121,8 @@ int do_manufactory_init(struct nvm_exdev * exdev)
 
     // Now all systbl is clean, don't need Flush down
 
-    //bootblk_flush_bbt();
-    //bootblk_flush_primary_page(POWER_DOWN_UNSAFE);
+    bootblk_flush_bbt();
+    bootblk_flush_primary_page(POWER_DOWN_UNSAFE);
 
     return 0;
 }

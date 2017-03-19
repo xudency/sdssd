@@ -59,7 +59,7 @@ struct nvm_exns {
 };
 
 /* extern fn */
-void nvm_create_exns(struct nvm_exdev *exdev);
+int nvm_create_exns(struct nvm_exdev *exdev);
 void nvm_delete_exns(struct nvm_exdev *exdev);
 
 
