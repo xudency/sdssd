@@ -1323,9 +1323,8 @@ void nvm_check_write_cmd_correct(void *data) {}
 #endif
 
 
-////////////////////////////expose ppa nvme ssd extend/////////////
-/////////// drivers/nvme/host/exppa.c
-/////////// drivers/nvme/host/nvme.h
+////////////////////expose ppa nvme ssd extend/////////////////////
+////////////////////drivers/nvme/host/exppa.c//////////////////////
 static LIST_HEAD(nvm_exdev_list);
 static DECLARE_RWSEM(nvm_exdev_lock);
 
@@ -1351,6 +1350,10 @@ int nvm_exdev_register(struct nvme_ctrl *ctrl)
     exdev->pdev = pdev;
 	scnprintf(exdev->name, sizeof(exdev->name), "nvme%d", ctrl->instance);
 
+	INIT_LIST_HEAD(&exdev->exns);
+	idr_init(&exdev->nsid_idr);	
+	mutex_init(&exdev->nslist_mutex);
+
 	down_write(&nvm_exdev_lock);
 	list_add(&exdev->devices, &nvm_exdev_list);
 	up_write(&nvm_exdev_lock);
@@ -1367,6 +1370,8 @@ void nvm_exdev_unregister(struct nvme_ctrl *ctrl)
 	down_write(&nvm_exdev_lock);
 	list_del(&exdev->devices);
 	up_write(&nvm_exdev_lock);
+
+	idr_destroy(&exdev->nsid_idr);
 
     kfree(exdev);
 }

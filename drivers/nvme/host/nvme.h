@@ -463,13 +463,16 @@ void nvme_core_exit(void);
 #if FSCFTL_ON
 
 struct nvm_exdev {
-	struct list_head devices;
+	struct list_head devices;  /* all nvm_exdev linked in nvm_exdev_list */	
+	struct list_head exns;     /* all nvm_exns linked in this List head */
     u32 magic_dw;
     int node;
     char name[8];
     struct nvme_dev  *ndev;
     struct nvme_ctrl *ctrl;
     struct pci_dev   *pdev;
+	struct idr nsid_idr;
+	struct mutex nslist_mutex;
 };
 
 static inline struct nvm_exdev *to_nvm_exdev(struct nvme_ctrl *ctrl)

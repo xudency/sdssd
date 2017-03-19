@@ -19,45 +19,10 @@
 
 #include "hwcfg/cfg/flash_cfg.h"
 #include "../nvme/host/nvme.h"
+#include "fscftl.h"
 
-static char exdev_name[8];
+static char exdev_name[8] = "nvme0";
 module_param_string(devname, exdev_name, 8, 0);
-
-// Move to fscftl.h
-enum {
-	NVME_PLANE_SNGL	= 0,
-	NVME_PLANE_DUAL	= 1,
-	NVME_PLANE_QUAD	= 2,
-};
-
-enum {
-	NVM_OP_WRPPA		= 0x91,
-	NVM_OP_RDPPA		= 0x92,
-	NVM_OP_ESPPA		= 0x90,
-	NVM_OP_WRRAW		= 0x95,
-	NVM_OP_RDRAW		= 0x96,
-};
-
-struct nvme_ppa_command {
-	__u8			opcode;
-	__u8			flags;
-	__u16			command_id;
-	__le32			nsid;
-	__u64			rsvd2;
-	__le64			metadata;
-	__le64			prp1;
-	__le64			prp2;
-	__le64			ppalist;
-	__le16			nlb;
-	__le16			control;
-	__le32			dsmgmt;
-	__le64			resv;
-};
-
-// TODO don't define fix value, should read from HW register
-#define NAND_RAW_SIZE 		304
-#define NAND_META_SIZE 		16
-
 
 void set_bb_tbl(u32 blk, u32 lun, u32 ch)
 {
@@ -73,8 +38,8 @@ int rdpparaw_sync(struct nvm_exdev *exdev, struct physical_address *ppa,
 
 	ppa_cmd.opcode = NVM_OP_RDRAW;
 	ppa_cmd.nsid = 1;
-	ppa_cmd.metadata = cpu_to_le64(metabuf);  // DMA-Address
-	ppa_cmd.ppalist = cpu_to_le64(ppa);    	  // DMA-Address
+	ppa_cmd.metadata = cpu_to_le64(metabuf);  			// DMA-Address
+	ppa_cmd.ppalist = cpu_to_le64(ppa);    	  			// DMA-Address
 	ppa_cmd.nlb = cpu_to_le16(nppa - 1);
 
 	nvme_submit_sync_cmd(q, (struct nvme_command *)&ppa_cmd,
@@ -137,7 +102,6 @@ int micron_flash_bb_eval(struct nvm_exdev *exdev, u32 blk, u32 lun, u32 ch)
 	return result;
 }
 
-
 void fscftl_bbt_discovery(struct nvm_exdev *exdev)
 {
 	u32 blk, lun, ch;
@@ -159,7 +123,9 @@ void fscftl_bbt_discovery(struct nvm_exdev *exdev)
 
 static int __init fscftl_module_init(void)
 {
+	u32 regval;
     struct nvm_exdev *exdev;
+	struct nvme_ctrl *ctrl;
 
 	printk("NandFlash type:%s\n", FLASH_TYPE);
 	printk("goto find expose nvme device:%s\n", exdev_name);
@@ -170,6 +136,13 @@ static int __init fscftl_module_init(void)
 
 	printk("find exdev:%s  magic_dw:0x%x\n", exdev->name, exdev->magic_dw);
 
+	ctrl = exdev->ctrl;
+	ctrl->ops->reg_read32(ctrl, 0x00, &regval);
+
+	printk("regval:0x%x\n", regval);
+
+	nvm_create_exns(exdev);
+
     //fscftl_bbt_discovery(exdev);
 
 	return 0;
@@ -177,6 +150,10 @@ static int __init fscftl_module_init(void)
 
 static void __exit fscftl_module_exit(void)
 {
+	struct nvm_exdev *exdev = nvm_find_exdev(exdev_name);
+
+	nvm_delete_exns(exdev);
+
 	return;
 }
 

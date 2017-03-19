@@ -1,6 +1,8 @@
 kfscftl-objs  := ./fscftl-init.o
+kfscftl-objs  += ./namespace.o
 
 fscftl-y := ./fscftl-init.o
+fscftl-y += ./namespace.o
 
 ccflags-y += -g
 
