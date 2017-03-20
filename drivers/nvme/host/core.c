@@ -156,8 +156,12 @@ static void nvme_free_ns(struct kref *kref)
 {
 	struct nvme_ns *ns = container_of(kref, struct nvme_ns, kref);
 
+	// OCSSD
 	if (ns->ndev)
 		nvme_nvm_unregister(ns);
+
+	// Expose SSD
+	nvm_exdev_unregister(ns->ctrl);
 
 	if (ns->disk) {
 		spin_lock(&dev_list_lock);
@@ -1705,6 +1709,13 @@ static void nvme_alloc_ns(struct nvme_ctrl *ctrl, unsigned nsid)
 	if (nvme_revalidate_ns(ns, &id))
 		goto out_free_queue;
 
+	// ExposeSSD support
+	if (nvm_exdev_register(ctrl, ns, disk_name)) {
+		dev_warn(ctrl->dev, "%s: FSCFTL init failure\n", __func__);
+		goto out_free_id;
+	}
+
+	// OCSSD support??
 	if (nvme_nvm_ns_supported(ns, id) &&
 				nvme_nvm_register(ns, disk_name, node)) {
 		dev_warn(ctrl->dev, "%s: LightNVM init failure\n", __func__);
@@ -1878,20 +1889,12 @@ static void nvme_scan_work(struct work_struct *work)
 
 void nvme_queue_scan(struct nvme_ctrl *ctrl)
 {
-	#if FSCFTL_ON
-
-	return;
-
-	#else
-
 	/*
 	 * Do not queue new scan work when a controller is reset during
 	 * removal.
 	 */
 	if (ctrl->state == NVME_CTRL_LIVE)
 		schedule_work(&ctrl->scan_work);
-
-	#endif
 }
 EXPORT_SYMBOL_GPL(nvme_queue_scan);
 
@@ -2013,7 +2016,7 @@ void nvme_uninit_ctrl(struct nvme_ctrl *ctrl)
 	flush_work(&ctrl->vendor_async_event_work);
 	flush_work(&ctrl->scan_work);
 
-    nvm_exdev_unregister(ctrl);
+    //nvm_exdev_unregister(ctrl);
 	nvme_remove_namespaces(ctrl);
 
 	device_destroy(nvme_class, MKDEV(nvme_char_major, ctrl->instance));
@@ -2082,11 +2085,11 @@ int nvme_init_ctrl(struct nvme_ctrl *ctrl, struct device *dev,
 	list_add_tail(&ctrl->node, &nvme_ctrl_list);
 	spin_unlock(&dev_list_lock);
 
-    if (nvm_exdev_register(ctrl)) {
+    /*if (nvm_exdev_register(ctrl)) {
         printk("nvm exdev register fail\n");
         ret = -ENOMEM;
         goto out_release_instance;
-    }
+    }*/
 
 	return 0;
 out_release_instance:

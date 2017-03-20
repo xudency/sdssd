@@ -23,45 +23,40 @@ static blk_qc_t fscftl_make_rq(struct request_queue *q, struct bio *bio)
 	return BLK_QC_T_NONE;
 }
 
-//nvme_dev;
-//nvme_ctrl;
-//nvm_exdev;
-//nvm_exns;
 int nvm_create_exns(struct nvm_exdev *exdev)
 {
-	int result, nsid;
+	int instance;
 	sector_t capacity;
 	struct gendisk *disk;	
 	struct request_queue *rqueue;
 	struct nvm_exns *exns;
 	int node = exdev->node;
-	struct nvme_ctrl *ctrl = exdev->ctrl;
 
 	exns = kzalloc_node(sizeof(*exns), GFP_KERNEL, node);
 	if (!exns)
 		return -ENOMEM;
 
-	nsid = idr_alloc(&exdev->nsid_idr, exns, 1, 0, GFP_KERNEL);
-	if (nsid < 0)
+	instance = idr_alloc(&exdev->nsid_idr, exns, 1, 0, GFP_KERNEL);
+	if (instance < 0)
 		goto out_free_ns;
 
-	exns->instance = nsid;
+	exns->instance = instance;
 	exns->ndev = exdev;
 
 	disk = alloc_disk(0);
 	if (!disk)
 		goto out_remove_idr;
 	
-	scnprintf(disk->disk_name, DISK_NAME_LEN, "nvme%dexns%d", 
-			  ctrl->instance, exns->instance);
+	scnprintf(disk->disk_name, DISK_NAME_LEN, "%sexp%d", 
+			  exdev->bdiskname, exns->instance);
 
 	exns->disk = disk;
 	
 	rqueue = blk_alloc_queue_node(GFP_KERNEL, node);
 	if (!rqueue)
 		goto out_put_disk;
-	
 	blk_queue_make_request(rqueue, fscftl_make_rq);
+	
 	// set disk attribute	
 	disk->flags = GENHD_FL_EXT_DEVT;
 	disk->major = 0;
@@ -71,6 +66,7 @@ int nvm_create_exns(struct nvm_exdev *exdev)
 	disk->private_data = exns;
 	rqueue->queuedata = exns;
 	exns->queue = rqueue;
+	exdev->private_data = exns;
 	
 	// set requst_queue attribute
 	rqueue->queue_flags = QUEUE_FLAG_DEFAULT;
@@ -83,21 +79,10 @@ int nvm_create_exns(struct nvm_exdev *exdev)
     //capacity = le64_to_cpup(&id->nsze) << (ns->lba_shift - 9);
     capacity = (MAX_USER_LBA + 1) * 8;
 	set_capacity(disk, capacity);	// 512 Unit
-	printk("create disk: /dev/%s  capacity:0x%lx(LBA)  %dGB\n", 
+	printk("create disk: /dev/%s  capacity:0x%lx(LBA)  %ldGB\n", 
 			disk->disk_name, capacity/8, (capacity*512 >> 30));
-
-	/*tmpns = idr_find(&exdev->nsid_idr, nsid);
-	if (tmpns != exns)
-		printk("idr mapp error\n");
-	else
-		printk("idr mapp OK\n");*/
-
 	add_disk(disk);
-
-	mutex_lock(&exdev->nslist_mutex);
-	list_add(&exns->list, &exdev->exns);
-	mutex_unlock(&exdev->nslist_mutex);
-
+	
 	return 0;
 
 out_put_disk:
@@ -111,18 +96,13 @@ out_free_ns:
 
 void nvm_delete_exns(struct nvm_exdev *exdev)
 {
-	struct nvm_exns *ns, *tmp;
+	struct nvm_exns *ns = (struct nvm_exns *)exdev->private_data;
 
-	mutex_lock(&exdev->nslist_mutex);
-	list_for_each_entry_safe(ns, tmp, &exdev->exns, list) {
-		list_del(&ns->list);
-		del_gendisk(ns->disk);
-		blk_cleanup_queue(ns->queue);
-		put_disk(ns->disk);
-		idr_remove(&exdev->nsid_idr, ns->instance);
-		kfree(ns);
-	}
-	mutex_unlock(&exdev->nslist_mutex);
+	del_gendisk(ns->disk);
+	blk_cleanup_queue(ns->queue);
+	put_disk(ns->disk);
+	idr_remove(&exdev->nsid_idr, ns->instance);
+	kfree(ns);
 }
 
 struct nvm_exns *find_nvm_exns(struct nvm_exdev *exdev, int instance)

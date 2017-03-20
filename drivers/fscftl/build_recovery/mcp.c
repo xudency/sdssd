@@ -1,4 +1,5 @@
 #include "power.h"
+#include "../fscftl.h"
 
 // Move to systbl/
 void set_bb_tbl(u32 blk, u32 lun, u32 ch)
@@ -33,7 +34,6 @@ int rdpparaw_sync(struct nvm_exdev *exdev, struct physical_address *ppa,
 
 	return 0;
 }
-
 
 void sweepup_disk(struct nvm_exdev *exdev)
 {

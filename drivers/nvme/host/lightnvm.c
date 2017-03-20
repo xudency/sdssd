@@ -1328,7 +1328,7 @@ void nvm_check_write_cmd_correct(void *data) {}
 static LIST_HEAD(nvm_exdev_list);
 static DECLARE_RWSEM(nvm_exdev_lock);
 
-int nvm_exdev_register(struct nvme_ctrl *ctrl)
+int nvm_exdev_register(struct nvme_ctrl *ctrl, struct nvme_ns *ns, char *disk_name)
 {
     int node;
     struct nvm_exdev *exdev;
@@ -1343,22 +1343,23 @@ int nvm_exdev_register(struct nvme_ctrl *ctrl)
     if (!exdev)
         return -ENOMEM;
 
-    exdev->magic_dw = 0xdc14dc14;   //FSCFTL
+    exdev->magic_dw = 0xdc28c124;   //FSCFTL Mark
     exdev->node = node;
     exdev->ndev = ndev;
     exdev->ctrl = ctrl;
+	exdev->bns = ns;
     exdev->pdev = pdev;
-	scnprintf(exdev->name, sizeof(exdev->name), "nvme%d", ctrl->instance);
+	memcpy(exdev->bdiskname, disk_name, DISK_NAME_LEN);
 
-	INIT_LIST_HEAD(&exdev->exns);
-	idr_init(&exdev->nsid_idr);	
-	mutex_init(&exdev->nslist_mutex);
+	//INIT_LIST_HEAD(&exdev->exns);
+	idr_init(&exdev->nsid_idr);
+	//mutex_init(&exdev->nslist_mutex);
 
 	down_write(&nvm_exdev_lock);
 	list_add(&exdev->devices, &nvm_exdev_list);
 	up_write(&nvm_exdev_lock);
 
-	printk("Ergister FSCFTL underlying exdev:%s\n", exdev->name);
+	printk("ExposeSSD support, Register base bdevice:%s\n", exdev->bdiskname);
 
     return 0;
 }
@@ -1371,6 +1372,8 @@ void nvm_exdev_unregister(struct nvme_ctrl *ctrl)
 	list_del(&exdev->devices);
 	up_write(&nvm_exdev_lock);
 
+	printk("ExposeSSD support, Unregister base bdevice:%s\n", exdev->bdiskname);
+
 	idr_destroy(&exdev->nsid_idr);
 
     kfree(exdev);
@@ -1381,7 +1384,7 @@ struct nvm_exdev *nvm_find_exdev(const char *name)
 	struct nvm_exdev *dev;
 
 	list_for_each_entry(dev, &nvm_exdev_list, devices)
-		if (!strcmp(name, dev->name))
+		if (!strcmp(name, dev->bdiskname))
 			return dev;
 
     printk("Can't find exposs ppa device:%s", name);

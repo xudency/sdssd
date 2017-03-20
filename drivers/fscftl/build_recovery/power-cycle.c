@@ -1,10 +1,5 @@
 #include "power.h"
-
-// TODO:: MOve to new file bootblk/bootblk.c bootblk.h
-bootblk_recovery_primary_page();
-bootblk_flush_primary_page(power_down_flag flag);
-bootblk_flush_bbt();
-bootblk_recovery_bbt();
+#include "../bootblk/bootblk_mngr.h"
 
 int rebuild_systbl(void)
 {
@@ -17,6 +12,8 @@ int rebuild_systbl(void)
     // open blk ftllog
     
     // l2ptbl
+
+	return 0;
 }
 
 void flush_down_systbl(void)
@@ -41,7 +38,7 @@ void flush_down_systbl(void)
 int try_recovery_systbl(void)
 {
     int result;
-    u32 power_flag;
+    enum power_down_flag power_flag = POWER_DOWN_UNSAFE;
 
     result = bootblk_recovery_primary_page();
     if (unlikely(result)) {

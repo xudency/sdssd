@@ -458,28 +458,42 @@ static inline struct nvme_ns *nvme_get_ns_from_dev(struct device *dev)
 int __init nvme_core_init(void);
 void nvme_core_exit(void);
 
-
-///////////////////////////////Expose ppa NVMe SSD device////////////////
+////////////////////////////Expose ppa NVMe SSD device////////////////
 #if FSCFTL_ON
 
-struct nvm_exdev {
-	struct list_head devices;  /* all nvm_exdev linked in nvm_exdev_list */	
-	struct list_head exns;     /* all nvm_exns linked in this List head */
-    u32 magic_dw;
-    int node;
-    char name[8];
-    struct nvme_ppa_ops *ops;
-    struct nvme_dev  *ndev;
-    struct nvme_ctrl *ctrl;
-    struct pci_dev   *pdev;
-	struct idr nsid_idr;
-	struct mutex nslist_mutex;
-};
+struct nvme_ppa_ops;
+struct nvm_exns;
+
+typedef int (nvm_submit_ppa_fn)(struct nvm_exns *exns, struct nvm_rq *rqd);
 
 struct nvme_ppa_ops {
-	const char *name;
-	struct module *module;
-    int (*submit_io)(struct nvm_exdev *exdev, int instance, struct nvm_rq *rqd);
+	char *name;
+	struct module *module;	
+	nvm_submit_ppa_fn	*submit_io;
+};
+
+// represent a ExposeSSD device
+struct nvm_exdev {
+	struct list_head devices;    /* all nvm_exdev linked in nvm_exdev_list */	
+    u32 magic_dw;
+    int node;
+	char bdiskname[DISK_NAME_LEN];
+	void *private_data;			/* Expose device nvme0n1_exp1 */
+	struct nvme_ns *bns;    	/* underlying device nvme0n1 */
+    struct nvme_dev  *ndev;
+    struct nvme_ctrl *ctrl;
+    struct nvme_ppa_ops *ops;
+    struct pci_dev   *pdev;
+	struct idr nsid_idr;
+};
+
+// expose PPA namespace
+struct nvm_exns {
+	//struct list_head list;	// linked in nvm_exdev->exns
+	struct request_queue *queue;
+	struct gendisk *disk;
+	struct nvm_exdev *ndev;
+	int instance;
 };
 
 static inline struct nvm_exdev *to_nvm_exdev(struct nvme_ctrl *ctrl)
@@ -487,13 +501,13 @@ static inline struct nvm_exdev *to_nvm_exdev(struct nvme_ctrl *ctrl)
 	return container_of(&ctrl, struct nvm_exdev, ctrl);
 }
 
-extern int nvm_exdev_register(struct nvme_ctrl *ctrl);
+extern int nvm_exdev_register(struct nvme_ctrl *ctrl, struct nvme_ns *ns, char *disk_name);
 extern void nvm_exdev_unregister(struct nvme_ctrl *ctrl);
-extern struct nvm_exdev *nvm_find_exdev(const char *name);
+extern struct nvm_exdev *nvm_find_exdev(const char *name); // export for FTL Module
 
 #else
 
-int nvm_exdev_register(struct nvme_ctrl *ctrl)
+int nvm_exdev_register(struct nvme_ctrl *ctrl, struct nvme_ns *ns, char *disk_name)
 {
     return 0;   
 }
@@ -503,7 +517,6 @@ void nvm_exdev_unregister(struct nvme_ctrl *ctrl)
     return 0;
 }
 
-#endif
-/////////////////////////////////////////////////////
+#endif	/* FSCFTL */
 
 #endif /* _NVME_H */

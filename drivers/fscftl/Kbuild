@@ -4,6 +4,7 @@ kfscftl-objs  += ./hwcfg/regrw.o
 kfscftl-objs  += ./build_recovery/mcp.o
 kfscftl-objs  += ./build_recovery/power-cycle.o
 kfscftl-objs  += ./build_recovery/crash-recovery.o
+kfscftl-objs  += ./bootblk/bootblk_mngr.o
 
 fscftl-y := ./fscftl-init.o
 fscftl-y += ./namespace.o
@@ -11,6 +12,7 @@ fscftl-y += ./hwcfg/regrw.o
 fscftl-y += ./build_recovery/mcp.o
 fscftl-y += ./build_recovery/power-cycle.o
 fscftl-y += ./build_recovery/crash-recovery.o
+fscftl-y += ./bootblk/bootblk_mngr.o
 
 ccflags-y += -g
 

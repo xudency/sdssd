@@ -1,6 +1,6 @@
 #ifndef _FSCFTL_POWER_H_
 #define _FSCFTL_POWER_H_
-#include "../hwcfg/cfg/flash_cfg.h"
+
 #include "../../nvme/host/nvme.h"
 
 enum power_down_flag {
@@ -14,3 +14,4 @@ int try_recovery_systbl(void);
 void flush_down_systbl(void);
 
 #endif
+

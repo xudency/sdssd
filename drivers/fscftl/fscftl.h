@@ -3,6 +3,7 @@
 
 #include "../nvme/host/nvme.h"
 #include "hwcfg/cfg/flash_cfg.h"
+#include "bootblk/bootblk_mngr.h"
 
 //don't define fix value, should read from HW register
 #define MAX_PPA_PER_CMD		64   // due to cqe 64 bit
@@ -47,15 +48,6 @@ struct nvme_ppa_command {
 	__le16			control;
 	__le32			dsmgmt;
 	__le64			resv;
-};
-
-// expose PPA namespace
-struct nvm_exns {
-	struct list_head list;	// linked in nvm_exdev->exns
-	struct request_queue *queue;
-	struct gendisk *disk;
-	struct nvm_exdev *ndev;
-	int instance;
 };
 
 /* extern fn */
