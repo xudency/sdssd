@@ -468,7 +468,7 @@ typedef int (nvm_submit_ppa_fn)(struct nvm_exns *exns, struct nvm_rq *rqd);
 
 struct nvme_ppa_ops {
 	char *name;
-	struct module *module;	
+	struct module *module;
 	nvm_submit_ppa_fn	*submit_io;
 };
 
@@ -484,6 +484,7 @@ struct nvm_exdev {
     struct nvme_ctrl *ctrl;
     struct nvme_ppa_ops *ops;
     struct pci_dev   *pdev;
+	struct dma_pool *dmapoll;
 	struct idr nsid_idr;
 };
 

@@ -262,7 +262,7 @@ struct nvm_rq {
 	struct bio *bio;
 
 	union {
-		struct ppa_addr ppa_addr;
+		struct ppa_addr ppa_addr;    /* in FSCFTL we regard is as CNEX PPAF */
 		dma_addr_t dma_ppa_list;
 	};
 
@@ -276,7 +276,7 @@ struct nvm_rq {
 
 	uint8_t opcode;
 	uint16_t nr_ppas;
-	uint16_t flags;
+	uint16_t flags;			 //control
 
 	u64 ppa_status; /* ppa media status */
 	int error;
