@@ -211,9 +211,9 @@ static void nvm_ppa_end_io(struct request *rq, int error)
 	blk_mq_free_request(rq);
 }
 
-static int nvm_submit_ppa(struct nvm_exns *exns, struct nvm_rq *rqd)
+static int nvm_submit_ppa(struct nvm_exdev *exdev, struct nvm_rq *rqd)
 {
-	struct nvme_ns *bns = exns->ndev->bns;
+	struct nvme_ns *bns = exdev->bns; //exns->ndev->bns;
 	struct request_queue *bq = bns->queue;
 	struct request *rq;
 	struct bio *bio = rqd->bio;

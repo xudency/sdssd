@@ -1387,7 +1387,7 @@ struct nvm_exdev *nvm_find_exdev(const char *name)
 		if (!strcmp(name, dev->bdiskname))
 			return dev;
 
-    printk("Can't find exposs ppa device:%s", name);
+    printk("Can't find Expose ppa NVMe device:%s", name);
 	return NULL;
 }
 EXPORT_SYMBOL(nvm_find_exdev);

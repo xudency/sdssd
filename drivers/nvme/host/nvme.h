@@ -461,17 +461,6 @@ void nvme_core_exit(void);
 ////////////////////////////Expose ppa NVMe SSD device////////////////
 #if FSCFTL_ON
 
-struct nvme_ppa_ops;
-struct nvm_exns;
-
-typedef int (nvm_submit_ppa_fn)(struct nvm_exns *exns, struct nvm_rq *rqd);
-
-struct nvme_ppa_ops {
-	char *name;
-	struct module *module;
-	nvm_submit_ppa_fn	*submit_io;
-};
-
 // represent a ExposeSSD device
 struct nvm_exdev {
 	struct list_head devices;    /* all nvm_exdev linked in nvm_exdev_list */	
@@ -488,13 +477,20 @@ struct nvm_exdev {
 	struct idr nsid_idr;
 };
 
-// expose PPA namespace
 struct nvm_exns {
 	//struct list_head list;	// linked in nvm_exdev->exns
 	struct request_queue *queue;
 	struct gendisk *disk;
 	struct nvm_exdev *ndev;
 	int instance;
+};
+
+typedef int (nvm_submit_ppa_fn)(struct nvm_exdev *exdev, struct nvm_rq *rqd);
+
+struct nvme_ppa_ops {
+	char *name;
+	struct module *module;
+	nvm_submit_ppa_fn	*submit_io;
 };
 
 static inline struct nvm_exdev *to_nvm_exdev(struct nvme_ctrl *ctrl)
