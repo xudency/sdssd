@@ -79,8 +79,8 @@ int nvm_create_exns(struct nvm_exdev *exdev)
     //capacity = le64_to_cpup(&id->nsze) << (ns->lba_shift - 9);
     capacity = (MAX_USER_LBA + 1) * 8;
 	set_capacity(disk, capacity);	// 512 Unit
-	printk("create disk: /dev/%s  capacity:0x%lx(LBA)  %ldGB\n", 
-			disk->disk_name, capacity/8, (capacity*512 >> 30));
+	printk("create disk:/dev/%s    User Capacity:%ldGB\n", 
+			disk->disk_name, (capacity*512 >> 30));
 	add_disk(disk);
 	
 	return 0;

@@ -115,6 +115,8 @@ void fscftl_bbt_discovery(struct nvm_exdev *exdev)
 
 int do_manufactory_init(struct nvm_exdev * exdev)
 {
+	printk("start %s\n", __FUNCTION__);
+
     sweepup_disk(exdev);
 
     fscftl_bbt_discovery(exdev);  //set bootblk bbt && bmi->bb
@@ -123,6 +125,8 @@ int do_manufactory_init(struct nvm_exdev * exdev)
 
     bootblk_flush_bbt();
     bootblk_flush_primary_page(POWER_DOWN_UNSAFE);
+
+	printk("complete %s\n", __FUNCTION__);
 
     return 0;
 }
