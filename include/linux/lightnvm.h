@@ -271,17 +271,27 @@ struct nvm_rq {
 	void *meta_list;
 	dma_addr_t dma_meta_list;
 
-	struct completion *wait;
-	nvm_end_io_fn *end_io;    //fn
+	struct completion *wait;  
+	nvm_end_io_fn *end_io;    /* callback fn */
 
 	uint8_t opcode;
-	uint16_t nr_ppas;
-	uint16_t flags;			 //control
+	uint16_t nr_ppas;   /* 1-base number of ppa_addr in ppa_list */
+	uint16_t flags;		/* control(SCRAMBLE PLMODE) */
+        /*
+        uint16_t plmode		    :2;		// hint for how to send single dual or qual plane commands
+        uint16_t aes_key		:4;		// AES key selection
+        uint16_t aes			:1;		// Whether to enable AES before written to SSD
+        uint16_t suspend		:1;		// whether to allow read or erase suspend
+        uint16_t slc_mode		:1;		// SLC mode enable
+        uint16_t scramble		:1;		// scramble enable
+        uint16_t rsved1			:4;
+        uint16_t fua			:1;		// fua enable
+        uint16_t limit_retry	:1;     // if set, controller should apply limited retry efforts.
+        */
+	u64 ppa_status;     /* ppa media status bitmap for most 64 PPA in ppa_list */
+	int error;          /* cqe status without phase tag */
 
-	u64 ppa_status; /* ppa media status */
-	int error;
-
-	void *private;			//ctx
+	void *private;		/* callback ctx */
 };
 
 static inline struct nvm_rq *nvm_rq_from_pdu(void *pdu)

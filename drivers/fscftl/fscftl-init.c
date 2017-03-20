@@ -101,7 +101,7 @@ void free_rqd_nand_ppalist(struct nvm_exdev * dev, struct nvm_rq *rqd)
 //example How to use submit_bio to submit PPA command
 // 1. rqd
 // 2. bio
-// 3. set fn(ctx)
+// 3. callback fn(ctx)
 //need form a struct nvm_rq rqd and a bio
 static void nvm_end_io_sync(struct nvm_rq *rqd)
 {
@@ -114,23 +114,30 @@ int nvm_ersppa_sync(struct nvm_exdev *dev, struct ppa_addr *ppas, int nr_ppas)
 {
 	int ret = 0;
 	struct nvm_rq rqd;
-	struct nvm_exns *exns = dev->private_data;
 
 	DECLARE_COMPLETION_ONSTACK(wait);
 
 	memset(&rqd, 0, sizeof(struct nvm_rq));
 
-    // fullfill rqd.xx
+    // 1.fullfill field of rqd.xx
     rqd.opcode = NVM_OP_ERASE;
 	rqd.flags = NVME_PLANE_SNGL;
+
+    // 2.callback fn(ctx)
 	rqd.end_io = nvm_end_io_sync;
 	rqd.private = &wait;
 
+    // 3.ppalist
 	ret = set_rqd_nand_ppalist(dev, &rqd, ppas, nr_ppas);
 	if (ret)
 		return ret;
-	
-    ret = dev->ops->submit_io(exns, &rqd);  //nvm_submit_ppa
+
+    // 4.metadata
+
+    // 5.form a bio
+
+    // 6.call core io handle fn
+    ret = dev->ops->submit_io(dev, &rqd);  //nvm_submit_ppa
 	if (ret) {
 		pr_err("erase I/O submission falied: %d\n", ret);
 		goto free_ppa_list;
@@ -147,7 +154,7 @@ void erspps_smoke_test(struct nvm_exdev *dev)
 {
 	struct ppa_addr nandppa[2];
 
-	nandppa[0].ppa = 0x3;	
+	nandppa[0].ppa = 0x3;
 	nandppa[0].ppa = 0x4;
 	
 	nvm_ersppa_sync(dev, &nandppa[0], 1);
@@ -211,9 +218,13 @@ static void nvm_ppa_end_io(struct request *rq, int error)
 	blk_mq_free_request(rq);
 }
 
+/*
+ * We submit NVMe command to NVMe Device Drive hw_queue,
+ * this queue is Under blk-mq, It has bind with cpu_num blk-mq-tagset
+ */
 static int nvm_submit_ppa(struct nvm_exdev *exdev, struct nvm_rq *rqd)
 {
-	struct nvme_ns *bns = exdev->bns; //exns->ndev->bns;
+	struct nvme_ns *bns = exdev->bns;
 	struct request_queue *bq = bns->queue;
 	struct request *rq;
 	struct bio *bio = rqd->bio;
@@ -231,6 +242,7 @@ static int nvm_submit_ppa(struct nvm_exdev *exdev, struct nvm_rq *rqd)
 	rq->cmd_flags &= ~REQ_FAILFAST_DRIVER;
 
 	if (bio) {
+        // write/read need form a bio
 		rq->ioprio = bio_prio(bio);
 		rq->__data_len = bio->bi_iter.bi_size;
 		rq->bio = rq->biotail = bio;
