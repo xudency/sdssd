@@ -479,7 +479,7 @@ struct nvm_exdev {
 struct nvme_ppa_ops {
 	const char *name;
 	struct module *module;
-    int (*submit_io)(struct nvm_exdev *exdev, struct nvm_rq *rqd);
+    int (*submit_io)(struct nvm_exdev *exdev, int instance, struct nvm_rq *rqd);
 };
 
 static inline struct nvm_exdev *to_nvm_exdev(struct nvme_ctrl *ctrl)

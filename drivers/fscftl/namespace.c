@@ -62,10 +62,6 @@ int nvm_create_exns(struct nvm_exdev *exdev)
 		goto out_put_disk;
 	
 	blk_queue_make_request(rqueue, fscftl_make_rq);
-
-	// FTL poweron flow
-	//tt->init();
-
 	// set disk attribute	
 	disk->flags = GENHD_FL_EXT_DEVT;
 	disk->major = 0;
@@ -129,3 +125,18 @@ void nvm_delete_exns(struct nvm_exdev *exdev)
 	mutex_unlock(&exdev->nslist_mutex);
 }
 
+struct nvm_exns *find_nvm_exns(struct nvm_exdev *exdev, int instance)
+{
+	return idr_find(&exdev->nsid_idr, instance);
+}
+
+/*
+void for_each_exns(struct nvm_exdev *exdev)
+{
+	u32 i;
+	struct nvm_exns *ns;
+
+	idr_for_each_entry(&exdev->nsid_idr, ns, i) {
+		printk("exns->instance:%d\n", ns->instance);
+	}
+}*/

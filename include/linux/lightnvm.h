@@ -271,7 +271,7 @@ struct nvm_rq {
 	void *meta_list;
 	dma_addr_t dma_meta_list;
 
-	struct completion *wait;  //ctx
+	struct completion *wait;
 	nvm_end_io_fn *end_io;    //fn
 
 	uint8_t opcode;
@@ -281,7 +281,7 @@ struct nvm_rq {
 	u64 ppa_status; /* ppa media status */
 	int error;
 
-	void *private;
+	void *private;			//ctx
 };
 
 static inline struct nvm_rq *nvm_rq_from_pdu(void *pdu)

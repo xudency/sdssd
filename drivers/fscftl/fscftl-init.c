@@ -29,9 +29,14 @@ static char exdev_name[8] = "nvme0";
 module_param_string(devname, exdev_name, 8, 0);
 
 // inherit interface from Lightnvm Subsystem and pblk
+static const struct nvme_ppa_ops exdev_ppa_ops = {
+	.name			 = "exppassd",
+	.module			 = THIS_MODULE,
+	.submit_io       = nvm_submit_ppa,
+};
 
 //example
-void nvm_wrppa(struct nvm_exdev *dev)
+void nvm_wrppa(struct nvm_exdev *dev, int instance)
 {
 	struct nvm_rq rqd;
 
@@ -42,18 +47,43 @@ void nvm_wrppa(struct nvm_exdev *dev)
 	rqd.end_io = nvm_end_io_sync;
 	rqd.private = &wait;
     
-    dev->ops->submit_io(dev, &rqd);
+    dev->ops->submit_io(dev, instance, &rqd);  //nvm_submit_ppa
 
 	//wait_for_completion_io(&wait);
 
     return;
 }
 
-// copy from nvme_nvm_submit_io
-static int nvm_submit_ppa(struct nvm_exdev *dev, struct nvm_rq *rqd)
+static inline void nvm_rqd_to_ppacmd(struct nvm_rq *rqd, int instance, 
+									 struct nvme_nvm_command *c)
+{
+	c->ph_rw.opcode = rqd->opcode;
+	c->ph_rw.nsid = cpu_to_le32(instance);
+	c->ph_rw.spba = cpu_to_le64(rqd->ppa_addr.ppa);
+	c->ph_rw.metadata = cpu_to_le64(rqd->dma_meta_list);
+	c->ph_rw.control = cpu_to_le16(rqd->flags);
+	c->ph_rw.length = cpu_to_le16(rqd->nr_ppas - 1);
+
+	// prp1 prp2 is in bio
+}
+
+static void nvm_ppa_end_io(struct request *rq, int error)
+{
+	struct nvm_rq *rqd = rq->end_io_data;
+
+	rqd->ppa_status = nvme_req(rq)->result.u64;
+	rqd->error = error;
+
+	if (rqd->end_io)
+		rqd->end_io(rqd);
+
+	kfree(nvme_req(rq)->cmd);
+	blk_mq_free_request(rq);
+}
+
+static int nvm_submit_ppa(struct nvm_exdev *dev, int instance, struct nvm_rq *rqd)
 {
 	struct request_queue *q = dev->q;  //this is underlying device(nvme0n1) q
-	struct nvme_ns *ns = q->queuedata;
 	struct request *rq;
 	struct bio *bio = rqd->bio;
 	struct nvme_nvm_command *cmd;
@@ -76,25 +106,21 @@ static int nvm_submit_ppa(struct nvm_exdev *dev, struct nvm_rq *rqd)
 		if (bio_has_data(bio))
 			rq->nr_phys_segments = bio_phys_segments(q, bio);
 	} else {
+		// Delete??
 		rq->ioprio = IOPRIO_PRIO_VALUE(IOPRIO_CLASS_BE, IOPRIO_NORM);
 		rq->__data_len = 0;
 	}
 
-	nvme_nvm_rqtocmd(rq, rqd, ns, cmd);
+	nvm_rqd_to_ppacmd(rqd, instance, cmd);
 
 	rq->end_io_data = rqd;
 
-	blk_execute_rq_nowait(q, NULL, rq, 0, nvme_nvm_end_io);
+	blk_execute_rq_nowait(q, NULL, rq, 0, nvm_ppa_end_io);
 
 	return 0;
 }
 
-static const struct nvme_ppa_ops exdev_ppa_ops = {
-	.name			 = "exppassd",
-	.module			 = THIS_MODULE,
-	.submit_io       = nvm_submit_ppa,
-};
-
+////////////////////////////////////////////////////////////////////////////
 int fscftl_setup(void)
 {
     return 0;
