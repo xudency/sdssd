@@ -1,13 +1,17 @@
 kfscftl-objs  := ./fscftl-init.o
+kfscftl-objs  += ./core.o
 kfscftl-objs  += ./namespace.o
 kfscftl-objs  += ./hwcfg/regrw.o
+kfscftl-objs  += ./datapath/ppa-ops.o
 kfscftl-objs  += ./build_recovery/mcp.o
 kfscftl-objs  += ./build_recovery/power-cycle.o
 kfscftl-objs  += ./build_recovery/crash-recovery.o
 kfscftl-objs  += ./bootblk/bootblk_mngr.o
 
 fscftl-y := ./fscftl-init.o
+fscftl-y += ./core.o
 fscftl-y += ./namespace.o
+fscftl-y += ./datapath/ppa-ops.o
 fscftl-y += ./hwcfg/regrw.o
 fscftl-y += ./build_recovery/mcp.o
 fscftl-y += ./build_recovery/power-cycle.o

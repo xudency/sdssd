@@ -1,6 +1,7 @@
 #ifndef FSCFTL_H_
 #define FSCFTL_H_
 
+#include "../../include/linux/lightnvm.h"
 #include "../nvme/host/nvme.h"
 #include "hwcfg/cfg/flash_cfg.h"
 #include "bootblk/bootblk_mngr.h"
@@ -17,12 +18,6 @@
 
 #define NAND_RAW_SIZE 		304
 #define NAND_META_SIZE 		16
-
-enum {
-	NVME_PLANE_SNGL	= 0,
-	NVME_PLANE_DUAL	= 1,
-	NVME_PLANE_QUAD	= 2,
-};
 
 // io opcode
 enum {
@@ -54,5 +49,13 @@ struct nvme_ppa_command {
 int nvm_create_exns(struct nvm_exdev *exdev);
 void nvm_delete_exns(struct nvm_exdev *exdev);
 
+void free_rqd_nand_ppalist(struct nvm_exdev * dev, struct nvm_rq *rqd);
+int set_rqd_nand_ppalist(struct nvm_exdev *dev, struct nvm_rq *rqd, 
+						 struct ppa_addr *ppas, int nr_ppas);
+
+int nvm_exdev_setup_pool(struct nvm_exdev *dev, char *name);
+void nvm_exdev_release_pool(struct nvm_exdev *dev);
+void *nvm_exdev_dma_pool_alloc(struct nvm_exdev *dev, dma_addr_t *dma_handle);
+void nvm_exdev_dma_pool_free(struct nvm_exdev *dev, void *vaddr, dma_addr_t dma_handle);
 
 #endif

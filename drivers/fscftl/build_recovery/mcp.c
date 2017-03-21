@@ -1,38 +1,12 @@
 #include "power.h"
 #include "../fscftl.h"
+#include "../datapath/ppa-ops.h"
 
 // Move to systbl/
 void set_bb_tbl(u32 blk, u32 lun, u32 ch)
 {
 	// TODO , BMI-TBL
 	return;
-}
-
-// TODO::  ppaops.c
-
-// these method define in a struct pointer
-//rdppa_sync
-//rdpparw_sync
-//wrppa_sync
-//wrpparaw_sync
-//ersppa_sync
-
-int rdpparaw_sync(struct nvm_exdev *exdev, struct physical_address *ppa, 
-                      u16 nppa, u16 ctrl, void *databuf, void *metabuf)
-{
-	struct nvme_ppa_command ppa_cmd;
-	struct request_queue *q = exdev->ctrl->admin_q;		// How get from
-
-	ppa_cmd.opcode = NVM_OP_RDRAW;
-	ppa_cmd.nsid = 1;
-	ppa_cmd.metadata = cpu_to_le64(metabuf);  			// DMA-Address
-	ppa_cmd.ppalist = cpu_to_le64(ppa);    	  			// DMA-Address
-	ppa_cmd.nlb = cpu_to_le16(nppa - 1);
-
-	nvme_submit_sync_cmd(q, (struct nvme_command *)&ppa_cmd,
-						 databuf, nppa * CFG_NAND_EP_SIZE);
-
-	return 0;
 }
 
 void sweepup_disk(struct nvm_exdev *exdev)
@@ -76,7 +50,8 @@ int micron_flash_bb_eval(struct nvm_exdev *exdev, u32 blk, u32 lun, u32 ch)
 		ppalist[pl].nand.pg = 0;
 	}
 	
-	rdpparaw_sync(exdev, ppalist, CFG_NAND_PLANE_NUM, NVME_PLANE_SNGL, databuf, metabuf);
+	nvm_rdpparaw_sync(exdev, ppalist, CFG_NAND_PLANE_NUM, NVM_IO_SNGL_ACCESS, 
+					  databuf, metabuf);
 
 	for(pl = 0; pl < CFG_NAND_PLANE_NUM; pl++) {
 		u8 *data = (u8 *)((u8 *)databuf + pl*CFG_NAND_EP_SIZE);
