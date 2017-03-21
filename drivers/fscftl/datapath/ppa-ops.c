@@ -100,6 +100,9 @@ int nvm_rdpparaw_sync(struct nvm_exdev *exdev, struct physical_address *ppa,
 	nvme_submit_sync_cmd(q, (struct nvme_command *)&ppa_cmd,
 						 databuf, nr_ppas * CFG_NAND_EP_SIZE);
 
+	
+	dma_unmap_single(&exdev->pdev->dev, dma_meta, dma_meta, DMA_FROM_DEVICE);
+
 	if (nr_ppas > 1)
 		nvm_exdev_dma_pool_free(exdev, ppalist, dma_ppalist);
 
