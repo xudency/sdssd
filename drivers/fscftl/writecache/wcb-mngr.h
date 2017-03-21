@@ -15,6 +15,8 @@
 #define RAID_LUN_DATA_SIZE (RAID_LUN_SEC_NUM * CFG_NAND_EP_SIZE)
 #define RAID_LUN_META_SIZE (RAID_LUN_SEC_NUM * NAND_META_SIZE)
 
+extern struct wcb_lun_gctl *g_wcb_lun_ctl;
+
 struct fsc_fifo {
 	u32 head;	
 	u32 tail;
@@ -71,6 +73,17 @@ struct wcb_lun_gctl {
 	/* this must=0 or 1 */
 	u16 ongoing_pg_cnt[CFG_NAND_LUN_NUM];
 };
+
+static inline void *wcb_entity_base_data(int index)
+{
+	return g_wcb_lun_ctl->lun_entitys[index].data;
+}
+
+static inline void *wcb_entity_base_meta(int index)
+{
+	void *bdata = wcb_entity_base_data(index);
+	return (void *)((unsigned long)bdata + RAID_LUN_DATA_SIZE);
+}
 
 
 int write_cache_alloc(struct nvm_exdev *exdev);

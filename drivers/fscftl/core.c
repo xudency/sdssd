@@ -172,22 +172,6 @@ struct nvme_ppa_ops exdev_ppa_ops = {
  *						    Divide										   *
  ***************************************************************************/
 
-/*
- * Returns 0 on success.  If the result is negative, it's a Linux error code;
- * if the result is positive, it's an NVM Express status code
- */
-static void nvme_ppa_completion(struct request *req, int error)
-{
-	//void *ctx = req->end_io_data;
-	//int status = error;						/* No phase tag */
-	//u64 result = nvme_req(req)->result.u64; /* 64bit completion btmap */
-	//struct nvme_command *cmd = nvme_req(req)->cmd;	/* original sqe */
-
-	// goto free/release some source
-
-	blk_mq_free_request(req);
-}
-
 static int __nvme_submit_ppa_cmd(struct request_queue *q, 
 		struct nvme_ppa_command *cmd, union nvme_result *result, 
 		void *buffer, unsigned bufflen, unsigned timeout, 
