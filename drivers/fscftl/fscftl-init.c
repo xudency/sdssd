@@ -23,6 +23,7 @@
 #include "build_recovery/power.h"
 #include "fscftl.h"
 #include "datapath/ppa-ops.h"
+#include "writecache/wcb-mngr.h"
 
 static bool mcp = false;
 module_param(mcp, bool, 0644);
@@ -32,13 +33,19 @@ module_param_string(bdev, exdev_name, 8, 0);   //basedev name
 
 extern struct nvme_ppa_ops exdev_ppa_ops;
 
-int fscftl_setup(void)
+int fscftl_setup(struct nvm_exdev *exdev)
 {
-    return 0;
+	int ret = 0;
+
+	ret = write_cache_alloc(exdev);
+
+    return ret;
 }
 
-void fscftl_cleanup(void)
+void fscftl_cleanup(struct nvm_exdev *exdev)
 {
+	write_cache_free(exdev);
+
     return;
 }
 
@@ -63,7 +70,7 @@ static int __init fscftl_module_init(void)
 	if (ret) 
 		return ret;
 
-    ret = fscftl_setup();
+    ret = fscftl_setup(exdev);
     if (ret)
         goto release_pool;
 
@@ -85,7 +92,7 @@ static int __init fscftl_module_init(void)
 	return 0;
 
 err_cleanup:
-    fscftl_cleanup();
+    fscftl_cleanup(exdev);
 release_pool:
 	nvm_exdev_release_pool(exdev);
     return -EFAULT;
@@ -97,7 +104,7 @@ static void __exit fscftl_module_exit(void)
 
 	nvm_delete_exns(exdev);
     flush_down_systbl();
-    fscftl_cleanup();
+    fscftl_cleanup(exdev);
 	nvm_exdev_release_pool(exdev);
     
 	return;

@@ -160,10 +160,80 @@ static int nvm_submit_ppa(struct nvm_exdev *exdev, struct nvm_rq *rqd)
 	return 0;
 }
 
-// inherit interface from Lightnvm Subsystem and pblk
+/* inherit interface from Lightnvm Subsystem and pblk */
 struct nvme_ppa_ops exdev_ppa_ops = {
 	.name			 = "expssd",
 	.module			 = THIS_MODULE,
 	.submit_io       = nvm_submit_ppa,
 };
+
+
+/***************************************************************************
+ *						    Divide										   *
+ ***************************************************************************/
+
+/*
+ * Returns 0 on success.  If the result is negative, it's a Linux error code;
+ * if the result is positive, it's an NVM Express status code
+ */
+static void nvme_ppa_completion(struct request *req, int error)
+{
+	void *ctx = req->end_io_data;
+	int status = error;						/* No phase tag */
+	u64 result = nvme_req(req)->result.u64; /* 64bit completion btmap */
+	struct nvme_command *cmd = nvme_req(req)->cmd;	/* original sqe */
+
+	// goto free/release some source
+
+	blk_mq_free_request(req);
+}
+
+static int __nvme_submit_ppa_cmd(struct request_queue *q, 
+		struct nvme_ppa_command *cmd, union nvme_result *result, 
+		void *buffer, unsigned bufflen, unsigned timeout, 
+		int qid, int at_head, int flags, 
+		rq_end_io_fn *done, void *ctx)
+{
+	struct request *req;
+	int ret;
+
+	req = nvme_alloc_request(q, (struct nvme_command *)cmd, flags, qid);
+	if (IS_ERR(req))
+		return PTR_ERR(req);
+
+	req->timeout = timeout ? timeout : NVME_IO_TIMEOUT;
+
+	if (buffer && bufflen) {
+		ret = blk_rq_map_kern(q, req, buffer, bufflen, GFP_KERNEL);
+		if (ret)
+			goto out;
+	}
+
+	req->end_io_data = ctx;
+	
+	blk_execute_rq_nowait(q, NULL, req, 0, done);
+
+	return 0;
+ out:
+	blk_mq_free_request(req);
+	return ret;
+}
+
+/*
+ * this method will bypass dev->ops.submit_io
+ * so we don't need prepare a nvm_rq rqd
+ * before call this function, Caller should Guarantee:
+ *		1. nvme_ppa_command is ready
+ *      2. ppalist metadata DMA buffer is allocated and set in cmd
+ *      3. databuff is dma_map inside this fn, so we don't need dma_map it
+ */
+int nvme_submit_ppa_cmd(struct nvm_exdev *dev, struct nvme_ppa_command *cmd,
+						void *buffer, unsigned bufflen, 
+						rq_end_io_fn *done, void *ctx)
+{
+	struct request_queue *q = dev->bns->queue;
+
+	return __nvme_submit_ppa_cmd(q, cmd, NULL, buffer, bufflen, 0,
+								 NVME_QID_ANY, 0, 0, done, ctx);
+}
 

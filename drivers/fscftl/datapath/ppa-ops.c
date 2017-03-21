@@ -100,7 +100,6 @@ int nvm_rdpparaw_sync(struct nvm_exdev *exdev, struct physical_address *ppa,
 	nvme_submit_sync_cmd(q, (struct nvme_command *)&ppa_cmd,
 						 databuf, nr_ppas * CFG_NAND_EP_SIZE);
 
-	
 	dma_unmap_single(&exdev->pdev->dev, dma_meta, dma_meta, DMA_FROM_DEVICE);
 
 	if (nr_ppas > 1)
@@ -109,7 +108,30 @@ int nvm_rdpparaw_sync(struct nvm_exdev *exdev, struct physical_address *ppa,
 	return 0;
 }
 
-///////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////
+// async Mode use dma_coherent
+int nvm_rdpparaw(struct nvm_exdev *exdev, dmappa ppa, int nr_ppas, 
+				u16 ctrl, void *databuf, dma_addr_t meta_dma)
+{
+	struct nvme_ppa_command ppa_cmd;
+
+	memset(&ppa_cmd, 0x00, sizeof(ppa_cmd));
+
+	ppa_cmd.opcode = NVM_OP_RDRAW;
+	ppa_cmd.nsid = exdev->bns->ns_id;
+	ppa_cmd.metadata = cpu_to_le64(meta_dma);
+	ppa_cmd.ppalist = ppa.dma_ppa_list;
+	ppa_cmd.nlb = cpu_to_le16(nr_ppas - 1);
+	ppa_cmd.control = cpu_to_le16(ctrl);
+
+	//nvme_submit_ppa_cmd(exdev, &ppa_cmd, databuf, nr_ppas * CFG_NAND_EP_SIZE, 
+						//rq_end_io_fn * done, void * ctx);
+
+	// in IRQ callkack completion to release
+
+	return 0;
+}
+
 void erspps_smoke_test(struct nvm_exdev *dev)
 {
 	struct ppa_addr nandppa[2];
@@ -123,7 +145,7 @@ void erspps_smoke_test(struct nvm_exdev *dev)
 	nvm_ersppa_sync(dev, &nandppa[1], 1);
 }
 
-void rdpparaw_smoke_test(struct nvm_exdev * exdev)
+void rdpparawsync_smoke_test(struct nvm_exdev * exdev)
 {
 	struct physical_address ppa[2];
 	void *databuf, *metabuf;
@@ -145,10 +167,19 @@ void rdpparaw_smoke_test(struct nvm_exdev * exdev)
 	kfree(databuf);
 }
 
+void rdpparraw_smoke_test(struct nvm_exdev * exdev)
+{
+	//g_ppalist_buf[0] = 0x13;
+
+	//nvm_rdpparaw(exdev, g_ppalist_dma, 1, 0, databuf, g_meta_dma);
+}
+
 void run_testcase(struct nvm_exdev *exdev)
 {
-	erspps_smoke_test(exdev);
-	rdpparaw_smoke_test(exdev);
+	rdpparraw_smoke_test(exdev);
+
+	//erspps_smoke_test(exdev);
+	//rdpparawsync_smoke_test(exdev);
 
 	return;
 }
