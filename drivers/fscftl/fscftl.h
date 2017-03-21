@@ -6,6 +6,9 @@
 #include "hwcfg/cfg/flash_cfg.h"
 #include "bootblk/bootblk_mngr.h"
 
+#define SEC_PER_PPA 8 // 4K/512
+#define EXP_PPA_SIZE (4096)
+
 //don't define fix value, should read from HW register
 #define MAX_PPA_PER_CMD		64   // due to cqe 64 bit
 
@@ -44,6 +47,16 @@ struct nvme_ppa_command {
 	__le32			dsmgmt;
 	__le64			resv;
 };
+
+static inline sector_t get_bio_slba(struct bio *bio)
+{
+	return bio->bi_iter.bi_sector / SEC_PER_PPA;
+}
+
+static inline unsigned int get_bio_nppa(struct bio *bio)
+{
+	return  bio->bi_iter.bi_size / EXP_PPA_SIZE;
+}
 
 /* extern fn */
 int nvm_create_exns(struct nvm_exdev *exdev);

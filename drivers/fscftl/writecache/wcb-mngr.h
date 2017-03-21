@@ -29,17 +29,28 @@ struct wcb_lun_entity {
 	/* begin ppa of this raid lun when pull form empty fifo
 	 * assign the value according cur_ppa
 	 */
-	struct physical_address baddr;
-	void *data;  /* Buffer Vaddr size=LUNSIZE */
-	void *meta;	 /* Meta Vaddr start */
+	geo_ppa baddr;
+
+
+    /* data will be dma_map_sg in NVMe Driver, 
+     * so we don't need alloc DMA for it 
+     */
+	void *data;
+
+    void *meta;
 	dma_addr_t meta_dma;
+
+    /* the ppa value in this LUN is fixed
+     * ppa = baddr+offt, BUT baddr is get from free_blk_list
+     */
+    u64 *ppa;
+    dma_addr_t ppa_dma;
 
 	/* 
 	 * when this Lun push to rd fifo, need update l2p incache to nand 
 	 * these represent the lba of this LUN 
 	 */
 	u32 lba[RAID_LUN_SEC_NUM];
-	//u64 ppa[RAID_LUN_SEC_NUM];
 	
 	/* next ep to be writed */
 	u16 pos;
@@ -56,15 +67,16 @@ struct wcb_lun_entity {
 };
 
 struct wcb_lun_gctl {
-	spinlock_t wcb_fifo_lock;
+	spinlock_t wcb_lock;
+    spinlock_t l2ptbl_lock;
 
-	struct physical_address curppa;  	/* next available ppa */
+	geo_ppa curppa;  	/* next available ppa */
 	struct fsc_fifo empty_lun;
 	struct fsc_fifo full_lun;
 	struct fsc_fifo read_lun[CFG_NAND_LUN_NUM];
 
 	struct wcb_lun_entity *lun_entitys;
-
+    struct wcb_lun_entity *partial_entity;
 	/* 
 	 * 0xdead: this Lun is idle, writer can issue this lun to hw 
 	 * else: this Lun has a page outstanding, the val=pagenum
@@ -74,6 +86,28 @@ struct wcb_lun_gctl {
 	/* this must=0 or 1 */
 	u16 ongoing_pg_cnt[CFG_NAND_LUN_NUM];
 };
+
+    
+/* the next available nand ppa address */
+static inline geo_ppa current_ppa(void)
+{
+    return g_wcb_lun_ctl->curppa;
+}
+
+static inline void set_current_ppa(geo_ppa ppa)
+{
+    g_wcb_lun_ctl->curppa = ppa;
+}
+
+static inline void incrs_current_ppa(void)
+{
+    //IF_CARRY();
+}
+
+static inline struct wcb_lun_entity *partial_wcb_lun_entity(void)
+{
+    return g_wcb_lun_ctl->partial_entity;
+}
 
 static inline void *wcb_entity_base_data(int index)
 {

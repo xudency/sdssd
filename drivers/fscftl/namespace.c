@@ -13,13 +13,106 @@ static const struct block_device_operations nvm_exns_fops = {
 	.owner		= THIS_MODULE,
 };
 
+typedef enum {
+    USR_DATA,
+    DUMMY_DATA,
+    BAD_BLK,
+    XOR_PARITY,
+    FIRST_PAGE,
+    FTL_LOG,
+    
+} PPA_TYPE;
+
+PPA_TYPE sys_get_ppa_type(geo_ppa ppa)
+{
+    // lookup BMI->bb
+
+    // xor last ch
+
+    // ep pl ln pg=0
+
+    // 255 511 pg ep=3
+
+    return USR_DATA;
+}
+
+// alloc len valid Normal PPA for this coming io
+int alloc_wcb(sector_t slba, u32 nr_ppas)
+{
+    int i = 0, loop = 1;
+    geo_ppa curppa;
+    u32 left_len = nr_ppas;
+    struct wcb_lun_entity *cur_lun_entity;
+    
+    curppa = current_ppa();
+    cur_lun_entity = partial_wcb_lun_entity();
+    //curppa = cur_lun_entity->baddr + cur_lun_entity->pos;
+
+    while (loop) 
+    {
+        switch (sys_get_ppa_type(curppa)) {
+        case USR_DATA:
+            left_len--;
+            cur_lun_entity->lba[cur_lun_entity->pos] = slba + i;
+            //cur_lun_entity->ppa[cur_lun_entity->pos] = curppa + i;  //CH+
+            cur_lun_entity->ppa[cur_lun_entity->pos] = curppa + i;    //EP+
+            cur_lun_entity->pos++;
+
+            if (cur_lun_entity->pos == PPA_PER_LUN) {
+                cur_lun_entity = get_empty_lun_entity();
+                if (!cur_lun_entity) {
+                    // TODO:: restore context
+                    printk("alloc write cache failed\n");
+                    return -1;
+                }
+                
+                curppa = cur_lun_entity->baddr;
+            }
+
+            if (left_len == 0) {
+                /* wcb is prepare ready */
+                loop = 0;
+            }
+            break;
+            
+        // TODO::
+        default:
+            break;
+        }
+    }
+
+    set_current_ppa(curppa);
+
+    return 0;
+}
+
+
 static blk_qc_t fscftl_make_rq(struct request_queue *q, struct bio *bio)
 {
-	//struct nvm_exns *exns = q->queuedata;
+	struct nvm_exns *exns = q->queuedata;
+    unsigned long flags;
+    int nr_ppas = get_bio_nppa(bio);
+    sector_t slba = get_bio_slba(struct bio * bio);
+    
+    // TODO:: only consider write and read now
+    if (bio_data_dir(bio) == READ) {
+        /* Read datapath */
+        bio_endio(bio);
+        return BLK_QC_T_NONE;
+    }
 
-	// do nothing
-	bio_endio(bio);
+    /* Write datapath */
+    spin_lock_irqsave(&g_wcb_lun_ctl->wcb_lock, flags);
+    alloc_wcb(slba, nr_ppas);
+    spin_lock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
 
+    flush_data_to_wcb();
+
+    spin_lock_irqsave(&g_wcb_lun_ctl->l2ptbl_lock, flags);
+    set_l2ptbl_incache();
+    spin_lock_irqrestore(&g_wcb_lun_ctl->l2ptbl_lock, flags);    
+    
+    bio_endio(bio);
 	return BLK_QC_T_NONE;
 }
 

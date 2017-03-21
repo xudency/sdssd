@@ -6,5 +6,8 @@
 #include "cfg_2TB_MCL95B.h"
 //#include "cfg_2TB_TH58TFG9DFK.h"
 
+/* the name is too long */
+typedef struct physical_address geo_ppa;
+
 #endif /* FLASH_CFG_H_ */
 

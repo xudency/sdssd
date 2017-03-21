@@ -24,7 +24,8 @@ static int wcb_lun_ctl_init(void)
 		return -ENOMEM;
 	}
 
-	spin_lock_init(&g_wcb_lun_ctl->wcb_fifo_lock);
+	spin_lock_init(&g_wcb_lun_ctl->wcb_lock);
+	spin_lock_init(&g_wcb_lun_ctl->l2ptbl_lock);
 
 	g_wcb_lun_ctl->lun_entitys = \
 		vzalloc(sizeof(struct wcb_lun_entity) * CB_ENTITYS_CNT);
@@ -60,8 +61,6 @@ static void wcb_lun_ctl_exit(void)
 	kfree(g_wcb_lun_ctl);
 }
 
-// TODO:: to check vmalloc memory can be dma_map_single ??
-
 static int wcb_single_lun_alloc(struct nvm_exdev *exdev, 
 							struct wcb_lun_entity *lun_entitys)
 {
@@ -73,13 +72,23 @@ static int wcb_single_lun_alloc(struct nvm_exdev *exdev,
 
 	lun_entitys->meta = dma_alloc_coherent(dmadev, RAID_LUN_META_SIZE, 
 								&lun_entitys->meta_dma, GFP_KERNEL);
-	if (!lun_entitys->meta) {
-		printk("dma_alloc_coherent fail\n");
-		vfree(lun_entitys->data);
-		return -ENOMEM;
-	}
-
+	if (!lun_entitys->meta) 
+        goto out_free_data;
+    
+	lun_entitys->ppa = dma_alloc_coherent(dmadev, RAID_LUN_SEC_NUM * sizeof(u64), 
+								&lun_entitys->ppa_dma, GFP_KERNEL);
+	if (!lun_entitys->ppa)
+        goto out_free_meta;
+    
 	return 0;
+
+out_free_meta:
+	dma_free_coherent(dmadev, RAID_LUN_META_SIZE, 
+					  lun_entitys->meta, lun_entitys->meta_dma);    
+out_free_data:
+	printk("dma_alloc_coherent fail\n");
+    vfree(lun_entitys->data);
+    return -ENOMEM;
 }
 
 static void wcb_single_lun_free(struct nvm_exdev *exdev, 
@@ -88,11 +97,13 @@ static void wcb_single_lun_free(struct nvm_exdev *exdev,
 	struct device *dmadev = &exdev->pdev->dev;
 
 	dma_free_coherent(dmadev, RAID_LUN_META_SIZE, 
+					  lun_entitys->ppa, lun_entitys->ppa_dma);
+
+	dma_free_coherent(dmadev, RAID_LUN_META_SIZE, 
 					  lun_entitys->meta, lun_entitys->meta_dma);
 	
 	vfree(lun_entitys->data);
 }
-
 
 static int wcb_lun_mem_alloc(struct nvm_exdev *exdev)
 {
