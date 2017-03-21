@@ -225,11 +225,9 @@ void rdpparraw_smoke_test(struct nvm_exdev * exdev)
 	dma_addr_t dma_meta;
 	dmappa ppa;
 	void *databuf = wcb_entity_base_data(0);
-	void *metabuf = wcb_entity_base_meta(0);
 	ppa.nandppa = 0x12;
 
-	dma_meta = dma_map_single(&exdev->pdev->dev, metabuf, 
-							  nr_ppas * NAND_RAW_SIZE, DMA_FROM_DEVICE);
+	dma_meta = wcb_entity_base_metadma(0);
 
 	nvm_rdpparaw(exdev, ppa, nr_ppas, 0, databuf, dma_meta);
 }

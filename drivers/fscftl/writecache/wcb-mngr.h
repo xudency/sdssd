@@ -32,6 +32,7 @@ struct wcb_lun_entity {
 	struct physical_address baddr;
 	void *data;  /* Buffer Vaddr size=LUNSIZE */
 	void *meta;	 /* Meta Vaddr start */
+	dma_addr_t meta_dma;
 
 	/* 
 	 * when this Lun push to rd fifo, need update l2p incache to nand 
@@ -81,10 +82,13 @@ static inline void *wcb_entity_base_data(int index)
 
 static inline void *wcb_entity_base_meta(int index)
 {
-	void *bdata = wcb_entity_base_data(index);
-	return (void *)((unsigned long)bdata + RAID_LUN_DATA_SIZE);
+	return g_wcb_lun_ctl->lun_entitys[index].meta;
 }
 
+static inline dma_addr_t wcb_entity_base_metadma(int index)
+{
+	return g_wcb_lun_ctl->lun_entitys[index].meta_dma;
+}
 
 int write_cache_alloc(struct nvm_exdev *exdev);
 void write_cache_free(struct nvm_exdev *exdev);

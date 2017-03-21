@@ -62,24 +62,49 @@ static void wcb_lun_ctl_exit(void)
 
 // TODO:: to check vmalloc memory can be dma_map_single ??
 
-static int wcb_lun_mem_alloc(void)
+static int wcb_single_lun_alloc(struct nvm_exdev *exdev, 
+							struct wcb_lun_entity *lun_entitys)
+{
+	struct device *dmadev = &exdev->pdev->dev;
+
+	lun_entitys->data = vzalloc(RAID_LUN_DATA_SIZE);
+	if (!lun_entitys->data)
+		return -ENOMEM;
+
+	lun_entitys->meta = dma_alloc_coherent(dmadev, RAID_LUN_META_SIZE, 
+								&lun_entitys->meta_dma, GFP_KERNEL);
+	if (!lun_entitys->meta) {
+		printk("dma_alloc_coherent fail\n");
+		vfree(lun_entitys->data);
+		return -ENOMEM;
+	}
+
+	return 0;
+}
+
+static void wcb_single_lun_free(struct nvm_exdev *exdev, 
+							struct wcb_lun_entity *lun_entitys)
+{
+	struct device *dmadev = &exdev->pdev->dev;
+
+	dma_free_coherent(dmadev, RAID_LUN_META_SIZE, 
+					  lun_entitys->meta, lun_entitys->meta_dma);
+	
+	vfree(lun_entitys->data);
+}
+
+
+static int wcb_lun_mem_alloc(struct nvm_exdev *exdev)
 {
 	int i;
 	struct wcb_lun_entity *lun_entitys;
 
 	for (i = 0; i < CB_ENTITYS_CNT ; i++) {
 		lun_entitys = g_wcb_lun_ctl->lun_entitys + i;
-		lun_entitys->data \
-			= vzalloc(RAID_LUN_DATA_SIZE + RAID_LUN_META_SIZE);
-		if (!lun_entitys->data) {
-			printk("%s alloc times:%d failed\n", __FUNCTION__, i);
-			goto free_lun_mem;
-		}
-		
-		lun_entitys->meta \
-			= (void *)((unsigned long)lun_entitys->data+ RAID_LUN_DATA_SIZE);
-
 		lun_entitys->index = i;
+
+		if (wcb_single_lun_alloc(exdev, lun_entitys))
+			goto free_lun_mem;
 	}
 
 	return 0;
@@ -87,20 +112,20 @@ static int wcb_lun_mem_alloc(void)
 free_lun_mem:
 	while (--i) {
 		lun_entitys = g_wcb_lun_ctl->lun_entitys + i;
-		vfree(lun_entitys->data);
+		wcb_single_lun_free(exdev, lun_entitys);
 	}
 
 	return -ENOMEM;
 }
 
-static void wcb_lun_mem_free(void)
+static void wcb_lun_mem_free(struct nvm_exdev *exdev)
 {
 	int i;	
-	struct wcb_lun_entity *lun_entitys;
+	struct wcb_lun_entity *lun_entitys;	
 
 	for (i = 0; i < CB_ENTITYS_CNT ; i++) {
 		lun_entitys = g_wcb_lun_ctl->lun_entitys + i;
-		vfree(lun_entitys->data);
+		wcb_single_lun_free(exdev, lun_entitys);
 	}
 }
 
@@ -112,7 +137,7 @@ int write_cache_alloc(struct nvm_exdev *exdev)
 	if (ret)
 		return ret;
 
-	ret = wcb_lun_mem_alloc();
+	ret = wcb_lun_mem_alloc(exdev);
 	if (ret) {
 		goto out_wcb_lun_ctl;
 	}
@@ -126,12 +151,20 @@ out_wcb_lun_ctl:
 
 void write_cache_free(struct nvm_exdev *exdev)
 {
-	wcb_lun_mem_free();
+	wcb_lun_mem_free(exdev);
 	wcb_lun_ctl_exit();
 }
 
 /*
 struct device *dmadev = &exdev->pdev->dev;
+
+lun_entitys->meta_dma = dma_map_single(dmadev, lun_entitys->meta, 
+						  RAID_LUN_META_SIZE, DMA_TO_DEVICE);
+
+
+dma_unmap_single(dmadev, lun_entitys->meta_dma, 
+				 RAID_LUN_META_SIZE, DMA_TO_DEVICE);
+
 
 g_ppalist_buf = dma_alloc_coherent(dmadev, PAGE_SIZE, &g_ppalist_dma, GFP_KERNEL);
 if (!g_ppalist_buf) {
@@ -142,4 +175,5 @@ memset(g_ppalist_buf, 0x00, PAGE_SIZE);
 
 dma_free_coherent(dmadev, PAGE_SIZE, g_ppalist_buf, g_ppalist_dma);
 */
+
 
