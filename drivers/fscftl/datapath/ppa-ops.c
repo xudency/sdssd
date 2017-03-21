@@ -176,7 +176,7 @@ void rdpparraw_smoke_test(struct nvm_exdev * exdev)
 
 void run_testcase(struct nvm_exdev *exdev)
 {
-	rdpparraw_smoke_test(exdev);
+	//rdpparraw_smoke_test(exdev);
 
 	//erspps_smoke_test(exdev);
 	//rdpparawsync_smoke_test(exdev);

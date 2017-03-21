@@ -461,13 +461,6 @@ void nvme_core_exit(void);
 ////////////////////////////Expose ppa NVMe SSD device////////////////
 #if FSCFTL_ON
 
-struct fsc_cache_entry {
-	void *data;
-	void *meta;
-	u32 lba;
-	u32 ppa;
-};
-
 // represent a ExposeSSD device
 struct nvm_exdev {
 	struct list_head devices;    /* all nvm_exdev linked in nvm_exdev_list */	
@@ -481,7 +474,6 @@ struct nvm_exdev {
     struct nvme_ppa_ops *ops;
     struct pci_dev   *pdev;
 	struct dma_pool *dmapoll;
-	struct fsc_cache_entry **wcb;	/* write cache buffer */
 	struct idr nsid_idr;
 };
 

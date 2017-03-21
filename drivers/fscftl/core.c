@@ -178,10 +178,10 @@ struct nvme_ppa_ops exdev_ppa_ops = {
  */
 static void nvme_ppa_completion(struct request *req, int error)
 {
-	void *ctx = req->end_io_data;
-	int status = error;						/* No phase tag */
-	u64 result = nvme_req(req)->result.u64; /* 64bit completion btmap */
-	struct nvme_command *cmd = nvme_req(req)->cmd;	/* original sqe */
+	//void *ctx = req->end_io_data;
+	//int status = error;						/* No phase tag */
+	//u64 result = nvme_req(req)->result.u64; /* 64bit completion btmap */
+	//struct nvme_command *cmd = nvme_req(req)->cmd;	/* original sqe */
 
 	// goto free/release some source
 
