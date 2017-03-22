@@ -151,9 +151,8 @@ static inline dma_addr_t wcb_entity_base_metadma(int index)
 
 static inline void *wcb_entity_offt_data(int index, u16 pos)
 {
-	return (void *)((unsigned long)wcb_entity_base_data + pos * CFG_NAND_EP_SIZE);
+	return wcb_entity_base_data(index) + pos*CFG_NAND_EP_SIZE;
 }
-
 
 
 int write_cache_alloc(struct nvm_exdev *exdev);
