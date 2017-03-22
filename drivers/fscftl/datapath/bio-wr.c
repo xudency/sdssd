@@ -144,6 +144,35 @@ void flush_data_to_wcb(struct wcb_bio_ctx *wcb_resource, struct bio *bio)
 				//:: TODO update firstpage ftllog
 				printk("sys data or bb\n");
 			}
+
+			// all travesal ppa need inc, regardless of pagetype
+			if (atomic_inc_return(&entitys->fill_cnt) == RAID_LUN_SEC_NUM) {
+				// TODO:: 
+				// push this lun_entity to full fifo and wait write_ts kickin
+				//wake_up(&write_ts);
+
+				
+				printk("push entity%d to full fifo\n", entitys->index);
+				push_lun_entity_to_fifo(&g_wcb_lun_ctl->full_lun, entitys);
+
+
+				{
+					u32 num;
+					struct wcb_lun_entity *entry;
+					struct fsc_fifo *full_lun =  &g_wcb_lun_ctl->full_lun;
+
+					num = full_lun->head;
+					while (num != 0xffff) {
+						entry = wcb_lun_entity_idx(num);
+						num = entry->prev;
+						printk("walk find full fifo entity%d\n", entry->index);
+					}						
+				
+					printk("****************************************");
+				}
+
+
+			}
 		}
 
 		//bio_memcpy_wcb(wcb_1ctx, bio);

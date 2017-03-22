@@ -7,12 +7,70 @@
 /* write cache buffer control block */
 struct wcb_lun_gctl *g_wcb_lun_ctl;
 
+// the fifo api is not locked, the caller should guarantee race outside
 void fsc_fifo_init(struct fsc_fifo *fifo)
 {
 	fifo->head = 0xffff;
 	fifo->tail = 0xffff;
 	fifo->size = 0;
 }
+
+// push to tail 
+void push_lun_entity_to_fifo(struct fsc_fifo *fifo, 
+							 struct wcb_lun_entity *entry)
+{
+	u32 old_tail;
+	struct wcb_lun_entity *otentry;
+	
+	old_tail = fifo->tail;
+
+	if (old_tail == 0xffff) {
+		fifo->head = fifo->tail = entry->index;
+		entry->next = 0xffff;
+		entry->prev = 0xffff;
+	} else {
+		fifo->tail = entry->index;
+		entry->next = old_tail;
+		entry->prev = 0xffff;
+		otentry = wcb_lun_entity_idx(old_tail);
+		otentry->prev = entry->index;
+	}
+
+	fifo->size++;
+}
+
+// and pull from head
+struct wcb_lun_entity *pull_lun_entity_from_fifo(struct fsc_fifo *fifo)
+{
+	u32 old_head = fifo->head;
+	struct wcb_lun_entity *entry, *nhentry;
+
+	if (old_head == 0xffff) {
+		printk("FiFO is empty\n");
+		return NULL;
+	}
+
+	entry = wcb_lun_entity_idx(old_head);
+
+	if (fifo->head == fifo->tail) {
+		// only 1 entry in this fifo
+		fifo->head = fifo->tail = 0xffff;
+		entry->next = entry->prev = 0xffff;
+	} else {
+		nhentry = wcb_lun_entity_idx(entry->prev);
+		fifo->head = entry->prev; //nhentry->index;
+		nhentry->next = 0xffff;		
+	}
+
+	fifo->size--;	
+	return entry;
+}
+
+// search and pull it out, not alway in head
+/*struct wcb_lun_entity *get_lun_entity_from_fifo(struct fsc_fifo *fifo, )
+{
+
+}*/
 
 struct wcb_lun_entity *get_new_lun_entity(geo_ppa curppa)
 {
@@ -131,6 +189,8 @@ static int wcb_lun_mem_alloc(struct nvm_exdev *exdev)
 	for (i = 0; i < CB_ENTITYS_CNT ; i++) {
 		lun_entitys = g_wcb_lun_ctl->lun_entitys + i;
 		lun_entitys->index = i;
+
+		atomic_set(&lun_entitys->fill_cnt, 0);
 
 		if (wcb_single_lun_alloc(exdev, lun_entitys))
 			goto free_lun_mem;

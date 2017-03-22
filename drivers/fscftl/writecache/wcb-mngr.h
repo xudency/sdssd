@@ -39,13 +39,14 @@ struct fsc_fifo {
 struct wcb_lun_entity {
 	u32 index; //idr?
 
-	/* begin ppa of this raid lun when pull form empty fifo
+	/* 
+	 * begin ppa of this raid lun when pull form empty fifo
 	 * assign the value according cur_ppa
 	 */
 	geo_ppa baddr;
 
-
-    /* data will be dma_map_sg in NVMe Driver, bio_map_kern
+    /* 
+     * data will be dma_map_sg in NVMe Driver, bio_map_kern
      * so we don't need alloc DMA for it 
      */
 	void *data;
@@ -53,7 +54,8 @@ struct wcb_lun_entity {
     void *meta;
 	dma_addr_t meta_dma;
 
-    /* the ppa value in this LUN is fixed
+    /* 
+     * the ppa value in this LUN is fixed
      * ppa = baddr+offt, BUT baddr is get from free_blk_list
      */
     u64 *ppa;
@@ -65,9 +67,6 @@ struct wcb_lun_entity {
 	 */
 	u32 lba[RAID_LUN_SEC_NUM];
 	
-	/* next ep to be writed */
-	u16 pos;
-
 	/* one bit for one ch, 
 	 * 1: this ch is outstanding  
 	 * 0: this ch is complete 
@@ -75,8 +74,22 @@ struct wcb_lun_entity {
 	 */
 	u16 ch_status;
 
+	/* 
+	 * next ep to be writed, it's the pointer by memcpy data from bio 
+	 * but, the data is not copyin when pos=RAID_LUN_SEC_NUM
+	 * Thus, we can't push it to pull fifo
+	 */
+	u16 pos;
+
+	/* 
+	 * it's the count of this lun entity has be coped data in 
+	 * when it=RAID_LUN_SEC_NUM, we can push it to pull fifo
+	 */
+	atomic_t fill_cnt;
+
 	/* emptypool readpool[lun] fullpool, submit[lun] */
 	u32 next;
+	u32 prev;
 };
 
 struct wcb_ctx {
@@ -112,6 +125,31 @@ struct wcb_lun_gctl {
 	u16 ongoing_pg_cnt[CFG_NAND_LUN_NUM];
 };
 
+/*
+ * NOTE, when you use this Macro, pls make sure the FIFO is not empty
+ * Or system will Crash
+ */
+ /*
+#define walk_for_each_fifo(entity, fifo, num) 	\
+	for (num = (fifo)->head, entity = wcb_lun_entity_idx(num); 	\
+		 num != 0xffff;		\
+		 num = entity->prev)
+*/
+
+/*
+#define walk_for_each_fifo(entity, fifo, num) 	\
+do {											\
+	num = (fifo)->head;						\
+	if (num == 0xffff)
+		break;
+	
+
+	while (num != 0xffff) {						\
+		entity = (wcb_lun_entity_idx(num));		\
+		num = entity->prev;						\
+	}											\
+} while(0);
+*/
     
 /* the next available nand ppa address */
 static inline geo_ppa current_ppa(void)
@@ -127,6 +165,11 @@ static inline void set_current_ppa(geo_ppa ppa)
 static inline void incrs_current_ppa(void)
 {
     //IF_CARRY();
+}
+
+static inline struct wcb_lun_entity *wcb_lun_entity_idx(int index)
+{
+	return &g_wcb_lun_ctl->lun_entitys[index];
 }
 
 static inline struct wcb_lun_entity *partial_wcb_lun_entity(void)
@@ -158,6 +201,10 @@ static inline void *wcb_entity_offt_data(int index, u16 pos)
 int write_cache_alloc(struct nvm_exdev *exdev);
 void write_cache_free(struct nvm_exdev *exdev);
 struct wcb_lun_entity *get_new_lun_entity(geo_ppa curppa);
+
+void push_lun_entity_to_fifo(struct fsc_fifo *fifo, 
+							struct wcb_lun_entity *entry);
+struct wcb_lun_entity *pull_lun_entity_from_fifo(struct fsc_fifo *fifo);
 
 #endif
 
