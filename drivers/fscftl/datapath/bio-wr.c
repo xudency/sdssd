@@ -1,7 +1,89 @@
+#include <linux/kthread.h>
+#include <linux/delay.h>
 #include "ppa-ops.h"
 #include "bio-datapath.h"
 #include "../writecache/wcb-mngr.h"
 
+/*  loop fifo
+{
+	u32 num;
+	struct wcb_lun_entity *entry;
+	struct fsc_fifo *full_lun =  &g_wcb_lun_ctl->full_lun;
+
+	num = full_lun->head;
+	while (num != 0xffff) {
+		entry = wcb_lun_entity_idx(num);
+		num = entry->prev;
+		printk("walk find full fifo entity%d\n", entry->index);
+	}						
+
+	printk("****************************************");
+}
+*/
+
+/* Write datapath backend, pull a LUN entity from fullfifo, 
+ * and check if It can Submit Now(LUN BUSY?)
+ * flush data from wcb to NandFlash
+ * return 1: continue to pull FUll LUN,  0: no full fifo thread schedule out
+ */
+int submit_write_backend(void)
+{
+	unsigned long flags;
+	struct fsc_fifo *full_lun =  &g_wcb_lun_ctl->full_lun;	
+	struct fsc_fifo *empty_lun =  &g_wcb_lun_ctl->empty_lun;
+	struct wcb_lun_entity *entity;
+
+	spin_lock_irqsave(&g_wcb_lun_ctl->fifo_lock, flags);
+	
+	entity = pull_lun_entity_from_fifo(full_lun);
+	if(entity == NULL) {
+		// full fifo is empty
+		spin_unlock_irqrestore(&g_wcb_lun_ctl->fifo_lock, flags);
+		return 0;
+	}
+
+	printk("Fscftl-Writer find a entity%d in full fifo\n", entity->index);
+	
+	// submit this LUNs to HW by NVMe PPA command
+	mdelay(2);
+
+	printk("write this LUNs to Nand, and push it to empty fifo\n");	
+	push_lun_entity_to_fifo(empty_lun, entity);
+	
+	spin_unlock_irqrestore(&g_wcb_lun_ctl->fifo_lock, flags);
+
+	return 1;
+}
+
+int fscftl_write_kthread(void *data)
+{
+	//struct nvm_exdev *exdev = data;	
+
+	while (!kthread_should_stop()) {
+		if (submit_write_backend())
+			continue;
+		
+		set_current_state(TASK_INTERRUPTIBLE);
+		io_schedule();
+	}
+
+	return 0;
+}
+
+int fscftl_writer_init(struct nvm_exdev *exdev)
+{
+	exdev->writer_thread = kthread_create(fscftl_write_kthread, exdev, "fscftl-writer");
+
+	wake_up_process(exdev->writer_thread);
+
+	return 0;
+}
+
+void fscftl_writer_exit(struct nvm_exdev *exdev)
+{
+	if (exdev->writer_thread)
+		kthread_stop(exdev->writer_thread);
+}
 
 PPA_TYPE sys_get_ppa_type(geo_ppa ppa)
 {
@@ -115,11 +197,13 @@ void bio_memcpy_wcb(struct wcb_ctx *wcb_1ctx, struct bio *bio)
 	return;
 }
 
-void flush_data_to_wcb(struct wcb_bio_ctx *wcb_resource, struct bio *bio)
+void flush_data_to_wcb(struct nvm_exdev *exdev, 
+						struct wcb_bio_ctx *wcb_resource, struct bio *bio)
 {
 	int i;
 	u32 lba;
 	u16 pos, bpos, epos;
+	unsigned long flags;
 	struct wcb_ctx *wcb_1ctx;
 	struct wcb_lun_entity *entitys = NULL;
 
@@ -147,35 +231,15 @@ void flush_data_to_wcb(struct wcb_bio_ctx *wcb_resource, struct bio *bio)
 
 			// all travesal ppa need inc, regardless of pagetype
 			if (atomic_inc_return(&entitys->fill_cnt) == RAID_LUN_SEC_NUM) {
-				// TODO:: 
-				// push this lun_entity to full fifo and wait write_ts kickin
-				//wake_up(&write_ts);
-
-				
 				printk("push entity%d to full fifo\n", entitys->index);
-				push_lun_entity_to_fifo(&g_wcb_lun_ctl->full_lun, entitys);
-
-
-				{
-					u32 num;
-					struct wcb_lun_entity *entry;
-					struct fsc_fifo *full_lun =  &g_wcb_lun_ctl->full_lun;
-
-					num = full_lun->head;
-					while (num != 0xffff) {
-						entry = wcb_lun_entity_idx(num);
-						num = entry->prev;
-						printk("walk find full fifo entity%d\n", entry->index);
-					}						
 				
-					printk("****************************************");
-				}
-
-
+				spin_lock_irqsave(&g_wcb_lun_ctl->fifo_lock, flags);
+				push_lun_entity_to_fifo(&g_wcb_lun_ctl->full_lun, entitys);
+				spin_unlock_irqrestore(&g_wcb_lun_ctl->fifo_lock, flags);
+				
+				wake_up_process(exdev->writer_thread);
 			}
 		}
-
-		//bio_memcpy_wcb(wcb_1ctx, bio);
 	}
 }
 

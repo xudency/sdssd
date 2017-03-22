@@ -101,6 +101,7 @@ static int wcb_lun_ctl_init(void)
 	}
 
 	spin_lock_init(&g_wcb_lun_ctl->wcb_lock);
+	spin_lock_init(&g_wcb_lun_ctl->fifo_lock);
 	spin_lock_init(&g_wcb_lun_ctl->l2ptbl_lock);
 
 	g_wcb_lun_ctl->lun_entitys = \

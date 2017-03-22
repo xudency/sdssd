@@ -24,6 +24,7 @@
 #include "datapath/ppa-ops.h"
 #include "writecache/wcb-mngr.h"
 #include "systbl/sys-meta.h"
+#include "datapath/bio-datapath.h"
 
 static bool mcp = false;
 module_param(mcp, bool, 0644);
@@ -43,14 +44,19 @@ int fscftl_setup(struct nvm_exdev *exdev)
 		return ret;
 
 	ret = l2ptbl_init(exdev);
-	if (ret) {
+	if (ret)
 		goto out_free_wcb;
-	}
+
+	ret = fscftl_writer_init(exdev);
+	if (ret)
+		goto out_free_l2p;
 
 	g_wcb_lun_ctl->partial_entity = get_new_lun_entity(current_ppa());
 
     return ret;
 
+out_free_l2p:
+	l2ptbl_exit(exdev);
 out_free_wcb:
 	write_cache_free(exdev);
 	return ret;
@@ -58,8 +64,8 @@ out_free_wcb:
 
 void fscftl_cleanup(struct nvm_exdev *exdev)
 {
+	fscftl_writer_exit(exdev);
 	l2ptbl_exit(exdev);
-
 	write_cache_free(exdev);
 
     return;

@@ -104,6 +104,7 @@ struct wcb_bio_ctx {
 
 struct wcb_lun_gctl {
 	spinlock_t wcb_lock;
+	spinlock_t fifo_lock;
     spinlock_t l2ptbl_lock;
 
 	geo_ppa curppa;  	/* next available ppa */

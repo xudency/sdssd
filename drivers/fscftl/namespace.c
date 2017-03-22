@@ -69,7 +69,7 @@ static blk_qc_t fscftl_make_rq(struct request_queue *q, struct bio *bio)
 		printk("===========================================\n");
 	}*/
 
-    flush_data_to_wcb(&wcb_resource, bio);
+    flush_data_to_wcb(exdev, &wcb_resource, bio);
 
     spin_lock(&g_wcb_lun_ctl->l2ptbl_lock);
 	set_l2ptbl_write_path(exdev, &wcb_resource);
