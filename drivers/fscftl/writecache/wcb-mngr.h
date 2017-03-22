@@ -106,12 +106,14 @@ struct wcb_lun_gctl {
 	spinlock_t wcb_lock;
 	spinlock_t fifo_lock;
     spinlock_t l2ptbl_lock;
+    spinlock_t biolist_lock;
 
 	geo_ppa curppa;  	/* next available ppa */
+    struct bio_list requeue_wr_bios;
+    
 	struct fsc_fifo empty_lun;
 	struct fsc_fifo full_lun;
 	struct fsc_fifo read_lun[CFG_NAND_LUN_NUM];
-
     struct fsc_fifo ongoing_lun;   //temp
 
 	struct wcb_lun_entity *lun_entitys;

@@ -2,6 +2,7 @@
 #include <linux/delay.h>
 #include "ppa-ops.h"
 #include "bio-datapath.h"
+#include "../fscftl.h"
 #include "../writecache/wcb-mngr.h"
 
 /*  loop fifo
@@ -59,6 +60,9 @@ int submit_write_backend(struct nvm_exdev *exdev)
 	return 1;
 }
 
+static struct workqueue_struct *requeue_bios_wq;
+
+// Simulation HW IRQ callback fn
 void simulate_cqe_back_fn(unsigned long data)
 {
     unsigned long flags;
@@ -76,6 +80,14 @@ void simulate_cqe_back_fn(unsigned long data)
     }
     
     push_lun_entity_to_fifo(empty_lun, entity);
+    
+    // Now wcb is available, we can process the pending bios in bio_list
+    // IRQ should keep as short as it can, Moreover it hold lock
+    //wake_up(wait_queue_head_t);
+    //completion notify
+    //workqueue
+    queue_work(requeue_bios_wq, &exdev->requeue_ws);
+
 	spin_unlock_irqrestore(&g_wcb_lun_ctl->fifo_lock, flags);
 
     mod_timer(&exdev->cqe_timer, jiffies + msecs_to_jiffies(100));
@@ -96,13 +108,36 @@ int fscftl_write_kthread(void *data)
 	return 0;
 }
 
+static void fscftl_requeue_workfn(struct work_struct *work)
+{
+	struct nvm_exdev *exdev = container_of(work, struct nvm_exdev, requeue_ws);
+	struct nvm_exns *ns = (struct nvm_exns *)exdev->private_data;
+	struct bio_list bios;
+	struct bio *bio;
+
+	bio_list_init(&bios);
+
+	spin_lock(&g_wcb_lun_ctl->biolist_lock);
+	bio_list_merge(&bios, &g_wcb_lun_ctl->requeue_wr_bios);
+	bio_list_init(&&g_wcb_lun_ctl->requeue_wr_bios);
+	spin_unlock(&g_wcb_lun_ctl->biolist_lock);
+
+	while ((bio = bio_list_pop(&bios)))
+		fscftl_make_rq(ns->queue, bio);
+}
+
+
 int fscftl_writer_init(struct nvm_exdev *exdev)
 {
+    requeue_bios_wq = alloc_workqueue("bios-dequeue", WQ_UNBOUND, 0);
+
 	exdev->writer_thread = kthread_create(fscftl_write_kthread, exdev, "fscftl-writer");
 
     setup_timer(&exdev->cqe_timer, simulate_cqe_back_fn, (unsigned long)exdev)
 
 	wake_up_process(exdev->writer_thread);
+
+    INIT_WORK(&exdev->requeue_ws, fscftl_requeue_workfn);
 
 	return 0;
 }
@@ -112,6 +147,8 @@ void fscftl_writer_exit(struct nvm_exdev *exdev)
 	if (exdev->writer_thread)
 		kthread_stop(exdev->writer_thread);
     del_timer(&exdev->cqe_timer);
+
+	destroy_workqueue(requeue_bios_wq);
 }
 
 PPA_TYPE sys_get_ppa_type(geo_ppa ppa)
@@ -127,10 +164,20 @@ PPA_TYPE sys_get_ppa_type(geo_ppa ppa)
     return USR_DATA;
 }
 
-// TODO::
 bool wcb_available(int nr_ppas)
 {
-	return true;
+    u16 left;
+    struct wcb_lun_entity *entity;
+    u32 emptysize = g_wcb_lun_ctl->empty_lun.size;
+    u16 extra = (nr_ppas >> 2) + 2;    // rsvd for sysmeta and bb and xor, etc 
+
+    entity = partial_wcb_lun_entity();
+    left = RAID_LUN_SEC_NUM - (entity->pos);
+
+    if ((nr_ppas+extra) >= left && emptysize == 0)
+        return false;
+
+	return false;
 }
 
 // alloc len valid Normal PPA for this coming io
@@ -219,7 +266,7 @@ void bio_memcpy_wcb(struct wcb_ctx *wcb_1ctx, struct bio *bio)
 			memcpy(dst, src, EXP_PPA_SIZE);			
 			bio_advance(bio, EXP_PPA_SIZE);
 		} else {
-			//:: TODO
+			// TODO::
 			printk("sys data or bb\n");
 		}
 	}

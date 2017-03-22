@@ -16,7 +16,7 @@ static const struct block_device_operations nvm_exns_fops = {
 	.owner		= THIS_MODULE,
 };
 
-static blk_qc_t fscftl_make_rq(struct request_queue *q, struct bio *bio)
+blk_qc_t fscftl_make_rq(struct request_queue *q, struct bio *bio)
 {
 	struct nvm_exns *exns = q->queuedata;
 	struct nvm_exdev *exdev = exns->ndev;
@@ -40,10 +40,14 @@ static blk_qc_t fscftl_make_rq(struct request_queue *q, struct bio *bio)
 		alloc_wcb_core(slba, nr_ppas, &wcb_resource);
 		spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
 	} else {
-   		spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
 		printk("alloc_wcb_core fail resubmit this bio\n");
-		//add_to_resubmit_list(bio);		
-		bio_endio(bio);
+   		spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
+
+        spin_lock(&g_wcb_lun_ctl->biolist_lock);
+		bio_list_add(&g_wcb_lun_ctl->requeue_wr_bios, bio);
+	    spin_lock(&g_wcb_lun_ctl->biolist_lock);
+
+		//bio_endio(bio);
 		return BLK_QC_T_NONE;
 	}
 

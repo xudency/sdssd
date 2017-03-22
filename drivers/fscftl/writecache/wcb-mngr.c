@@ -110,6 +110,9 @@ static int wcb_lun_ctl_init(void)
 	spin_lock_init(&g_wcb_lun_ctl->wcb_lock);
 	spin_lock_init(&g_wcb_lun_ctl->fifo_lock);
 	spin_lock_init(&g_wcb_lun_ctl->l2ptbl_lock);
+	spin_lock_init(&g_wcb_lun_ctl->biolist_lock);
+
+    bio_list_init(&g_wcb_lun_ctl->requeue_wr_bios);
 
 	g_wcb_lun_ctl->lun_entitys = \
 		vzalloc(sizeof(struct wcb_lun_entity) * CB_ENTITYS_CNT);

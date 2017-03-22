@@ -59,6 +59,8 @@ static inline unsigned int get_bio_nppa(struct bio *bio)
 }
 
 /* extern fn */
+blk_qc_t fscftl_make_rq(struct request_queue *q, struct bio *bio);
+
 int nvm_create_exns(struct nvm_exdev *exdev);
 void nvm_delete_exns(struct nvm_exdev *exdev);
 
