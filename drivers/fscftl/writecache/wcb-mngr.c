@@ -2,6 +2,7 @@
 #include <linux/vmalloc.h>
 #include "../fscftl.h"
 #include "wcb-mngr.h"
+#include "../datapath/ppa-ops.h"
 
 /* write cache buffer control block */
 struct wcb_lun_gctl *g_wcb_lun_ctl;
@@ -11,6 +12,23 @@ void fsc_fifo_init(struct fsc_fifo *fifo)
 	fifo->head = 0xffff;
 	fifo->tail = 0xffff;
 	fifo->size = 0;
+}
+
+struct wcb_lun_entity *get_new_lun_entity(geo_ppa curppa)
+{
+	struct wcb_lun_entity *lun_entity;
+
+	// TODO:: pull from a lun entity from empty fifo
+	lun_entity = g_wcb_lun_ctl->lun_entitys + \
+				((g_wcb_lun_ctl->entitynum++) % CB_ENTITYS_CNT);
+
+	lun_entity->baddr = get_next_entity_baddr(curppa);
+	lun_entity->pos = 0;
+	lun_entity->ch_status = 0;
+
+	g_wcb_lun_ctl->partial_entity = lun_entity;
+
+	return lun_entity;
 }
 
 static int wcb_lun_ctl_init(void)

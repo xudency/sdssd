@@ -16,7 +16,7 @@
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/slab.h>
-
+#include <linux/vmalloc.h>
 #include "../nvme/host/nvme.h"
 #include "hwcfg/cfg/flash_cfg.h"
 #include "hwcfg/regrw.h"
@@ -33,17 +33,48 @@ module_param_string(bdev, exdev_name, 8, 0);   //basedev name
 
 extern struct nvme_ppa_ops exdev_ppa_ops;
 
+/////////////
+int l2ptbl_init(struct nvm_exdev *exdev)
+{
+	exdev->l2ptbl = vmalloc(sizeof(u32) * MAX_USER_LBA);
+	if (!exdev->l2ptbl) {
+		printk("l2ptbl malloc failed\n");
+		return -ENOMEM;
+	}
+
+	return 0;
+}
+
+void l2ptbl_exit(struct nvm_exdev *exdev)
+{
+	vfree(exdev->l2ptbl);
+}
+
+/////////////
 int fscftl_setup(struct nvm_exdev *exdev)
 {
 	int ret = 0;
 
 	ret = write_cache_alloc(exdev);
 
+	ret = l2ptbl_init(exdev);
+	if (ret) {
+		goto out_free_wcb;
+	}
+
+	g_wcb_lun_ctl->partial_entity = get_new_lun_entity(current_ppa());
+
     return ret;
+
+out_free_wcb:
+	write_cache_free(exdev);
+	return ret;
 }
 
 void fscftl_cleanup(struct nvm_exdev *exdev)
 {
+	l2ptbl_exit(exdev);
+
 	write_cache_free(exdev);
 
     return;
@@ -87,7 +118,7 @@ static int __init fscftl_module_init(void)
         goto err_cleanup;
 
 	/* testcase */
-	run_testcase(exdev);
+	//run_testcase(exdev);
 
 	return 0;
 

@@ -474,6 +474,7 @@ struct nvm_exdev {
     struct nvme_ppa_ops *ops;
     struct pci_dev   *pdev;
 	struct dma_pool *dmapoll;
+	u32 *l2ptbl;
 	struct idr nsid_idr;
 };
 
