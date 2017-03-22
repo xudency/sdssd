@@ -51,8 +51,6 @@ int fscftl_setup(struct nvm_exdev *exdev)
 	if (ret)
 		goto out_free_l2p;
 
-	g_wcb_lun_ctl->partial_entity = get_new_lun_entity(current_ppa());
-
     return ret;
 
 out_free_l2p:

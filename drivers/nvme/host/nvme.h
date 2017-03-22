@@ -475,7 +475,8 @@ struct nvm_exdev {
     struct pci_dev   *pdev;
 	struct dma_pool *dmapoll;
 	struct task_struct *writer_thread;
-	u32 *l2ptbl;
+	struct timer_list cqe_timer;
+    u32 *l2ptbl;
 	struct idr nsid_idr;
 };
 

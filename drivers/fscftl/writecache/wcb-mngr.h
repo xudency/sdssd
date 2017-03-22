@@ -112,9 +112,11 @@ struct wcb_lun_gctl {
 	struct fsc_fifo full_lun;
 	struct fsc_fifo read_lun[CFG_NAND_LUN_NUM];
 
+    struct fsc_fifo ongoing_lun;   //temp
+
 	struct wcb_lun_entity *lun_entitys;
     struct wcb_lun_entity *partial_entity;
-	u32 entitynum;
+	//u32 entitynum;   // temp
 	
 	/* 
 	 * 0xdead: this Lun is idle, writer can issue this lun to hw 

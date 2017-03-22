@@ -45,12 +45,11 @@ geo_ppa get_next_entity_baddr(geo_ppa curppa)
 	/*if (carry) 
 	{ 
 		carry = 0;
-		//INCRE_BOUNDED(n, bits, carry);
+	    // free list is in oder, free blk is in order, 1 2 3 etc.
 		blk = get_blk_from_free_list();
 
 	}*/
 
-	// free list is in oder, free blk is in order, 1 2 3 etc.
 	IF_CARRY_THEN_INCRE_BOUNDED(carry, blk, BL_BITS);
 
 	bppa.nand.lun = lun;
