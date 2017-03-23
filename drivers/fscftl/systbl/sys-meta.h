@@ -10,6 +10,15 @@
 
 #define BMITBL_SIZE   (BMITBL_SEC_NUM * EXP_PPA_SIZE)
 
+enum raidblk_status {
+	RAID_BLK_FREE,		// in free pool
+	RAID_BLK_OPEN,		// partial used, write pointer
+	RAID_BLK_GOING,		// wr_point to next blk, but this blk cqe don't back
+	RAID_BLK_CLOSED,	// all cqe of this raidblk has back
+	RAID_BLK_TOGC,		// in gc_blk_pool, vpc decrease to 0, can be GC
+	RAID_BLK_GCING		// GC this raid blk
+};
+
 // flush to primary page
 struct sys_status_tbl {
 	struct fsc_fifo free_blk_pool;
