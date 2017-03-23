@@ -14,7 +14,7 @@ compare device-base and host-based
     buffer_head         
 ++++++++++++++++++++++++++++++++  
 **Generic Block Layer**       
-    bio        
+    bio/request            
 ++++++++++++++++++++++++++++++++    
 **Official NVMe Driver**  
     /dev/nvme0n1   
@@ -22,6 +22,7 @@ compare device-base and host-based
 ++++++++++++++++++++++++++++++++    
 **Controller**    
       FW+Logic    
+    (FTL, l2p, gc, error-handle)        
 ++++++++++++++++++++++++++++++++  
 **NandFlash**     
 
@@ -35,11 +36,14 @@ compare device-base and host-based
     bio        
 ++++++++++++++++++++++++++++++++  
 **FSCFTL**       
-      /dev/cnexssd    
-      make_request_fn bio->PPA CMD         
+      /dev/nvme0n1_exp1       
+      make_request_fn    
+      bio->request    
+      fullfill ppa cmd    
+    (l2p gc error-handle)    
 ++++++++++++++++++++++++++++++++    
 **Official NVMe Driver**    
-      NVMe PPA R/W/E API   
+      NVMe (dma_map irq hwqueue)      
 ++++++++++++++++++++++++++++++++    
 **Controller**    
       FW+Logic    
