@@ -33,11 +33,11 @@ geo_ppa get_next_entity_baddr(geo_ppa curppa)
 	geo_ppa bppa;
 
 	bppa.ppa = curppa.ppa;
-	bppa.nand.ch = 0;	
-	bppa.nand.sec = 0;
-	bppa.nand.pl = 0;
 
     get_ppa_each_region(&bppa, &ch, &sec, &pl, &lun, &pg, &blk);
+
+	//printk("curppa blk:%d pg:%d lun:%d\n", 
+		//curppa.nand.blk, curppa.nand.pg, curppa.nand.lun);
 
 	INCRE_BOUNDED(lun, LN_BITS, carry);
 	IF_CARRY_THEN_INCRE_BOUNDED(carry, pg, PG_BITS);
@@ -52,9 +52,15 @@ geo_ppa get_next_entity_baddr(geo_ppa curppa)
 
 	IF_CARRY_THEN_INCRE_BOUNDED(carry, blk, BL_BITS);
 
+	bppa.nand.ch = 0;	
+	bppa.nand.sec = 0;
+	bppa.nand.pl = 0;
 	bppa.nand.lun = lun;
-	bppa.nand.sec = pg;
+	bppa.nand.pg = pg;
 	bppa.nand.blk = blk;
+
+	//printk("newppa blk:%d pg:%d lun:%d\n", 
+			//bppa.nand.blk, bppa.nand.pg, bppa.nand.lun);
 
 	return bppa;
 }

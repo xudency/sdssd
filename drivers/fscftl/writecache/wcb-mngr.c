@@ -46,7 +46,7 @@ struct wcb_lun_entity *pull_lun_entity_from_fifo(struct fsc_fifo *fifo)
 	struct wcb_lun_entity *entry, *nhentry;
 
 	if (old_head == 0xffff) {
-		printk("FiFO is empty\n");
+		//printk("FiFO is empty\n");
 		return NULL;
 	}
 
@@ -76,8 +76,9 @@ struct wcb_lun_entity *get_new_lun_entity(geo_ppa curppa)
 {
 	struct wcb_lun_entity *lun_entity;
 
-	//lun_entity = g_wcb_lun_ctl->lun_entitys + \
-				//((g_wcb_lun_ctl->entitynum++) % CB_ENTITYS_CNT);
+	/* Round Robin
+	lun_entity = g_wcb_lun_ctl->lun_entitys + \
+				((g_wcb_lun_ctl->entitynum++) % CB_ENTITYS_CNT);*/
 
     lun_entity = pull_lun_entity_from_fifo(&g_wcb_lun_ctl->empty_lun);
     if (lun_entity == NULL) {
@@ -92,6 +93,11 @@ struct wcb_lun_entity *get_new_lun_entity(geo_ppa curppa)
 	lun_entity->ch_status = 0;
 
 	g_wcb_lun_ctl->partial_entity = lun_entity;
+	
+	printk("get LUNs(blk:%d pg:%d lun:%d) from empty fifo\n", 
+			lun_entity->baddr.nand.blk, 
+			lun_entity->baddr.nand.pg, 
+			lun_entity->baddr.nand.lun);
 
 	return lun_entity;
 }

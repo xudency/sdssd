@@ -23,7 +23,7 @@
 */
 
 /* Write datapath backend, pull a LUN entity from fullfifo, 
- * and check if It can Submit Now(LUN BUSY?)
+ * and check if It can Submit Now(LUN BUSY?) NO NEED
  * flush data from wcb to NandFlash
  * return 1: continue to pull FUll LUN,  0: no full fifo thread schedule out
  */
@@ -43,9 +43,12 @@ int submit_write_backend(struct nvm_exdev *exdev)
 		return 0;
 	}
 
-	printk("Fscftl-Writer find a entity%d in full fifo\n", entity->index);
+	printk("Fscftl-Writer find LUN(blk:%d pg:%d lun:%d) in full fifo\n", 
+			entity->baddr.nand.blk, 
+           	entity->baddr.nand.pg, 
+            entity->baddr.nand.lun);
 
-	printk("write this LUNs(blk:%d pg:%d lun:%d) to Nand\n", 
+	printk("submit LUNs(blk:%d pg:%d lun:%d) ongoing and wait for cqe back\n", 
             entity->baddr.nand.blk, 
             entity->baddr.nand.pg, 
             entity->baddr.nand.lun);
@@ -73,6 +76,7 @@ void simulate_cqe_back_fn(unsigned long data)
 
 	spin_lock_irqsave(&g_wcb_lun_ctl->fifo_lock, flags);
 
+	// pull until fifo empty ?
 	entity = pull_lun_entity_from_fifo(ongoing_lun);
     if (entity == NULL) {
 	    spin_unlock_irqrestore(&g_wcb_lun_ctl->fifo_lock, flags);
@@ -80,15 +84,20 @@ void simulate_cqe_back_fn(unsigned long data)
     }
     
     push_lun_entity_to_fifo(empty_lun, entity);
+	
+	printk("LUNs(blk:%d pg:%d lun:%d) write complete push to empty fifo\n", 
+            entity->baddr.nand.blk, 
+            entity->baddr.nand.pg, 
+            entity->baddr.nand.lun);
     
+	spin_unlock_irqrestore(&g_wcb_lun_ctl->fifo_lock, flags);
+
     // Now wcb is available, we can process the pending bios in bio_list
     // IRQ should keep as short as it can, Moreover it hold lock
     //wake_up(wait_queue_head_t);
     //completion notify
     //workqueue
     queue_work(requeue_bios_wq, &exdev->requeue_ws);
-
-	spin_unlock_irqrestore(&g_wcb_lun_ctl->fifo_lock, flags);
 
     mod_timer(&exdev->cqe_timer, jiffies + msecs_to_jiffies(100));
 }
@@ -119,7 +128,7 @@ static void fscftl_requeue_workfn(struct work_struct *work)
 
 	spin_lock(&g_wcb_lun_ctl->biolist_lock);
 	bio_list_merge(&bios, &g_wcb_lun_ctl->requeue_wr_bios);
-	bio_list_init(&&g_wcb_lun_ctl->requeue_wr_bios);
+	bio_list_init(&g_wcb_lun_ctl->requeue_wr_bios);
 	spin_unlock(&g_wcb_lun_ctl->biolist_lock);
 
 	while ((bio = bio_list_pop(&bios)))
@@ -133,7 +142,7 @@ int fscftl_writer_init(struct nvm_exdev *exdev)
 
 	exdev->writer_thread = kthread_create(fscftl_write_kthread, exdev, "fscftl-writer");
 
-    setup_timer(&exdev->cqe_timer, simulate_cqe_back_fn, (unsigned long)exdev)
+    setup_timer(&exdev->cqe_timer, simulate_cqe_back_fn, (unsigned long)exdev);
 
 	wake_up_process(exdev->writer_thread);
 
@@ -177,7 +186,7 @@ bool wcb_available(int nr_ppas)
     if ((nr_ppas+extra) >= left && emptysize == 0)
         return false;
 
-	return false;
+	return true;
 }
 
 // alloc len valid Normal PPA for this coming io
@@ -307,8 +316,11 @@ void flush_data_to_wcb(struct nvm_exdev *exdev,
 			}
 
 			// all travesal ppa need inc, regardless of pagetype
-			if (atomic_inc_return(&entitys->fill_cnt) == RAID_LUN_SEC_NUM) {
-				printk("push entity%d to full fifo\n", entitys->index);
+			if (atomic_inc_return(&entitys->fill_cnt) == RAID_LUN_SEC_NUM) {				
+				printk("LUNs(blk:%d pg:%d lun:%d) push to full fifo\n", 
+						entitys->baddr.nand.blk, 
+						entitys->baddr.nand.pg, 
+						entitys->baddr.nand.lun);
 				atomic_set(&entitys->fill_cnt, 0);
 				spin_lock_irqsave(&g_wcb_lun_ctl->fifo_lock, flags);
 				push_lun_entity_to_fifo(&g_wcb_lun_ctl->full_lun, entitys);
