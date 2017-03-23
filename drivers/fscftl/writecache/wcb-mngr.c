@@ -2,6 +2,7 @@
 #include <linux/vmalloc.h>
 #include "../fscftl.h"
 #include "wcb-mngr.h"
+#include "../systbl/sys-meta.h"
 #include "../datapath/ppa-ops.h"
 
 /* write cache buffer control block */
@@ -13,6 +14,14 @@ void fsc_fifo_init(struct fsc_fifo *fifo)
 	fifo->head = 0xffff;
 	fifo->tail = 0xffff;
 	fifo->size = 0;
+}
+
+void print_lun_entitys_fifo(void)
+{
+	printk("Lun entitys FIFO size(empty:%d full:%d ongoning:%d)", 
+			g_wcb_lun_ctl->empty_lun.size, 
+			g_wcb_lun_ctl->full_lun.size,
+			g_wcb_lun_ctl->ongoing_lun.size);
 }
 
 // push to tail 
@@ -55,24 +64,56 @@ struct wcb_lun_entity *pull_lun_entity_from_fifo(struct fsc_fifo *fifo)
 	if (fifo->head == fifo->tail) {
 		// only 1 entry in this fifo
 		fifo->head = fifo->tail = 0xffff;
-		entry->next = entry->prev = 0xffff;
 	} else {
 		nhentry = wcb_lun_entity_idx(entry->prev);
 		fifo->head = entry->prev; //nhentry->index;
-		nhentry->next = 0xffff;		
+		nhentry->next = 0xffff;
 	}
 
+	entry->next = entry->prev = 0xffff;
 	fifo->size--;	
 	return entry;
 }
 
-// search and pull it out, not alway in head
-/*struct wcb_lun_entity *get_lun_entity_from_fifo(struct fsc_fifo *fifo, )
+geo_ppa get_next_entity_baddr(geo_ppa curppa)
 {
+    bool carry;
+    u8 ch, sec, pl, lun;
+    u16 blk, pg;
+	geo_ppa bppa;
 
-}*/
+	bppa.ppa = curppa.ppa;
 
-struct wcb_lun_entity *get_new_lun_entity(geo_ppa curppa)
+    get_ppa_each_region(&bppa, &ch, &sec, &pl, &lun, &pg, &blk);
+
+	//printk("curppa blk:%d pg:%d lun:%d\n", 
+		//curppa.nand.blk, curppa.nand.pg, curppa.nand.lun);
+
+	INCRE_BOUNDED(lun, LN_BITS, carry);
+	IF_CARRY_THEN_INCRE_BOUNDED(carry, pg, PG_BITS);
+
+	if (carry) { 
+		carry = 0;
+		blk = get_blk_from_free_list();
+	}
+
+	//IF_CARRY_THEN_INCRE_BOUNDED(carry, blk, BL_BITS);
+
+	bppa.nand.ch = 0;
+	bppa.nand.sec = 0;
+	bppa.nand.pl = 0;
+	bppa.nand.lun = lun;
+	bppa.nand.pg = pg;
+	bppa.nand.blk = blk;
+
+	//printk("newppa blk:%d pg:%d lun:%d\n", 
+			//bppa.nand.blk, bppa.nand.pg, bppa.nand.lun);
+
+	return bppa;
+}
+
+// get next lun entity and set baddr according last ppa
+struct wcb_lun_entity *get_next_lun_entity(geo_ppa curppa)
 {
 	struct wcb_lun_entity *lun_entity;
 
@@ -84,7 +125,9 @@ struct wcb_lun_entity *get_new_lun_entity(geo_ppa curppa)
     if (lun_entity == NULL) {
         // Never Run here, we should keep a eye beforehand
         // to prevent run here
-        printk("writecache is Full, no space to buffer coming bio\n");
+        // FIXME
+        printk("Can't get_next_lun_entity\n");
+		print_lun_entitys_fifo();
         return NULL;
     }
 
@@ -94,13 +137,49 @@ struct wcb_lun_entity *get_new_lun_entity(geo_ppa curppa)
 
 	g_wcb_lun_ctl->partial_entity = lun_entity;
 	
-	printk("get LUNs(blk:%d pg:%d lun:%d) from empty fifo\n", 
-			lun_entity->baddr.nand.blk, 
-			lun_entity->baddr.nand.pg, 
-			lun_entity->baddr.nand.lun);
+	debug_info("get LUNs(blk:%d pg:%d lun:%d) from empty fifo\n", 
+			    lun_entity->baddr.nand.blk, 
+			    lun_entity->baddr.nand.pg, 
+			    lun_entity->baddr.nand.lun);
 
 	return lun_entity;
 }
+
+struct wcb_lun_entity *get_lun_entity(geo_ppa startppa)
+{
+	u16 ch, ep ,pl, pos;
+	struct wcb_lun_entity *lun_entity;
+
+    lun_entity = pull_lun_entity_from_fifo(&g_wcb_lun_ctl->empty_lun);
+    if (lun_entity == NULL) {
+        // Never Run here, we should keep a eye beforehand
+        // to prevent run here
+        printk("Can't get_lun_entity\n");
+        return NULL;
+    }
+
+	ch = startppa.nand.ch;
+	ep = startppa.nand.sec;
+	pl = startppa.nand.pl;
+	pos = ch | (ep << CH_BITS) | (pl <<(CH_BITS + EP_BITS));
+
+	startppa.nand.ch = 0;
+	startppa.nand.sec = 0;
+	startppa.nand.pl = 0;
+	lun_entity->baddr = startppa;
+	lun_entity->pos = pos;
+	lun_entity->ch_status = 0;
+
+	g_wcb_lun_ctl->partial_entity = lun_entity;
+	
+	debug_info("get LUNs(blk:%d pg:%d lun:%d) from empty fifo\n", 
+			    lun_entity->baddr.nand.blk, 
+			    lun_entity->baddr.nand.pg, 
+			    lun_entity->baddr.nand.lun);
+
+	return lun_entity;
+}
+
 
 static int wcb_lun_ctl_init(void)
 {
@@ -147,7 +226,7 @@ static int wcb_lun_ctl_init(void)
         push_lun_entity_to_fifo(&g_wcb_lun_ctl->empty_lun, wcb_lun_entity_idx(i));
     }
 
-	g_wcb_lun_ctl->partial_entity = get_new_lun_entity(current_ppa());
+	printk("empty lun entitys fifo size:%d\n", g_wcb_lun_ctl->empty_lun.size);
 
 	return 0;
 

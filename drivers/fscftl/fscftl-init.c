@@ -39,32 +39,66 @@ int fscftl_setup(struct nvm_exdev *exdev)
 {
 	int ret = 0;
 
-	ret = write_cache_alloc(exdev);
+	ret = statetbl_init();
 	if (ret)
 		return ret;
 
+	ret = bmitbl_init();
+	if (ret)
+		goto out_free_statetbl;
+
 	ret = l2ptbl_init(exdev);
 	if (ret)
-		goto out_free_wcb;
+		goto out_free_bmitbl;
 
-	ret = fscftl_writer_init(exdev);
+	ret = write_cache_alloc(exdev);
 	if (ret)
 		goto out_free_l2p;
 
-    return ret;
+	ret = fscftl_writer_init(exdev);
+	if (ret)
+		goto out_free_wcb;
 
-out_free_l2p:
-	l2ptbl_exit(exdev);
+	// prepare for write
+	{
+
+	int blk;
+	struct bmi_item *bmi;
+	geo_ppa startppa;
+	for (blk = CFG_NAND_BLOCK_NUM - 1; blk >= 0; blk--) {
+		// init 1 bmi_item
+		bmi = bmitbl + blk;
+		insert_blk_to_free_list(blk);		
+	}
+
+	startppa.ppa = 0;
+	blk = get_blk_from_free_list();
+	startppa.nand.blk = blk;
+
+	g_wcb_lun_ctl->partial_entity = get_lun_entity(startppa);
+
+	}
+
+    return ret;
+	
 out_free_wcb:
 	write_cache_free(exdev);
+out_free_l2p:
+	l2ptbl_exit(exdev);
+out_free_bmitbl:
+	bmitbl_exit();
+out_free_statetbl:
+	statetbl_exit();
 	return ret;
 }
 
 void fscftl_cleanup(struct nvm_exdev *exdev)
 {
 	fscftl_writer_exit(exdev);
-	l2ptbl_exit(exdev);
 	write_cache_free(exdev);
+	l2ptbl_exit(exdev);
+	bmitbl_exit();	
+	statetbl_exit();
 
     return;
 }

@@ -202,10 +202,13 @@ static inline void *wcb_entity_offt_data(int index, u16 pos)
 	return wcb_entity_base_data(index) + pos*CFG_NAND_EP_SIZE;
 }
 
+void print_lun_entitys_fifo(void);
 
+void fsc_fifo_init(struct fsc_fifo *fifo);
 int write_cache_alloc(struct nvm_exdev *exdev);
 void write_cache_free(struct nvm_exdev *exdev);
-struct wcb_lun_entity *get_new_lun_entity(geo_ppa curppa);
+struct wcb_lun_entity *get_lun_entity(geo_ppa startppa);
+struct wcb_lun_entity *get_next_lun_entity(geo_ppa curppa);
 
 void push_lun_entity_to_fifo(struct fsc_fifo *fifo, 
 							struct wcb_lun_entity *entry);

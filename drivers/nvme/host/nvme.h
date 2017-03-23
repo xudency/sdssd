@@ -476,7 +476,8 @@ struct nvm_exdev {
 	struct dma_pool *dmapoll;
 	struct task_struct *writer_thread;
 	struct timer_list cqe_timer;
-    struct work_struct requeue_ws;
+    struct work_struct requeue_ws;	
+    struct work_struct yirq;   // simulation irq
     u32 *l2ptbl;
 	struct idr nsid_idr;
 };

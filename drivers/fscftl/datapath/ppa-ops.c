@@ -25,46 +25,6 @@ void get_ppa_each_region(geo_ppa *ppa, u8 *ch, u8 *sec,
     *blk = ppa->nand.blk;
 }
 
-geo_ppa get_next_entity_baddr(geo_ppa curppa)
-{
-    bool carry;
-    u8 ch, sec, pl, lun;
-    u16 blk, pg;
-	geo_ppa bppa;
-
-	bppa.ppa = curppa.ppa;
-
-    get_ppa_each_region(&bppa, &ch, &sec, &pl, &lun, &pg, &blk);
-
-	//printk("curppa blk:%d pg:%d lun:%d\n", 
-		//curppa.nand.blk, curppa.nand.pg, curppa.nand.lun);
-
-	INCRE_BOUNDED(lun, LN_BITS, carry);
-	IF_CARRY_THEN_INCRE_BOUNDED(carry, pg, PG_BITS);
-
-	/*if (carry) 
-	{ 
-		carry = 0;
-	    // free list is in oder, free blk is in order, 1 2 3 etc.
-		blk = get_blk_from_free_list();
-
-	}*/
-
-	IF_CARRY_THEN_INCRE_BOUNDED(carry, blk, BL_BITS);
-
-	bppa.nand.ch = 0;	
-	bppa.nand.sec = 0;
-	bppa.nand.pl = 0;
-	bppa.nand.lun = lun;
-	bppa.nand.pg = pg;
-	bppa.nand.blk = blk;
-
-	//printk("newppa blk:%d pg:%d lun:%d\n", 
-			//bppa.nand.blk, bppa.nand.pg, bppa.nand.lun);
-
-	return bppa;
-}
-
 static void print_ppa_cqe(struct nvme_ppa_command *cmd, u64 result, int status)
 {
 	printk("New PPA command CQE complete\n");

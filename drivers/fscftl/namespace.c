@@ -40,7 +40,7 @@ blk_qc_t fscftl_make_rq(struct request_queue *q, struct bio *bio)
 		alloc_wcb_core(slba, nr_ppas, &wcb_resource);
 		spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
 	} else {
-		printk("alloc_wcb_core fail resubmit this bio\n");
+		printk("wcb_unavailable resubmit this bio\n");
    		spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
 
         spin_lock(&g_wcb_lun_ctl->biolist_lock);
