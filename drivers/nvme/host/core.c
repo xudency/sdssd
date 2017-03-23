@@ -2015,8 +2015,6 @@ void nvme_uninit_ctrl(struct nvme_ctrl *ctrl)
 	flush_work(&ctrl->async_event_work);
 	flush_work(&ctrl->vendor_async_event_work);
 	flush_work(&ctrl->scan_work);
-
-    //nvm_exdev_unregister(ctrl);
 	nvme_remove_namespaces(ctrl);
 
 	device_destroy(nvme_class, MKDEV(nvme_char_major, ctrl->instance));
@@ -2084,12 +2082,6 @@ int nvme_init_ctrl(struct nvme_ctrl *ctrl, struct device *dev,
 	spin_lock(&dev_list_lock);
 	list_add_tail(&ctrl->node, &nvme_ctrl_list);
 	spin_unlock(&dev_list_lock);
-
-    /*if (nvm_exdev_register(ctrl)) {
-        printk("nvm exdev register fail\n");
-        ret = -ENOMEM;
-        goto out_release_instance;
-    }*/
 
 	return 0;
 out_release_instance:

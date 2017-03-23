@@ -1877,9 +1877,6 @@ static int nvme_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	dev->dev = get_device(&pdev->dev);
 	pci_set_drvdata(pdev, dev);
 
- 	//struct pci_dev *pdev = to_pci_dev(dev->dev);
- 	//struct nvme_dev *dev = pci_get_drvdata(pdev);
-
 	result = nvme_dev_map(dev);
 	if (result)
 		goto free;
@@ -1944,12 +1941,12 @@ static void nvme_remove(struct pci_dev *pdev)
 	nvme_change_ctrl_state(&dev->ctrl, NVME_CTRL_DELETING);
 
 	pci_set_drvdata(pdev, NULL);
-    
+
 	if (!pci_device_is_present(pdev))
 		nvme_change_ctrl_state(&dev->ctrl, NVME_CTRL_DEAD);
 
 	flush_work(&dev->reset_work);
-    nvme_uninit_ctrl(&dev->ctrl);
+	nvme_uninit_ctrl(&dev->ctrl);
 	nvme_dev_disable(dev, true);
 	nvme_dev_remove_admin(dev);
 	nvme_free_queues(dev, 0);

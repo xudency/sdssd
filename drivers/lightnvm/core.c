@@ -1458,11 +1458,11 @@ static const struct file_operations _ctl_fops = {
 	.owner = THIS_MODULE,
 	.llseek  = noop_llseek,
 };
-/*
+
 static struct miscdevice _nvm_misc = {
 	.minor		= MISC_DYNAMIC_MINOR,
 	.name		= "lightnvm",
 	.nodename	= "lightnvm/control",
 	.fops		= &_ctl_fops,
 };
-builtin_misc_device(_nvm_misc);*/
+builtin_misc_device(_nvm_misc);
