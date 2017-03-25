@@ -22,12 +22,12 @@
 extern struct wcb_lun_gctl *g_wcb_lun_ctl;
 
 typedef enum {
-    USR_DATA,
-    DUMMY_DATA,
-    BAD_BLK,
-    XOR_PARITY,
-    FIRST_PAGE,
-    FTL_LOG,
+	USR_DATA,
+	DUMMY_DATA,
+	BAD_BLK,
+	XOR_PARITY,
+	FIRST_PAGE,
+	FTL_LOG,
 } PPA_TYPE;
 
 struct fsc_fifo {
@@ -45,28 +45,28 @@ struct wcb_lun_entity {
 	 */
 	geo_ppa baddr;
 
-    /* 
-     * data will be dma_map_sg in NVMe Driver, bio_map_kern
-     * so we don't need alloc DMA for it 
-     */
+	/* 
+	* data will be dma_map_sg in NVMe Driver, bio_map_kern
+	* so we don't need alloc DMA for it 
+	*/
 	void *data;
 
-    void *meta;
+	void *meta;
 	dma_addr_t meta_dma;
 
-    /* 
-     * the ppa value in this LUN is fixed
-     * ppa = baddr+offt, BUT baddr is get from free_blk_list
-     */
-    u64 *ppa;
-    dma_addr_t ppa_dma;
+	/* 
+	* the ppa value in this LUN is fixed
+	* ppa = baddr+offt, BUT baddr is get from free_blk_list
+	*/
+	u64 *ppa;
+	dma_addr_t ppa_dma;
 
 	/* 
 	 * when this Lun push to rd fifo, need update l2p incache to nand 
 	 * these represent the lba of this LUN 
 	 */
 	u32 lba[RAID_LUN_SEC_NUM];
-	
+
 	/* one bit for one ch, 
 	 * 1: this ch is outstanding  
 	 * 0: this ch is complete 
@@ -105,25 +105,25 @@ struct wcb_bio_ctx {
 struct wcb_lun_gctl {
 	spinlock_t wcb_lock;
 	spinlock_t fifo_lock;
-    spinlock_t l2ptbl_lock;
-    spinlock_t biolist_lock;
+	spinlock_t l2ptbl_lock;
+	spinlock_t biolist_lock;
 
 	geo_ppa curppa;  	/* next available ppa */
-    struct bio_list requeue_wr_bios;
-    
+	struct bio_list requeue_wr_bios;
+
 	struct fsc_fifo empty_lun;
 	struct fsc_fifo full_lun;
 	struct fsc_fifo read_lun[CFG_NAND_LUN_NUM];
-    struct fsc_fifo ongoing_lun;   //temp
+	struct fsc_fifo ongoing_lun;   //temp
 
 	struct wcb_lun_entity *lun_entitys;
-    struct wcb_lun_entity *partial_entity;
+	struct wcb_lun_entity *partial_entity;
 	//u32 entitynum;   // temp
-	
+
 	/* 
-	 * 0xdead: this Lun is idle, writer can issue this lun to hw 
-	 * else: this Lun has a page outstanding, the val=pagenum
-	 */
+	* 0xdead: this Lun is idle, writer can issue this lun to hw 
+	* else: this Lun has a page outstanding, the val=pagenum
+	*/
 	u16 ongoing_pg_num[CFG_NAND_LUN_NUM];
 
 	/* this must=0 or 1 */
@@ -159,12 +159,12 @@ do {											\
 /* the next available nand ppa address */
 static inline geo_ppa current_ppa(void)
 {
-    return g_wcb_lun_ctl->curppa;
+	return g_wcb_lun_ctl->curppa;
 }
 
 static inline void set_current_ppa(geo_ppa ppa)
 {
-    g_wcb_lun_ctl->curppa = ppa;
+	g_wcb_lun_ctl->curppa = ppa;
 }
 
 static inline void incrs_current_ppa(void)
@@ -179,7 +179,7 @@ static inline struct wcb_lun_entity *wcb_lun_entity_idx(int index)
 
 static inline struct wcb_lun_entity *partial_wcb_lun_entity(void)
 {
-    return g_wcb_lun_ctl->partial_entity;
+	return g_wcb_lun_ctl->partial_entity;
 }
 
 static inline void *wcb_entity_base_data(int index)
@@ -210,8 +210,7 @@ void write_cache_free(struct nvm_exdev *exdev);
 struct wcb_lun_entity *get_lun_entity(geo_ppa startppa);
 struct wcb_lun_entity *get_next_lun_entity(geo_ppa curppa);
 
-void push_lun_entity_to_fifo(struct fsc_fifo *fifo, 
-							struct wcb_lun_entity *entry);
+void push_lun_entity_to_fifo(struct fsc_fifo *fifo, struct wcb_lun_entity *entry);
 struct wcb_lun_entity *pull_lun_entity_from_fifo(struct fsc_fifo *fifo);
 
 #endif

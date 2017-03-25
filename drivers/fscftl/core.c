@@ -48,13 +48,14 @@ void *nvm_exdev_dma_pool_alloc(struct nvm_exdev *dev, dma_addr_t *dma_handle)
 	return dma_pool_alloc(dev->dmapoll, GFP_KERNEL, dma_handle);
 }
 
-void nvm_exdev_dma_pool_free(struct nvm_exdev *dev, void *vaddr, dma_addr_t dma_handle)
+void nvm_exdev_dma_pool_free(struct nvm_exdev *dev, void *vaddr, 
+			    dma_addr_t dma_handle)
 {
 	dma_pool_free(dev->dmapoll, vaddr, dma_handle);
 }
 
 int set_rqd_nand_ppalist(struct nvm_exdev *dev, struct nvm_rq *rqd, 
-						 struct ppa_addr *ppas, int nr_ppas)
+			struct ppa_addr *ppas, int nr_ppas)
 {
 	int i;
 
@@ -86,7 +87,7 @@ void free_rqd_nand_ppalist(struct nvm_exdev * dev, struct nvm_rq *rqd)
 }
 
 static inline void nvm_rqd_to_ppacmd(struct nvm_rq *rqd, int instance, 
-									 struct nvme_ppa_command *c)
+				     struct nvme_ppa_command *c)
 {
 	c->opcode = rqd->opcode;
 	c->nsid = cpu_to_le32(instance);
@@ -164,7 +165,7 @@ static int nvm_submit_ppa(struct nvm_exdev *exdev, struct nvm_rq *rqd)
 struct nvme_ppa_ops exdev_ppa_ops = {
 	.name			 = "expssd",
 	.module			 = THIS_MODULE,
-	.submit_io       = nvm_submit_ppa,
+	.submit_io		 = nvm_submit_ppa,
 };
 
 
@@ -212,12 +213,12 @@ static int __nvme_submit_ppa_cmd(struct request_queue *q,
  *      3. databuff is dma_map inside this fn, so we don't need dma_map it
  */
 int nvme_submit_ppa_cmd(struct nvm_exdev *dev, struct nvme_ppa_command *cmd,
-						void *buffer, unsigned bufflen, 
-						rq_end_io_fn *done, void *ctx)
+			void *buffer, unsigned bufflen, 
+			rq_end_io_fn *done, void *ctx)
 {
 	struct request_queue *q = dev->bns->queue;
 
 	return __nvme_submit_ppa_cmd(q, cmd, NULL, buffer, bufflen, 0,
-								 NVME_QID_ANY, 0, 0, done, ctx);
+				NVME_QID_ANY, 0, 0, done, ctx);
 }
 

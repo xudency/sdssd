@@ -34,11 +34,11 @@ int submit_write_backend(struct nvm_exdev *exdev)
 {
 	unsigned long flags;
 	struct fsc_fifo *full_lun =  &g_wcb_lun_ctl->full_lun;
-    struct fsc_fifo *ongoing_lun =  &g_wcb_lun_ctl->ongoing_lun;	
+	struct fsc_fifo *ongoing_lun =  &g_wcb_lun_ctl->ongoing_lun;	
 	struct wcb_lun_entity *entity;
 
 	spin_lock_irqsave(&g_wcb_lun_ctl->wcb_lock, flags);
-	
+
 	entity = pull_lun_entity_from_fifo(full_lun);
 	if(entity == NULL) {
 		// full fifo is empty
@@ -47,20 +47,20 @@ int submit_write_backend(struct nvm_exdev *exdev)
 	}
 
 	debug_info("Fscftl-Writer find LUN(blk:%d pg:%d lun:%d) in full fifo\n", 
-			    entity->baddr.nand.blk, 
-           		entity->baddr.nand.pg, 
-            	entity->baddr.nand.lun);
+		    entity->baddr.nand.blk, 
+		    entity->baddr.nand.pg, 
+		    entity->baddr.nand.lun);
 	debug_info("submit LUNs(blk:%d pg:%d lun:%d) ongoing and wait for cqe back\n", 
-            	entity->baddr.nand.blk, 
-            	entity->baddr.nand.pg, 
-            	entity->baddr.nand.lun);
-    
-    push_lun_entity_to_fifo(ongoing_lun, entity);
-	
+		    entity->baddr.nand.blk, 
+		    entity->baddr.nand.pg, 
+		    entity->baddr.nand.lun);
+
+	push_lun_entity_to_fifo(ongoing_lun, entity);
+
 	spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
 
 	// Simulation IRQ back
-    queue_work(requeue_bios_wq, &exdev->yirq);
+	queue_work(requeue_bios_wq, &exdev->yirq);
 
 	return 1;
 }
@@ -68,37 +68,37 @@ int submit_write_backend(struct nvm_exdev *exdev)
 // Simulation HW IRQ callback fn Timer
 void simulate_cqe_back_fn(unsigned long data)
 {
-    unsigned long flags;
+	unsigned long flags;
 	struct nvm_exdev *exdev = (struct nvm_exdev *)data;
-    struct fsc_fifo *empty_lun =  &g_wcb_lun_ctl->empty_lun;
-    struct fsc_fifo *ongoing_lun =  &g_wcb_lun_ctl->ongoing_lun;	
+	struct fsc_fifo *empty_lun =  &g_wcb_lun_ctl->empty_lun;
+	struct fsc_fifo *ongoing_lun =  &g_wcb_lun_ctl->ongoing_lun;	
 	struct wcb_lun_entity *entity;
 
 	while (1) {
 		spin_lock_irqsave(&g_wcb_lun_ctl->wcb_lock, flags);
 
 		entity = pull_lun_entity_from_fifo(ongoing_lun);
-	    if (entity == NULL) {
-		    spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
-	        break;
-	    }
+		if (entity == NULL) {
+			spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
+			break;
+		}
 	    
-	    push_lun_entity_to_fifo(empty_lun, entity);
-		
+		push_lun_entity_to_fifo(empty_lun, entity);
+
 		debug_info("LUNs(blk:%d pg:%d lun:%d) write complete push to empty fifo\n", 
-	            	entity->baddr.nand.blk, 
-	            	entity->baddr.nand.pg, 
-	            	entity->baddr.nand.lun);
+			    entity->baddr.nand.blk, 
+			    entity->baddr.nand.pg, 
+			    entity->baddr.nand.lun);
 
 		spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
 
-	    // Now wcb is available, we can process the pending bios in bio_list
-	    // IRQ should keep as short as it can, Moreover it hold lock
-	    //wake_up(wait_queue_head_t);
-	    //completion notify
-	    //workqueue
+		// Now wcb is available, we can process the pending bios in bio_list
+		// IRQ should keep as short as it can, Moreover it hold lock
+		//wake_up(wait_queue_head_t);
+		//completion notify
+		//workqueue
 		//mod_timer(&exdev->cqe_timer, jiffies + msecs_to_jiffies(100));
-	    queue_work(requeue_bios_wq, &exdev->requeue_ws);
+		queue_work(requeue_bios_wq, &exdev->requeue_ws);
 	}
 }
 
@@ -169,16 +169,16 @@ static void fscftl_yirq_workfn(struct work_struct *work)
 
 int fscftl_writer_init(struct nvm_exdev *exdev)
 {
-    requeue_bios_wq = alloc_workqueue("bios-dequeue", WQ_UNBOUND, 0);
+	requeue_bios_wq = alloc_workqueue("bios-dequeue", WQ_UNBOUND, 0);
 
 	exdev->writer_thread = kthread_create(fscftl_write_kthread, exdev, "fscftl-writer");
 
-    setup_timer(&exdev->cqe_timer, simulate_cqe_back_fn, (unsigned long)exdev);
+	setup_timer(&exdev->cqe_timer, simulate_cqe_back_fn, (unsigned long)exdev);
 
 	wake_up_process(exdev->writer_thread);
 
-    INIT_WORK(&exdev->requeue_ws, fscftl_requeue_workfn);	
-    INIT_WORK(&exdev->yirq, fscftl_yirq_workfn);
+	INIT_WORK(&exdev->requeue_ws, fscftl_requeue_workfn);	
+	INIT_WORK(&exdev->yirq, fscftl_yirq_workfn);
 
 	return 0;
 }
@@ -187,36 +187,36 @@ void fscftl_writer_exit(struct nvm_exdev *exdev)
 {
 	if (exdev->writer_thread)
 		kthread_stop(exdev->writer_thread);
-    del_timer(&exdev->cqe_timer);
+	del_timer(&exdev->cqe_timer);
 
 	destroy_workqueue(requeue_bios_wq);
 }
 
 PPA_TYPE sys_get_ppa_type(geo_ppa ppa)
 {
-    // lookup BMI->bb
+	// lookup BMI->bb
 
-    // xor last ch
+	// xor last ch
 
-    // ep pl ln pg=0
+	// ep pl ln pg=0
 
-    // 255 511 pg ep=3
+	// 255 511 pg ep=3
 
-    return USR_DATA;
+	return USR_DATA;
 }
 
 bool wcb_available(int nr_ppas)
 {
-    u16 left;
-    struct wcb_lun_entity *entity;
-    u32 emptysize = g_wcb_lun_ctl->empty_lun.size;
-    u16 extra = (nr_ppas >> 2) + 2;    // rsvd for sysmeta and bb and xor, etc 
+	u16 left;
+	struct wcb_lun_entity *entity;
+	u32 emptysize = g_wcb_lun_ctl->empty_lun.size;
+	u16 extra = (nr_ppas >> 2) + 2;    // rsvd for sysmeta and bb and xor, etc 
 
-    entity = partial_wcb_lun_entity();
-    left = RAID_LUN_SEC_NUM - (entity->pos);
+	entity = partial_wcb_lun_entity();
+	left = RAID_LUN_SEC_NUM - (entity->pos);
 
-    if ((nr_ppas+extra) >= left && emptysize == 0)
-        return false;
+	if ((nr_ppas+extra) >= left && emptysize == 0)
+		return false;
 
 	return true;
 }
@@ -224,64 +224,62 @@ bool wcb_available(int nr_ppas)
 // alloc len valid Normal PPA for this coming io
 int alloc_wcb_core(sector_t slba, u32 nr_ppas, struct wcb_bio_ctx *wcb_resource)
 {
-    int loop = 1;
+	int loop = 1;
 	int num = 0;
-    geo_ppa curppa;
-    u32 left_len = nr_ppas;
-    struct wcb_lun_entity *cur_lun_entity = partial_wcb_lun_entity();
+	geo_ppa curppa;
+	u32 left_len = nr_ppas;
+	struct wcb_lun_entity *cur_lun_entity = partial_wcb_lun_entity();
 
 	wcb_resource->bio_wcb[num].entitys = cur_lun_entity;	
 	wcb_resource->bio_wcb[num].start_pos = cur_lun_entity->pos;	
 	wcb_resource->bio_wcb[num].end_pos = cur_lun_entity->pos;
-	
-    //curppa = current_ppa();
-    curppa.ppa = cur_lun_entity->baddr.ppa + cur_lun_entity->pos;
-    
-    while (loop) 
-    {
-        switch (sys_get_ppa_type(curppa)) {
-        case USR_DATA:
-			left_len--;
-            cur_lun_entity->lba[cur_lun_entity->pos] = slba++;
-            cur_lun_entity->ppa[cur_lun_entity->pos] = curppa.ppa;   //EP+
-			wcb_resource->bio_wcb[num].end_pos = cur_lun_entity->pos;
-            cur_lun_entity->pos++;
 
-            if (cur_lun_entity->pos == RAID_LUN_SEC_NUM) {	
-                cur_lun_entity = get_next_lun_entity(curppa);
-                if (!cur_lun_entity)
-                    return -1;
+	//curppa = current_ppa();
+	curppa.ppa = cur_lun_entity->baddr.ppa + cur_lun_entity->pos;
+    
+	while (loop) 
+	{
+		switch (sys_get_ppa_type(curppa)) {
+		case USR_DATA:
+			left_len--;
+			cur_lun_entity->lba[cur_lun_entity->pos] = slba++;
+			cur_lun_entity->ppa[cur_lun_entity->pos] = curppa.ppa;   //EP+
+			wcb_resource->bio_wcb[num].end_pos = cur_lun_entity->pos;
+			cur_lun_entity->pos++;
+
+			if (cur_lun_entity->pos == RAID_LUN_SEC_NUM) {	
+				cur_lun_entity = get_next_lun_entity(curppa);
+				if (!cur_lun_entity)
+					return -1;
 
 				if (left_len == 0) {
 					loop = 0;
 					break;
 				}
-				
+						
 				num++;
 				wcb_resource->bio_wcb[num].entitys = cur_lun_entity;
 				wcb_resource->bio_wcb[num].start_pos = cur_lun_entity->pos;
 				wcb_resource->bio_wcb[num].end_pos = cur_lun_entity->pos;
 
-                curppa = cur_lun_entity->baddr;
-            } else {
-                // TODO:: use EP+ Mode
+				curppa = cur_lun_entity->baddr;
+			} else {
+			// TODO:: use EP+ Mode
 				curppa.ppa++;
 			}
 
 			if (left_len == 0) {
 				/* wcb is prepare ready */
-                loop = 0;
+				loop = 0;
 			}
 
-            break;
-            
-        // TODO::
-        default:
-            break;
-        }
-    }
-
-    //set_current_ppa(curppa);
+			break;
+	    
+		// TODO::
+		default:
+	   		break;
+		}
+	}
 
     return 0;
 }

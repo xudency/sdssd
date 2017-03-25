@@ -92,16 +92,16 @@ int do_manufactory_init(struct nvm_exdev * exdev)
 {
 	printk("start %s\n", __FUNCTION__);
 
-    sweepup_disk(exdev);
+	sweepup_disk(exdev);
 
-    fscftl_bbt_discovery(exdev);  //set bootblk bbt && bmi->bb
+	fscftl_bbt_discovery(exdev);  //set bootblk bbt && bmi->bb
 
-    // Now all systbl is clean, don't need Flush down
+	// Now all systbl is clean, don't need Flush down
 
-    bootblk_flush_bbt();
-    bootblk_flush_primary_page(POWER_DOWN_UNSAFE);
+	bootblk_flush_bbt();
+	bootblk_flush_primary_page(POWER_DOWN_UNSAFE);
 
 	printk("complete %s\n", __FUNCTION__);
 
-    return 0;
+	return 0;
 }

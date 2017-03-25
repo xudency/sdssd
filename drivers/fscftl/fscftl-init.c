@@ -100,45 +100,45 @@ void fscftl_cleanup(struct nvm_exdev *exdev)
 	bmitbl_exit();	
 	statetbl_exit();
 
-    return;
+	return;
 }
 
 static int __init fscftl_module_init(void)
 {
-    int ret = 0;
-    struct nvm_exdev *exdev;
+	int ret = 0;
+	struct nvm_exdev *exdev;
 
 	printk("NandFlash type:%s\n", FLASH_TYPE);
 
 	exdev = nvm_find_exdev(exdev_name);
-    if (exdev == NULL)
-        return -ENODEV;
+	if (exdev == NULL)
+		return -ENODEV;
 
-	printk("find exdev:%s  magic_dw:0x%x\n", exdev->bdiskname, exdev->magic_dw);
+	printk("find exdev:%s idndw:0x%x\n", exdev->bdiskname, exdev->magic_dw);
 
-    exdev->ops = &exdev_ppa_ops;
+	exdev->ops = &exdev_ppa_ops;
 
-    ctrl_reg_setup(exdev->ctrl);
+	ctrl_reg_setup(exdev->ctrl);
 
 	ret = nvm_exdev_setup_pool(exdev, "prp-ppa-list");
 	if (ret) 
 		return ret;
 
-    ret = fscftl_setup(exdev);
-    if (ret)
-        goto release_pool;
+	ret = fscftl_setup(exdev);
+	if (ret)
+		goto release_pool;
 
-    if (mcp) {
-        if (do_manufactory_init(exdev))
-            goto err_cleanup;
-    } else {
-        if (try_recovery_systbl())
-            goto err_cleanup;
-    }
+	if (mcp) {
+		if (do_manufactory_init(exdev))
+	    		goto err_cleanup;
+	} else {
+		if (try_recovery_systbl())
+	    		goto err_cleanup;
+	}
 
 	ret = nvm_create_exns(exdev);
-    if (ret)
-        goto err_cleanup;
+	if (ret)
+		goto err_cleanup;
 
 	/* testcase */
 	//run_testcase(exdev);
@@ -146,10 +146,10 @@ static int __init fscftl_module_init(void)
 	return 0;
 
 err_cleanup:
-    fscftl_cleanup(exdev);
+	fscftl_cleanup(exdev);
 release_pool:
 	nvm_exdev_release_pool(exdev);
-    return -EFAULT;
+	return -EFAULT;
 }
 
 static void __exit fscftl_module_exit(void)
@@ -157,8 +157,8 @@ static void __exit fscftl_module_exit(void)
 	struct nvm_exdev *exdev = nvm_find_exdev(exdev_name);
 
 	nvm_delete_exns(exdev);
-    flush_down_systbl();
-    fscftl_cleanup(exdev);
+	flush_down_systbl();
+	fscftl_cleanup(exdev);
 	nvm_exdev_release_pool(exdev);
     
 	return;

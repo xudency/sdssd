@@ -6,7 +6,7 @@
 
 // BMITBL need how many PPAs
 #define BMITBL_SEC_NUM  (DIV_ROUND_UP(CFG_NAND_BLOCK_NUM * \
-						sizeof(struct bmi_item), EXP_PPA_SIZE))
+			 sizeof(struct bmi_item), EXP_PPA_SIZE))
 
 #define BMITBL_SIZE   (BMITBL_SEC_NUM * EXP_PPA_SIZE)
 

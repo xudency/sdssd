@@ -20,66 +20,66 @@ blk_qc_t fscftl_make_rq(struct request_queue *q, struct bio *bio)
 {
 	struct nvm_exns *exns = q->queuedata;
 	struct nvm_exdev *exdev = exns->ndev;
-    unsigned long flags;
+	unsigned long flags;
 	struct wcb_bio_ctx wcb_resource;
-    int nr_ppas = get_bio_nppa(bio);
-    sector_t slba = get_bio_slba(bio);
-    
-    // TODO:: only consider write and read now
-    if (bio_data_dir(bio) == READ) {
-        /* Read datapath */
-        bio_endio(bio);
-        return BLK_QC_T_NONE;
-    }
+	int nr_ppas = get_bio_nppa(bio);
+	sector_t slba = get_bio_slba(bio);
 
-    /* Write datapath */
+	// TODO:: only consider write and read now
+	if (bio_data_dir(bio) == READ) {
+		/* Read datapath */
+		bio_endio(bio);
+		return BLK_QC_T_NONE;
+	}
+
+	/* Write datapath */
 	memset(&wcb_resource, 0x00, sizeof(wcb_resource));
 
-    spin_lock_irqsave(&g_wcb_lun_ctl->wcb_lock, flags);
+	spin_lock_irqsave(&g_wcb_lun_ctl->wcb_lock, flags);
 	if (wcb_available(nr_ppas)) {
 		alloc_wcb_core(slba, nr_ppas, &wcb_resource);
 		spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
 	} else {
 		printk("wcb_unavailable resubmit this bio\n");
-   		spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
+		spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
 
-        spin_lock(&g_wcb_lun_ctl->biolist_lock);
+		spin_lock(&g_wcb_lun_ctl->biolist_lock);
 		bio_list_add(&g_wcb_lun_ctl->requeue_wr_bios, bio);
-	    spin_lock(&g_wcb_lun_ctl->biolist_lock);
+		spin_lock(&g_wcb_lun_ctl->biolist_lock);
 
 		//bio_endio(bio);
 		return BLK_QC_T_NONE;
 	}
 
 	/*{
-		int i;
-		u16 bpos, epos;
-		struct wcb_ctx *wcb_1ctx;
-		struct wcb_lun_entity *entitys = NULL;
+	int i;
+	u16 bpos, epos;
+	struct wcb_ctx *wcb_1ctx;
+	struct wcb_lun_entity *entitys = NULL;
 
-		for (i=0; i < MAX_USED_WCB_ENTITYS; i++) 
-		{
-			wcb_1ctx = &wcb_resource.bio_wcb[i];
-			entitys = wcb_1ctx->entitys;
-			if (!entitys)
-				break;
+	for (i=0; i < MAX_USED_WCB_ENTITYS; i++) 
+	{
+	wcb_1ctx = &wcb_resource.bio_wcb[i];
+	entitys = wcb_1ctx->entitys;
+	if (!entitys)
+	break;
 
-			bpos = wcb_1ctx->start_pos;
-			epos = wcb_1ctx->end_pos;
-			printk("bio nrppa:%d need lun entity%d [%d-%d]\n", 
-					nr_ppas, entitys->index, bpos, epos);				
-		}
+	bpos = wcb_1ctx->start_pos;
+	epos = wcb_1ctx->end_pos;
+	printk("bio nrppa:%d need lun entity%d [%d-%d]\n", 
+	nr_ppas, entitys->index, bpos, epos);				
+	}
 
-		printk("===========================================\n");
+	printk("===========================================\n");
 	}*/
 
-    flush_data_to_wcb(exdev, &wcb_resource, bio);
+	flush_data_to_wcb(exdev, &wcb_resource, bio);
 
-    spin_lock(&g_wcb_lun_ctl->l2ptbl_lock);
+	spin_lock(&g_wcb_lun_ctl->l2ptbl_lock);
 	set_l2ptbl_write_path(exdev, &wcb_resource);
-    spin_unlock(&g_wcb_lun_ctl->l2ptbl_lock);
-    
-    bio_endio(bio);
+	spin_unlock(&g_wcb_lun_ctl->l2ptbl_lock);
+
+	bio_endio(bio);
 	return BLK_QC_T_NONE;
 }
 
@@ -136,8 +136,8 @@ int nvm_create_exns(struct nvm_exdev *exdev)
 	blk_queue_max_hw_sectors(rqueue, 8 * MAX_PPA_PER_CMD); // 512 Unit
 	blk_queue_write_cache(rqueue, true, false);
 
-    //capacity = le64_to_cpup(&id->nsze) << (ns->lba_shift - 9);
-    capacity = (MAX_USER_LBA + 1) * 8;
+	//capacity = le64_to_cpup(&id->nsze) << (ns->lba_shift - 9);
+	capacity = (MAX_USER_LBA + 1) * 8;
 	set_capacity(disk, capacity);	// 512 Unit
 	printk("create disk:/dev/%s    User Capacity:%ldGB\n", 
 			disk->disk_name, (capacity*512 >> 30));
