@@ -12,7 +12,7 @@
 
 struct sys_status_tbl *statetbl;
 struct bmi_item *bmitbl;
-u32 *vpctbl;
+u32 *vpctbl;   // prevent by l2plock
 
 // TODO::
 // blk-pool lunentity-fifo unify use one interface

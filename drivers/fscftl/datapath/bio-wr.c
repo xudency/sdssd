@@ -386,14 +386,23 @@ void flush_data_to_wcb(struct nvm_exdev *exdev,
 void set_l2ptbl_incache(struct nvm_exdev *dev, u32 lba, u32 ppa)
 {
 	geo_ppa mapping;
-	mapping.ppa = ppa;
-	mapping.cache.in_cache = 1;
-	
+        u32 prev;
+	u32 *l2p_ppa;
+        
 	if (lba < MAX_USER_LBA) {
-		// TODO:: vpc
-		dev->l2ptbl[lba] = mapping.ppa;
-	} else {
+	        l2p_ppa = &dev->l2ptbl[lba];
+	        prev = *l2p_ppa;
+                mapping.ppa = prev;
 
+                if (prev != INVALID_PAGE)
+                        vpctbl[mapping.nand.blk]--;
+
+	        mapping.ppa = ppa;
+	        mapping.cache.in_cache = 1;
+		*l2p_ppa = mapping.ppa;
+                vpctbl[mapping.nand.blk]++;
+	} else {
+                // TODO::
 	}
 
 	return;

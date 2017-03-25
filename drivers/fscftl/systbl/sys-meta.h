@@ -69,6 +69,7 @@ struct bmi_item {
 
 extern struct sys_status_tbl *statetbl;
 extern struct bmi_item *bmitbl;
+extern u32 *vpctbl;   // prevent by l2plock
 
 u32 pull_blk_from_pool(struct fsc_fifo *fifo);
 void push_blk_to_pool(struct fsc_fifo *fifo, u32 blk);
