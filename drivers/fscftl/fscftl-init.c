@@ -47,9 +47,13 @@ int fscftl_setup(struct nvm_exdev *exdev)
 	if (ret)
 		goto out_free_statetbl;
 
+        ret = vpctbl_init();
+        if (ret)
+                goto out_free_bmitbl
+
 	ret = l2ptbl_init(exdev);
 	if (ret)
-		goto out_free_bmitbl;
+		goto out_free_vpctbl;
 
 	ret = write_cache_alloc(exdev);
 	if (ret)
@@ -59,16 +63,16 @@ int fscftl_setup(struct nvm_exdev *exdev)
 	if (ret)
 		goto out_free_wcb;
 
-	// prepare for write
+	// prepare for write MOve to MCP
 	{
 
 	int blk;
-	struct bmi_item *bmi;
+	//struct bmi_item *bmi;
 	geo_ppa startppa;
 	for (blk = CFG_NAND_BLOCK_NUM - 1; blk >= 0; blk--) {
 		// init 1 bmi_item
-		bmi = bmitbl + blk;
-		insert_blk_to_free_list(blk);		
+		//bmi = bmitbl + blk;
+		insert_blk_to_free_list(blk);	
 	}
 
 	startppa.ppa = 0;
@@ -85,6 +89,8 @@ out_free_wcb:
 	write_cache_free(exdev);
 out_free_l2p:
 	l2ptbl_exit(exdev);
+out_free_vpctbl:
+        vpctbl_exit();
 out_free_bmitbl:
 	bmitbl_exit();
 out_free_statetbl:
@@ -97,6 +103,7 @@ void fscftl_cleanup(struct nvm_exdev *exdev)
 	fscftl_writer_exit(exdev);
 	write_cache_free(exdev);
 	l2ptbl_exit(exdev);
+        vpctbl_exit();
 	bmitbl_exit();	
 	statetbl_exit();
 

@@ -463,23 +463,24 @@ void nvme_core_exit(void);
 
 // represent a ExposeSSD device
 struct nvm_exdev {
-	struct list_head devices;    /* all nvm_exdev linked in nvm_exdev_list */	
-    u32 magic_dw;
-    int node;
-	char bdiskname[DISK_NAME_LEN];
-	void *private_data;			/* Expose device nvme0n1_exp1 */
-	struct nvme_ns *bns;    	/* underlying device nvme0n1 */
-    struct nvme_dev  *ndev;
-    struct nvme_ctrl *ctrl;
-    struct nvme_ppa_ops *ops;
-    struct pci_dev   *pdev;
-	struct dma_pool *dmapoll;
-	struct task_struct *writer_thread;
-	struct timer_list cqe_timer;
-    struct work_struct requeue_ws;	
-    struct work_struct yirq;   // simulation irq
-    u32 *l2ptbl;
-	struct idr nsid_idr;
+        struct list_head devices;    /* all nvm_exdev linked in nvm_exdev_list */	
+        u32 magic_dw;
+        int node;
+        char bdiskname[DISK_NAME_LEN];
+        void *private_data;			/* Expose device nvme0n1_exp1 */
+        struct nvme_ns *bns;    	/* underlying device nvme0n1 */
+        struct nvme_dev  *ndev;
+        struct nvme_ctrl *ctrl;
+        struct nvme_ppa_ops *ops;
+        struct pci_dev   *pdev;
+        struct dma_pool *dmapoll;
+        struct task_struct *writer_thread;
+        struct timer_list cqe_timer;
+        struct work_struct requeue_ws;	
+        struct work_struct yirq;   // simulation irq
+        u32 *l2ptbl;
+        u32 *l2pl1tbl;
+        struct idr nsid_idr;
 };
 
 struct nvm_exns {
@@ -511,12 +512,12 @@ extern struct nvm_exdev *nvm_find_exdev(const char *name); // export for FTL Mod
 
 int nvm_exdev_register(struct nvme_ctrl *ctrl, struct nvme_ns *ns, char *disk_name)
 {
-    return 0;   
+        return 0;
 }
 
 void nvm_exdev_unregister(struct nvme_ctrl *ctrl)
 {
-    return 0;
+        return 0;
 }
 
 #endif	/* FSCFTL */

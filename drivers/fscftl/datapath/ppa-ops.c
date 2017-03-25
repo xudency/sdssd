@@ -15,7 +15,7 @@
  *********************************************************************/
 
 void get_ppa_each_region(geo_ppa *ppa, u8 *ch, u8 *sec, 
-						 u8 *pl, u8 *lun, u16 *pg, u16 *blk) 
+                                u8 *pl, u8 *lun, u16 *pg, u16 *blk) 
 {
     *ch = ppa->nand.ch;
     *sec = ppa->nand.sec;
@@ -23,6 +23,62 @@ void get_ppa_each_region(geo_ppa *ppa, u8 *ch, u8 *sec,
     *lun = ppa->nand.lun;
     *pg = ppa->nand.pg;
     *blk = ppa->nand.blk;
+}
+
+
+void set_ppa_nand_addr(geo_ppa *ppa, u8 ch, u8 sec, 
+                            u8 pl, u8 lun, u16 pg, u16 blk)
+{
+        ppa->nand.ch  = ch;
+        ppa->nand.sec = sec;
+        ppa->nand.pl  = pl;
+        ppa->nand.lun = lun;
+        ppa->nand.pg  = pg;
+        ppa->nand.blk = blk;
+}
+
+void ppa_step(geo_ppa *ppa, bool mode)
+{
+        if (mode == CH_INCRS) {
+                ppa->ppa++;
+        } else {
+                bool carry;
+                u8 ch, sec, pl, lun;
+                u16 pg, blk;
+
+                get_ppa_each_region(ppa, &ch, &sec, &pl, &lun, &pg, &blk);
+
+        	INCRE_BOUNDED(sec, EP_BITS, carry);
+        	IF_CARRY_THEN_INCRE_BOUNDED(carry, pl, PL_BITS);
+        	IF_CARRY_THEN_INCRE_BOUNDED(carry, ch, CH_BITS);
+        	IF_CARRY_THEN_INCRE_BOUNDED(carry, lun, LN_BITS);
+        	IF_CARRY_THEN_INCRE_BOUNDED(carry, pg, PG_BITS);
+        	IF_CARRY_THEN_INCRE_BOUNDED(carry, blk,BL_BITS);
+
+                set_ppa_nand_addr(ppa, ch, sec, pl, lun, pg, blk);
+        }
+}
+
+u32 pos_to_ppa(struct wcb_lun_entity *entity, bool mode)
+{
+        if (mode == CH_INCRS) {
+	        return entity->baddr.ppa + entity->pos;
+        } else {
+                u8 ch, sec, pl;
+                geo_ppa ppa;
+                geo_pos temp;
+                temp.all = entity->pos;
+                sec = temp.bits.sec;
+                pl  = temp.bits.pl;
+                ch  = temp.bits.ch;
+
+                ppa.ppa = entity->baddr.ppa; // blk pg lun
+                ppa.nand.ch = ch;
+                ppa.nand.sec = sec;
+                ppa.nand.pl = pl;
+
+                return ppa.ppa;
+        }
 }
 
 static void print_ppa_cqe(struct nvme_ppa_command *cmd, u64 result, int status)

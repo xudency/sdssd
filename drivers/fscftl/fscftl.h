@@ -12,13 +12,6 @@
 //don't define fix value, should read from HW register
 #define MAX_PPA_PER_CMD		64   // due to cqe 64 bit
 
-/* Bootblk+SYSTBL+BB+GC+SpecialPPA(XOR FistPage Ftllog) */
-//#define OP_CAPACITY		(CAPACITY - USER_CAPACITY)
-/* User data Byte */
-#define USER_CAPACITY   ((CAPACITY*8)/11)
-
-#define MAX_USER_LBA	(USER_CAPACITY/CFG_NAND_EP_SIZE)
-
 #define NAND_RAW_SIZE 		304
 #define NAND_META_SIZE 		16
 

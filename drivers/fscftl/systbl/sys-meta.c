@@ -12,6 +12,7 @@
 
 struct sys_status_tbl *statetbl;
 struct bmi_item *bmitbl;
+u32 *vpctbl;
 
 // TODO::
 // blk-pool lunentity-fifo unify use one interface
@@ -65,25 +66,34 @@ void push_blk_to_pool(struct fsc_fifo *fifo, u32 blk)
 //form freelist when do power on bmitbl
 u32 get_blk_from_free_list(void)
 {
+
 	u32 blk = pull_blk_from_pool(&statetbl->free_blk_pool);
+        struct bmi_item *bmi;
 
 	if (blk == 0xffff) {
-		printk("no free blk !!! \n");
+		printk("ERROR no free blk !!! \n");
 		return 0;
 	}
-	
+        
+        bmi = bmitbl + blk;
+
 	printk("open blk:%d  left cnt:%d\n", blk, statetbl->free_blk_pool.size);
+        bmi->bmstate = RAID_BLK_OPEN;
 
 	return blk;
 }
 
 void insert_blk_to_free_list(u32 blk)
 {
+        struct bmi_item *bmi = bmitbl + blk;
+        
 	push_blk_to_pool(&statetbl->free_blk_pool, blk);
+        bmi->bmstate = RAID_BLK_FREE;
 }
 
 int statetbl_init(void)
 {
+        // move this to primary-page
 	statetbl = kzalloc(sizeof(struct sys_status_tbl), GFP_KERNEL);
 	if (!statetbl)
 		return -ENOMEM;
@@ -124,20 +134,43 @@ void bmitbl_exit(void)
 	vfree(bmitbl);
 }
 
+int vpctbl_init(void)
+{
+        vpctbl = kzalloc(VPCTBL_SIZE);
+        if (!vpctbl)
+                return -ENOMEM;
+}
+
+void vpctbl_exit(void)
+{
+        kfree(vpctbl);
+}
+
 int l2ptbl_init(struct nvm_exdev *exdev)
 {
-	exdev->l2ptbl = vmalloc(sizeof(u32) * MAX_USER_LBA);
+	exdev->l2ptbl = vmalloc(USR_FTLTBL_SIZE);
 	if (!exdev->l2ptbl) {
 		printk("l2ptbl malloc failed\n");
 		return -ENOMEM;
 	}
 
+        memset(exdev->l2ptbl, INVALID_PAGE, USR_FTLTBL_SIZE);
+
+        exdev->l2pl1tbl = kzalloc(L1TBL_SIZE);
+        if (!exdev->l2pl1tbl)
+                goto free_l2ptbl;
+
 	return 0;
+        
+free_l2ptbl:
+	vfree(exdev->l2ptbl);
+        return -ENOMEM;
 }
 
 void l2ptbl_exit(struct nvm_exdev *exdev)
 {
 	vfree(exdev->l2ptbl);
+        kfree(exdev->l2pl1tbl);
 }
 
 

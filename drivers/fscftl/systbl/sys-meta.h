@@ -4,16 +4,42 @@
 #include "../fscftl.h"
 #include "../writecache/wcb-mngr.h"
 
-// BMITBL need how many PPAs
+/* Bootblk+SYSTBL+BB+GC+SpecialPPA(XOR FistPage Ftllog) */
+//#define OP_CAPACITY		(CAPACITY - USER_CAPACITY)
+/* User data Byte */
+#define USER_CAPACITY   ((CAPACITY*8)/11)
+#define MAX_USER_LBA	   (USER_CAPACITY/CFG_NAND_EP_SIZE - 1)
+
 #define BMITBL_SEC_NUM  (DIV_ROUND_UP(CFG_NAND_BLOCK_NUM * \
 			 sizeof(struct bmi_item), EXP_PPA_SIZE))
+#define BMITBL_SIZE     (BMITBL_SEC_NUM * EXP_PPA_SIZE)
 
-#define BMITBL_SIZE   (BMITBL_SEC_NUM * EXP_PPA_SIZE)
+#define VPCTBL_SEC_NUM  (DIV_ROUND_UP(CFG_NAND_BLOCK_NUM * 4, EXP_PPA_SIZE))
+#define VPCTBL_SIZE     (VPCTBL_SEC_NUM*EXP_PPA_SIZE)
+
+#define USR_FTLTBL_SEC_NUM  (DIV_ROUND_UP(MAX_USER_LBA * 4, EXP_PPA_SIZE))
+#define USR_FTLTBL_SIZE     (USR_FTLTBL_SEC_NUM*EXP_PPA_SIZE)
+
+#define L1TBL_NOALIGN_SIZE ((USR_FTLTBL_SEC_NUM+VPCTBL_SEC_NUM+BMITBL_SEC_NUM)*4)
+#define L1TBL_SEC_NUM   (DIV_ROUND_UP(L1TBL_NOALIGN_SIZE, EXP_PPA_SIZE))
+#define L1TBL_SIZE      (L1TBL_SEC_NUM*EXP_PPA_SIZE)
+// LBA zone
+//[0 MAX_USER_LBA] //User zone
+#define EXTEND_LBA_BASE    (MAX_USER_LBA + 1)
+#define EXTEND_LBA_BMITBL  (EXTEND_LBA_BASE)
+#define EXTEND_LBA_VPCTBL  (EXTEND_LBA_BMITBL+BMITBL_SEC_NUM)
+#define EXTEND_LBA_L1TBL   (EXTEND_LBA_VPCTBL+VPCTBL_SEC_NUM) //
+//#define XXX  (EXTEND_LBA_L1TBL + L1TBL_SEC_NUM)
+
+
+
+// PAGE
+#define INVALID_PAGE     0xffffffff
+
 
 enum raidblk_status {
 	RAID_BLK_FREE,		// in free pool
-	RAID_BLK_OPEN,		// partial used, write pointer
-	RAID_BLK_GOING,		// wr_point to next blk, but this blk cqe don't back
+	RAID_BLK_OPEN,		// partial used, write pointer, atmost has 2 OPEN
 	RAID_BLK_CLOSED,	// all cqe of this raidblk has back
 	RAID_BLK_TOGC,		// in gc_blk_pool, vpc decrease to 0, can be GC
 	RAID_BLK_GCING		// GC this raid blk
@@ -35,8 +61,8 @@ struct bmi_item {
 	u16 read_uecc[CFG_NAND_LUN_NUM];
 	u16 rdcount;	
 	u16 bmstate;
-	
-	// fifo link
+        atomic_t cmpl_lun;  // 1 rblk contain PG*LUN LUNs, when all LUNs back set bmstate=Close
+        // fifo link
 	u32 prev;
 	u32 next;
 };
@@ -55,6 +81,9 @@ void statetbl_exit(void);
 
 int bmitbl_init(void);
 void bmitbl_exit(void);
+
+int vpctbl_init(void);
+void vpctbl_exit(void);
 
 int l2ptbl_init(struct nvm_exdev *exdev);
 void l2ptbl_exit(struct nvm_exdev *exdev);

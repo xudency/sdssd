@@ -229,21 +229,22 @@ int alloc_wcb_core(sector_t slba, u32 nr_ppas, struct wcb_bio_ctx *wcb_resource)
 	geo_ppa curppa;
 	u32 left_len = nr_ppas;
 	struct wcb_lun_entity *cur_lun_entity = partial_wcb_lun_entity();
+        struct wcb_ctx *wcb_1ctx = &wcb_resource->bio_wcb[num];
 
-	wcb_resource->bio_wcb[num].entitys = cur_lun_entity;	
-	wcb_resource->bio_wcb[num].start_pos = cur_lun_entity->pos;	
-	wcb_resource->bio_wcb[num].end_pos = cur_lun_entity->pos;
+	wcb_1ctx.entitys = cur_lun_entity;	
+	wcb_1ctx.start_pos = cur_lun_entity->pos;	
+	wcb_1ctx.end_pos = cur_lun_entity->pos;
 
-	//curppa = current_ppa();
-	curppa.ppa = cur_lun_entity->baddr.ppa + cur_lun_entity->pos;
-    
-	while (loop) 
+        // startppa for this io
+        cur_lun_entity->baddr.ppa + cur_lun_entity->pos
+
+        while (loop) 
 	{
 		switch (sys_get_ppa_type(curppa)) {
 		case USR_DATA:
 			left_len--;
 			cur_lun_entity->lba[cur_lun_entity->pos] = slba++;
-			cur_lun_entity->ppa[cur_lun_entity->pos] = curppa.ppa;   //EP+
+			cur_lun_entity->ppa[cur_lun_entity->pos] = curppa.ppa;
 			wcb_resource->bio_wcb[num].end_pos = cur_lun_entity->pos;
 			cur_lun_entity->pos++;
 
@@ -256,32 +257,55 @@ int alloc_wcb_core(sector_t slba, u32 nr_ppas, struct wcb_bio_ctx *wcb_resource)
 					loop = 0;
 					break;
 				}
-						
-				num++;
-				wcb_resource->bio_wcb[num].entitys = cur_lun_entity;
-				wcb_resource->bio_wcb[num].start_pos = cur_lun_entity->pos;
-				wcb_resource->bio_wcb[num].end_pos = cur_lun_entity->pos;
+
+                                wcb_1ctx = &wcb_resource->bio_wcb[++num];
+                                wcb_1ctx.entitys = cur_lun_entity;	
+                                wcb_1ctx.start_pos = cur_lun_entity->pos;	
+                                wcb_1ctx.end_pos = cur_lun_entity->pos;
 
 				curppa = cur_lun_entity->baddr;
 			} else {
-			// TODO:: use EP+ Mode
-				curppa.ppa++;
+                                curppa.ppa++
 			}
 
 			if (left_len == 0) {
 				/* wcb is prepare ready */
 				loop = 0;
 			}
-
 			break;
-	    
-		// TODO::
+
+                case DUMMY_DATA:
+                        /*  */
+                        break;
+            
 		default:
 	   		break;
 		}
 	}
 
-    return 0;
+	/*{
+	int i;
+	u16 bpos, epos;
+	struct wcb_ctx *wcb_1ctx;
+	struct wcb_lun_entity *entitys = NULL;
+
+	for (i=0; i < MAX_USED_WCB_ENTITYS; i++) 
+	{
+        	wcb_1ctx = &wcb_resource->bio_wcb[i];
+        	entitys = wcb_1ctx->entitys;
+        	if (!entitys)
+        	        break;
+
+        	bpos = wcb_1ctx->start_pos;
+        	epos = wcb_1ctx->end_pos;
+        	printk("bio nrppa:%d need lun entity%d [%d-%d]\n", 
+        	        nr_ppas, entitys->index, bpos, epos);				
+	}
+
+	printk("===========================================\n");
+	}*/
+
+        return 0;
 }
 
 void bio_memcpy_wcb(struct wcb_ctx *wcb_1ctx, struct bio *bio)
@@ -311,7 +335,7 @@ void bio_memcpy_wcb(struct wcb_ctx *wcb_1ctx, struct bio *bio)
 }
 
 void flush_data_to_wcb(struct nvm_exdev *exdev, 
-						struct wcb_bio_ctx *wcb_resource, struct bio *bio)
+                            struct wcb_bio_ctx *wcb_resource, struct bio *bio)
 {
 	int i;
 	u32 lba;

@@ -25,9 +25,10 @@ blk_qc_t fscftl_make_rq(struct request_queue *q, struct bio *bio)
 	int nr_ppas = get_bio_nppa(bio);
 	sector_t slba = get_bio_slba(bio);
 
-	// TODO:: only consider write and read now
+        // TODO:: trim discard fua etc.
+
 	if (bio_data_dir(bio) == READ) {
-		/* Read datapath */
+                // TODO: Read LBA
 		bio_endio(bio);
 		return BLK_QC_T_NONE;
 	}
@@ -45,33 +46,10 @@ blk_qc_t fscftl_make_rq(struct request_queue *q, struct bio *bio)
 
 		spin_lock(&g_wcb_lun_ctl->biolist_lock);
 		bio_list_add(&g_wcb_lun_ctl->requeue_wr_bios, bio);
-		spin_lock(&g_wcb_lun_ctl->biolist_lock);
+		spin_unlock(&g_wcb_lun_ctl->biolist_lock);
 
-		//bio_endio(bio);
 		return BLK_QC_T_NONE;
 	}
-
-	/*{
-	int i;
-	u16 bpos, epos;
-	struct wcb_ctx *wcb_1ctx;
-	struct wcb_lun_entity *entitys = NULL;
-
-	for (i=0; i < MAX_USED_WCB_ENTITYS; i++) 
-	{
-	wcb_1ctx = &wcb_resource.bio_wcb[i];
-	entitys = wcb_1ctx->entitys;
-	if (!entitys)
-	break;
-
-	bpos = wcb_1ctx->start_pos;
-	epos = wcb_1ctx->end_pos;
-	printk("bio nrppa:%d need lun entity%d [%d-%d]\n", 
-	nr_ppas, entitys->index, bpos, epos);				
-	}
-
-	printk("===========================================\n");
-	}*/
 
 	flush_data_to_wcb(exdev, &wcb_resource, bio);
 
