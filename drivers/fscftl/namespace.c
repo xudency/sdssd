@@ -11,6 +11,7 @@
 #include "writecache/wcb-mngr.h"
 #include "datapath/ppa-ops.h"
 #include "datapath/bio-datapath.h"
+#include "systbl/sys-meta.h"
 
 static const struct block_device_operations nvm_exns_fops = {
 	.owner		= THIS_MODULE,

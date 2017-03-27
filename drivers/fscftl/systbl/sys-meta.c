@@ -136,9 +136,11 @@ void bmitbl_exit(void)
 
 int vpctbl_init(void)
 {
-        vpctbl = kzalloc(VPCTBL_SIZE);
+        vpctbl = kzalloc(VPCTBL_SIZE, GFP_KERNEL);
         if (!vpctbl)
                 return -ENOMEM;
+
+	return 0;
 }
 
 void vpctbl_exit(void)
@@ -156,7 +158,7 @@ int l2ptbl_init(struct nvm_exdev *exdev)
 
         memset(exdev->l2ptbl, INVALID_PAGE, USR_FTLTBL_SIZE);
 
-        exdev->l2pl1tbl = kzalloc(L1TBL_SIZE);
+        exdev->l2pl1tbl = kzalloc(L1TBL_SIZE, GFP_KERNEL);
         if (!exdev->l2pl1tbl)
                 goto free_l2ptbl;
 

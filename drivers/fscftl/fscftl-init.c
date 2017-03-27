@@ -49,7 +49,7 @@ int fscftl_setup(struct nvm_exdev *exdev)
 
         ret = vpctbl_init();
         if (ret)
-                goto out_free_bmitbl
+                goto out_free_bmitbl;
 
 	ret = l2ptbl_init(exdev);
 	if (ret)

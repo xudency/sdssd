@@ -5,6 +5,7 @@
 #include "../nvme/host/nvme.h"
 #include "hwcfg/cfg/flash_cfg.h"
 #include "bootblk/bootblk_mngr.h"
+#include "systbl/sys-meta.h"
 
 #define SEC_PER_PPA 8 // 4K/512
 #define EXP_PPA_SIZE (4096)

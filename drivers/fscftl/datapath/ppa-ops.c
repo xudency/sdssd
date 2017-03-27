@@ -310,6 +310,7 @@ void run_testcase(struct nvm_exdev *exdev)
 	return;
 }
 
+#if 0
 ///////////////////BackEnd Ioctl sync//////////////////
 // nvme-cli extend
 // nvme-cli fscftl passthru
@@ -463,4 +464,4 @@ static int nvme_issue_user_cmd(struct nvm_exdev *dev,
 
 	return ret;
 }
-
+#endif

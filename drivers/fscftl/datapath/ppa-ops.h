@@ -3,8 +3,8 @@
 
 #include "../fscftl.h"
 
-//#define debug_info printk
-#define debug_info(format, arg...)  do {} while (0)
+#define debug_info printk
+//#define debug_info(format, arg...)  do {} while (0)
 
 #define INCRE_BOUNDED(n, bits, carry) { if (++n == (1 << bits)) { n = 0; carry = 1; } else { carry = 0; } }
 #define IF_CARRY_THEN_INCRE_BOUNDED(carry, n, bits) { if (carry) { carry = 0; INCRE_BOUNDED(n, bits, carry); } }
@@ -13,11 +13,15 @@
 #define EP_INCRS 1
 
 struct nvme_ppa_iod {
-	void *vaddr_meta;
+	void *ctx;	// lun entity
+	struct nvm_exdev *dev;
+
+	void *vaddr_meta; // 16B
 	dma_addr_t *dma_meta;
 
-	void *vaddr_ppalist;
+	u64 *vaddr_ppalist;
 	dma_addr_t *dma_ppalist;
+	int idx;   // which line or which ch
 };
 
 typedef union phy_ppa {

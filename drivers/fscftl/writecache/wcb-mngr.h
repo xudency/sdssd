@@ -1,6 +1,7 @@
 #ifndef __WCB_MNGR_
 #define __WCB_MNGR_
 #include "../hwcfg/cfg/flash_cfg.h"
+#include "../fscftl.h"
 
 // Write Cache Size=16*4*4*8*10(4KB) = 80MB
 #define PADDING_PAGE_NUM  8
@@ -72,7 +73,8 @@ struct wcb_lun_entity {
 	 * 0: this ch is complete 
 	 * when ch_status=0, it indicated this LUN can push to read fifo
 	 */
-	u16 ch_status;
+	unsigned long ch_status;
+	unsigned long line_status;
 
 	/* 
 	 * next ep to be writed, it's the pointer by memcpy data from bio 
@@ -187,20 +189,22 @@ static inline void *wcb_entity_base_data(int index)
 	return g_wcb_lun_ctl->lun_entitys[index].data;
 }
 
+static inline void *wcb_entity_offt_data(int index, u16 pos)
+{
+	return wcb_entity_base_data(index) + pos*CFG_NAND_EP_SIZE;
+}
+
 static inline void *wcb_entity_base_meta(int index)
 {
 	return g_wcb_lun_ctl->lun_entitys[index].meta;
 }
+
 
 static inline dma_addr_t wcb_entity_base_metadma(int index)
 {
 	return g_wcb_lun_ctl->lun_entitys[index].meta_dma;
 }
 
-static inline void *wcb_entity_offt_data(int index, u16 pos)
-{
-	return wcb_entity_base_data(index) + pos*CFG_NAND_EP_SIZE;
-}
 
 void print_lun_entitys_fifo(void);
 
