@@ -59,4 +59,6 @@ int nvm_rdpparaw_sync(struct nvm_exdev *exdev, struct physical_address *ppa,
 
 void run_testcase(struct nvm_exdev *exdev);
 
+int erase_rblk_wait(struct nvm_exdev *exdev, u16 blk);
+
 #endif

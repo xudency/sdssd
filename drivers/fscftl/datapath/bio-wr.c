@@ -115,7 +115,7 @@ static void wrppa_lun_completion(struct request *req, int error)
 		print_lun_entity_baddr("this entity cqe back, push", 
 			   		entity, "to emptyfifo");
 		
-		queue_work(requeue_bios_wq, &ppa_iod->dev->requeue_ws);
+		//queue_work(requeue_bios_wq, &ppa_iod->dev->requeue_ws);
 
 		if (!bio_list_empty(&g_wcb_lun_ctl->requeue_wr_bios)) {
 			complete(&lun_completion);
@@ -537,7 +537,7 @@ void flush_data_to_wcb(struct nvm_exdev *exdev,
 			}
 
 			// all travesal ppa need inc, regardless of pagetype
-			if (atomic_inc_return(&entitys->fill_cnt) == RAID_LUN_SEC_NUM) {				
+			if (atomic_inc_return(&entitys->fill_cnt) == RAID_LUN_SEC_NUM) {
 				print_lun_entity_baddr("this lun is full push", 
 							entitys, 
 							"to fullfifo");

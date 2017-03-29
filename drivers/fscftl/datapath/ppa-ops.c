@@ -310,6 +310,55 @@ void run_testcase(struct nvm_exdev *exdev)
 	return;
 }
 
+int erase_rblk_wait(struct nvm_exdev *exdev, u16 blk)
+{
+        int ret = 0;
+        u16 nlb, ch, lun;
+        u16 plmode;
+        u16 nr_ppas = CFG_NAND_CHANNEL_NUM*CFG_NAND_LUN_NUM;
+        dma_addr_t dma_ppalist;
+        u64 ppalist;
+        geo_ppa ppa;
+	struct nvme_ppa_command *ppa_cmd;
+	
+	ppa_cmd = kzalloc(sizeof(struct nvme_ppa_command), GFP_KERNEL);
+	if (!ppa_cmd)
+		return -ENOMEM;
+
+        if (CFG_NAND_PLANE_NUM == 4) {
+                plmode = NVM_IO_QUAD_ACCESS;
+        } else if (CFG_NAND_PLANE_NUM == 2) {
+                plmode = NVM_IO_DUAL_ACCESS;
+        }
+
+        ppalist = nvm_exdev_dma_pool_alloc(exdev, &dma_ppalist);
+        if (!ppalist) {
+                pr_err("nvm: failed to allocate dma memory\n");
+                ret = -ENOMEM;
+                goto free_cmd;
+        }
+
+        for (lun = 0; lun < CFG_NAND_LUN_NUM; lun++) {
+                for (ch = 0; ch < CFG_NAND_CHANNEL_NUM; ch++) {
+                        set_ppa_nand_addr(&ppa, ch, 0, 0, lun, 0, blk);
+                        ppalist[nlb++] = ppa.ppa;
+                }
+        }
+
+	ppa_cmd->opcode = NVM_OP_ERASE;
+	ppa_cmd->nsid = exdev->bns->ns_id;
+	ppa_cmd->nlb = cpu_to_le16(nr_ppas - 1);
+        ppa_cmd.ppalist = cpu_to_le64(dma_ppalist);
+	ppa_cmd->control = cpu_to_le16(plmode);
+
+        nvme_submit_ppa_cmd_sync(exdev, ppa_cmd, NULL, 0);
+
+        nvm_exdev_dma_pool_free(exdev, ppalist, dma_ppalist);
+free_cmd:
+        kfree(ppa_cmd);
+	return ret;
+}
+
 #if 0
 ///////////////////BackEnd Ioctl sync//////////////////
 // nvme-cli extend

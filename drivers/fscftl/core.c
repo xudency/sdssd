@@ -212,13 +212,56 @@ static int __nvme_submit_ppa_cmd(struct request_queue *q,
  *      2. ppalist metadata DMA buffer is allocated and set in cmd
  *      3. databuff is dma_map inside this fn, so we don't need dma_map it
  */
-int nvme_submit_ppa_cmd(struct nvm_exdev *dev, struct nvme_ppa_command *cmd,
-			void *buffer, unsigned bufflen, 
-			rq_end_io_fn *done, void *ctx)
+int nvme_submit_ppa_cmd(struct nvm_exdev *dev, 
+                                struct nvme_ppa_command *cmd,
+			        void *buffer, unsigned bufflen, 
+			        rq_end_io_fn *done, void *ctx)
 {
 	struct request_queue *q = dev->bns->queue;
 
 	return __nvme_submit_ppa_cmd(q, cmd, NULL, buffer, bufflen, 0,
 				NVME_QID_ANY, 0, 0, done, ctx);
+}
+
+//nvme_nvm_submit_user_cmd
+static void nvme_ppa_sync_completion(struct request *rq, int error)
+{
+	struct completion *waiting = rq->end_io_data;
+
+	complete(waiting);
+}
+
+int nvme_submit_ppa_cmd_sync(struct nvm_exdev *dev, 
+                                       struct nvme_ppa_command *cmd,
+			               void *buffer, unsigned bufflen)
+{
+	int ret = 0;
+	struct request_queue *q = dev->bns->queue;
+	struct request *req;
+	DECLARE_COMPLETION_ONSTACK(wait);
+
+	req = nvme_alloc_request(q, (struct nvme_command *)cmd, 0, NVME_QID_ANY);
+	if (IS_ERR(req))
+		return PTR_ERR(req);
+
+	req->timeout = NVME_IO_TIMEOUT;
+	req->end_io_data = &wait;
+
+	if (buffer && bufflen) {
+		ret = blk_rq_map_kern(q, req, buffer, bufflen, GFP_KERNEL);
+		if (ret)
+			goto out;
+	}
+	
+	blk_execute_rq_nowait(q, NULL, req, 0, nvme_ppa_sync_completion);
+
+	wait_for_completion_io(&wait);
+
+        //status = req->errors;
+	//result = le64_to_cpu(nvme_req(req)->result.u64);
+        
+ out:
+	blk_mq_free_request(req);
+	return ret;
 }
 

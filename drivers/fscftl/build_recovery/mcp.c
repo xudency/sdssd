@@ -11,7 +11,13 @@ void set_bb_tbl(u32 blk, u32 lun, u32 ch)
 
 void sweepup_disk(struct nvm_exdev *exdev)
 {
+        u16 blk;
 
+        for (blk = 0; blk < CFG_NAND_BLOCK_NUM; blk++) {
+                printk("erase blk:%d...", blk);
+                erase_rblk_wait(blk);
+                printk("done\n");
+        }
 }
 
 /* in bbt, pl is invisible, i.e. any one pl is bb, we regard all pl is bb 

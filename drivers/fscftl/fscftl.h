@@ -68,8 +68,14 @@ void *nvm_exdev_dma_pool_alloc(struct nvm_exdev *dev, dma_addr_t *dma_handle);
 void nvm_exdev_dma_pool_free(struct nvm_exdev *dev, void *vaddr, 
 							 dma_addr_t dma_handle);
 
-int nvme_submit_ppa_cmd(struct nvm_exdev *dev, struct nvme_ppa_command *cmd,
-						void *buffer, unsigned bufflen, 
-						rq_end_io_fn *done, void *ctx);
+int nvme_submit_ppa_cmd(struct nvm_exdev *dev, 
+                                struct nvme_ppa_command *cmd,
+				void *buffer, unsigned bufflen, 
+				rq_end_io_fn *done, void *ctx);
+
+int nvme_submit_ppa_cmd_sync(struct nvm_exdev *dev, 
+                                       struct nvme_ppa_command *cmd,
+			               void *buffer, unsigned bufflen);
+
 
 #endif
