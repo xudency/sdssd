@@ -156,9 +156,9 @@ int l2ptbl_init(struct nvm_exdev *exdev)
 		return -ENOMEM;
 	}
 
-        memset(exdev->l2ptbl, INVALID_PAGE, USR_FTLTBL_SIZE);
+	memset(exdev->l2ptbl, INVALID_PAGE, USR_FTLTBL_SIZE);
 
-        exdev->l2pl1tbl = kzalloc(L1TBL_SIZE, GFP_KERNEL);
+	exdev->l2pl1tbl = kzalloc(L1TBL_SIZE, GFP_KERNEL);
         if (!exdev->l2pl1tbl)
                 goto free_l2ptbl;
 

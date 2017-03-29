@@ -67,14 +67,13 @@ struct wcb_lun_entity {
 	 * these represent the lba of this LUN 
 	 */
 	u32 lba[RAID_LUN_SEC_NUM];
-
-	/* one bit for one ch, 
-	 * 1: this ch is outstanding  
-	 * 0: this ch is complete 
-	 * when ch_status=0, it indicated this LUN can push to read fifo
+	
+	/* one bit for one ch or line, 
+	 * 0: this ch is outstanding  
+	 * 1: this ch is complete 
+	 * when cqe_flag=BIT2MASK(), it indicated this LUN can push to read fifo
 	 */
-	unsigned long ch_status;
-	unsigned long line_status;
+	u16 cqe_flag;
 
 	/* 
 	 * next ep to be writed, it's the pointer by memcpy data from bio 
@@ -82,6 +81,9 @@ struct wcb_lun_entity {
 	 * Thus, we can't push it to pull fifo
 	 */
 	u16 pos;
+
+	/* add new member here, can before or will crash, I don't know Why :( */
+	u32 newval;
 
 	/* 
 	 * it's the count of this lun entity has be coped data in 

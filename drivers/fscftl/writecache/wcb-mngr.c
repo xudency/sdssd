@@ -18,10 +18,20 @@ void fsc_fifo_init(struct fsc_fifo *fifo)
 
 void print_lun_entitys_fifo(void)
 {
-	printk("Lun entitys FIFO size(empty:%d full:%d ongoning:%d)", 
+	struct fsc_fifo *empty_lun = &g_wcb_lun_ctl->empty_lun;
+	struct fsc_fifo *full_lun = &g_wcb_lun_ctl->full_lun;
+
+	/*printk("Lun entitys FIFO size(empty:%d full:%d ongoning:%d)", 
 			g_wcb_lun_ctl->empty_lun.size, 
 			g_wcb_lun_ctl->full_lun.size,
-			g_wcb_lun_ctl->ongoing_lun.size);
+			g_wcb_lun_ctl->ongoing_lun.size);*/
+
+	printk("emptyfifo  head:%d tail:%d size:%d\n", empty_lun->head, 
+		empty_lun->tail, empty_lun->size);
+
+	printk("fullfifo  head:%d tail:%d size:%d\n", full_lun->head, 
+		full_lun->tail, full_lun->size);
+
 }
 
 // push to tail 
@@ -132,7 +142,7 @@ struct wcb_lun_entity *get_next_lun_entity(geo_ppa curppa)
 
 	lun_entity->baddr = get_next_entity_baddr(curppa);
 	lun_entity->pos = 0;
-	lun_entity->ch_status = 0;
+	lun_entity->cqe_flag = 0;
 
 	g_wcb_lun_ctl->partial_entity = lun_entity;
 
@@ -167,7 +177,7 @@ struct wcb_lun_entity *get_lun_entity(geo_ppa startppa)
 	startppa.nand.pl = 0;
 	lun_entity->baddr = startppa;
 	lun_entity->pos = pos;
-	lun_entity->ch_status = 0;
+	lun_entity->cqe_flag = 0;	
 
 	g_wcb_lun_ctl->partial_entity = lun_entity;
 
@@ -220,13 +230,6 @@ static int wcb_lun_ctl_init(void)
 		fsc_fifo_init(&g_wcb_lun_ctl->read_lun[i]);
 	}
     
-	for (i = 0; i < CB_ENTITYS_CNT; i++) {
-		/* all pushed to emptyfifo */
-		push_lun_entity_to_fifo(&g_wcb_lun_ctl->empty_lun, wcb_lun_entity_idx(i));
-	}
-
-	printk("empty lun entitys fifo size:%d\n", g_wcb_lun_ctl->empty_lun.size);
-
 	return 0;
 
 out_free_ctl:
@@ -292,12 +295,18 @@ static int wcb_lun_mem_alloc(struct nvm_exdev *exdev)
 	for (i = 0; i < CB_ENTITYS_CNT ; i++) {
 		lun_entitys = g_wcb_lun_ctl->lun_entitys + i;
 		lun_entitys->index = i;
+		lun_entitys->next = 0xffff;		
+		lun_entitys->prev = 0xffff;
+
+		push_lun_entity_to_fifo(&g_wcb_lun_ctl->empty_lun, lun_entitys);
 
 		atomic_set(&lun_entitys->fill_cnt, 0);
 
 		if (wcb_single_lun_alloc(exdev, lun_entitys))
 			goto free_lun_mem;
 	}
+
+	print_lun_entitys_fifo();
 
 	return 0;
 

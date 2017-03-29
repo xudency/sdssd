@@ -81,6 +81,8 @@ int fscftl_setup(struct nvm_exdev *exdev)
 
 	g_wcb_lun_ctl->partial_entity = get_lun_entity(startppa);
 
+	print_lun_entitys_fifo();
+
 	}
 
     return ret;

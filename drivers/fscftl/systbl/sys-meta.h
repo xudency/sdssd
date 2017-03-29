@@ -31,6 +31,7 @@
 #define EXTEND_LBA_L1TBL   (EXTEND_LBA_VPCTBL+VPCTBL_SEC_NUM) //
 //#define XXX  (EXTEND_LBA_L1TBL + L1TBL_SEC_NUM)
 
+//#define EXTEND_LBA_END	   ()
 
 
 // PAGE
@@ -56,6 +57,7 @@ struct bmi_item {
 	u32 sequence;	
 	u32 pecycle;
 	u16 blknum;
+	u16 flag_bitmap;
 	u16 bbt[CFG_NAND_LUN_NUM]; /* 1: bad; 0: good */
 	u16 write_err[CFG_NAND_LUN_NUM];
 	u16 read_uecc[CFG_NAND_LUN_NUM];

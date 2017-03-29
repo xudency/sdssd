@@ -3,8 +3,8 @@
 
 #include "../fscftl.h"
 
-#define debug_info printk
-//#define debug_info(format, arg...)  do {} while (0)
+//#define debug_info printk
+#define debug_info(format, arg...)  do {} while (0)
 
 #define INCRE_BOUNDED(n, bits, carry) { if (++n == (1 << bits)) { n = 0; carry = 1; } else { carry = 0; } }
 #define IF_CARRY_THEN_INCRE_BOUNDED(carry, n, bits) { if (carry) { carry = 0; INCRE_BOUNDED(n, bits, carry); } }
