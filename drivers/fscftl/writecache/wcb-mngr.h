@@ -13,13 +13,15 @@
 #define RAID_PAGE_SEC_NUM (RAID_LUN_SEC_NUM * CFG_NAND_LUN_NUM)
 #define WRITE_CACHE_SEC_NUM (RAID_PAGE_SEC_NUM * TOTAL_CB_UNITS)
 
+#define RAID_LUN_PPA_SIZE  (RAID_LUN_SEC_NUM * sizeof(u64))
 #define RAID_LUN_DATA_SIZE (RAID_LUN_SEC_NUM * CFG_NAND_EP_SIZE)
 #define RAID_LUN_META_SIZE (RAID_LUN_SEC_NUM * NAND_META_SIZE)
 
 /* one bio most will cross 3 LUN entitys */
 #define MAX_USED_WCB_ENTITYS 3
 
-
+extern void *g_vdata;
+extern dma_addr_t g_dmadata;
 extern struct wcb_lun_gctl *g_wcb_lun_ctl;
 
 typedef enum {
@@ -51,6 +53,7 @@ struct wcb_lun_entity {
 	* so we don't need alloc DMA for it 
 	*/
 	void *data;
+	dma_addr_t data_dma;
 
 	void *meta;
 	dma_addr_t meta_dma;

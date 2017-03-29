@@ -8,6 +8,9 @@
 /* write cache buffer control block */
 struct wcb_lun_gctl *g_wcb_lun_ctl;
 
+void *g_vdata;
+dma_addr_t g_dmadata;
+
 // the fifo api is not locked, the caller should guarantee race outside
 void fsc_fifo_init(struct fsc_fifo *fifo)
 {
@@ -248,7 +251,8 @@ static int wcb_single_lun_alloc(struct nvm_exdev *exdev,
 {
 	struct device *dmadev = &exdev->pdev->dev;
 
-	lun_entitys->data = vzalloc(RAID_LUN_DATA_SIZE);
+	lun_entitys->data = dma_alloc_coherent(dmadev, RAID_LUN_DATA_SIZE, 
+					&lun_entitys->data_dma, GFP_KERNEL);
 	if (!lun_entitys->data)
 		return -ENOMEM;
 
@@ -256,11 +260,15 @@ static int wcb_single_lun_alloc(struct nvm_exdev *exdev,
 					&lun_entitys->meta_dma, GFP_KERNEL);
 	if (!lun_entitys->meta) 
         	goto out_free_data;
+
+	memset(lun_entitys->meta, 0x00, RAID_LUN_META_SIZE);
     
-	lun_entitys->ppa = dma_alloc_coherent(dmadev, RAID_LUN_SEC_NUM * sizeof(u64), 
+	lun_entitys->ppa = dma_alloc_coherent(dmadev,  RAID_LUN_PPA_SIZE, 
 					&lun_entitys->ppa_dma, GFP_KERNEL);
 	if (!lun_entitys->ppa)
         	goto out_free_meta;
+
+	memset(lun_entitys->ppa, 0x00, RAID_LUN_PPA_SIZE);
     
 	return 0;
 
@@ -269,7 +277,8 @@ out_free_meta:
 			  lun_entitys->meta, lun_entitys->meta_dma);    
 out_free_data:
 	printk("dma_alloc_coherent fail\n");
-	vfree(lun_entitys->data);
+	dma_free_coherent(dmadev, RAID_LUN_DATA_SIZE, 
+			  lun_entitys->data, lun_entitys->data_dma);
 	return -ENOMEM;
 }
 
@@ -278,13 +287,15 @@ static void wcb_single_lun_free(struct nvm_exdev *exdev,
 {
 	struct device *dmadev = &exdev->pdev->dev;
 
-	dma_free_coherent(dmadev, RAID_LUN_META_SIZE, 
+	dma_free_coherent(dmadev, RAID_LUN_PPA_SIZE, 
 			  lun_entitys->ppa, lun_entitys->ppa_dma);
 
 	dma_free_coherent(dmadev, RAID_LUN_META_SIZE, 
 			  lun_entitys->meta, lun_entitys->meta_dma);
 	
-	vfree(lun_entitys->data);
+
+	dma_free_coherent(dmadev, RAID_LUN_DATA_SIZE, 
+			  lun_entitys->data, lun_entitys->data_dma);
 }
 
 static int wcb_lun_mem_alloc(struct nvm_exdev *exdev)
@@ -343,6 +354,9 @@ int write_cache_alloc(struct nvm_exdev *exdev)
 		goto out_wcb_lun_ctl;
 	}
 
+	//g_vdata = dma_alloc_coherent(&exdev->pdev->dev, RAID_LUN_DATA_SIZE, 
+					//&g_dmadata, GFP_KERNEL);
+
 	return 0;
 	
 out_wcb_lun_ctl:
@@ -352,6 +366,9 @@ out_wcb_lun_ctl:
 
 void write_cache_free(struct nvm_exdev *exdev)
 {
+	//dma_free_coherent(&exdev->pdev->dev, RAID_LUN_DATA_SIZE, 
+			    //g_vdata, g_dmadata);
+
 	wcb_lun_mem_free(exdev);
 	wcb_lun_ctl_exit();
 }

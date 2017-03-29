@@ -92,7 +92,7 @@ static void wrppa_lun_completion(struct request *req, int error)
 
 	if (status != 0) {
 		// TODO:: program fail Handle
-		printk("result:0x%llx  status:0x%x\n", result, status);
+		debug_info("result:0x%llx  status:0x%x\n", result, status);
 	}
 
 	if (BIT_TEST(entity->cqe_flag, idx)) {
@@ -121,7 +121,7 @@ static void wrppa_lun_completion(struct request *req, int error)
 // full LUNs submit nvme command to HW, by CH+
 void nvme_wrppa_lun(struct nvm_exdev *exdev, struct wcb_lun_entity *entity)
 {
-	int line, i;
+	int line;
 	void *databuf;
 	dma_addr_t meta_dma, ppa_dma;
 	int nr_ppas = CFG_NAND_CHANNEL_NUM;
@@ -137,7 +137,7 @@ void nvme_wrppa_lun(struct nvm_exdev *exdev, struct wcb_lun_entity *entity)
 		entity->baddr.nand.lun);
 
 	printk("\n");
-	/*for (i = 0; i < RAID_LUN_SEC_NUM; i++) {
+	/*for (int i = 0; i < RAID_LUN_SEC_NUM; i++) {
 		debug_info("ppa[%d]=0x%llx\n", i, entity->ppa[i]);
 	}*/
 	
@@ -152,8 +152,7 @@ void nvme_wrppa_lun(struct nvm_exdev *exdev, struct wcb_lun_entity *entity)
 		ppa_iod->dev = exdev;
 		ppa_iod->ctx = entity;
 		ppa_iod->idx = line;
-		ppa_iod->vaddr_ppalist = entity->ppa + \
-					line*CFG_NAND_CHANNEL_NUM*sizeof(u64);
+		ppa_iod->vaddr_ppalist = entity->ppa + line*CFG_NAND_CHANNEL_NUM;
 		
 		ppa_cmd->opcode = NVM_OP_WRPPA;
 		ppa_cmd->nsid = exdev->bns->ns_id;
@@ -167,8 +166,10 @@ void nvme_wrppa_lun(struct nvm_exdev *exdev, struct wcb_lun_entity *entity)
 		ppa_cmd->ppalist = ppa_dma;
 
 		databuf = entity->data+ line*CFG_NAND_CHANNEL_NUM*EXP_PPA_SIZE;
+		//databuf = g_vdata + line*CFG_NAND_CHANNEL_NUM*EXP_PPA_SIZE;
+
 		nvme_submit_ppa_cmd(exdev, ppa_cmd, databuf, 
-				    nr_ppas * CFG_NAND_EP_SIZE, 
+				    nr_ppas * EXP_PPA_SIZE, 
 				    wrppa_lun_completion, ppa_iod);
 		
 		debug_info("submit line%d\n", line);
