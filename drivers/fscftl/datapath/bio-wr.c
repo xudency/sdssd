@@ -103,9 +103,9 @@ static void wrppa_lun_completion(struct request *req, int error)
 	}
 	
 	if (entity->cqe_flag == (u16)BIT2MASK(CFG_DRIVE_LINE_NUM)) {
-		spin_lock_irqsave(&g_wcb_lun_ctl->wcb_lock, flags);
+		spin_lock_irqsave(&g_wcb_lun_ctl->fifo_lock, flags);
 		push_lun_entity_to_fifo(&g_wcb_lun_ctl->empty_lun, entity);
-		spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
+		spin_unlock_irqrestore(&g_wcb_lun_ctl->fifo_lock, flags);
 
 		print_lun_entity_baddr("this entity cqe back, push", 
 			   		entity, "to emptyfifo");
@@ -186,26 +186,25 @@ int submit_write_backend(struct nvm_exdev *exdev)
 	unsigned long flags;
 	struct wcb_lun_entity *entity;
 
-	spin_lock_irqsave(&g_wcb_lun_ctl->wcb_lock, flags);
+	spin_lock_irqsave(&g_wcb_lun_ctl->fifo_lock, flags);
 
 	entity = pull_lun_entity_from_fifo(&g_wcb_lun_ctl->full_lun);
 	if(entity == NULL) {
 		// full fifo is empty
-		spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
+		spin_unlock_irqrestore(&g_wcb_lun_ctl->fifo_lock, flags);
 		return 0;
 	}
 	
 	print_lun_entity_baddr("Fscftl-writer pull", entity, "from fullfifo");
 	
 #if 1	// Really NVMe Command
-	spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
-
+	spin_unlock_irqrestore(&g_wcb_lun_ctl->fifo_lock, flags);
 	nvme_wrppa_lun(exdev, entity);
 
 #else	// Simulation
 	push_lun_entity_to_fifo(&g_wcb_lun_ctl->ongoing_lun, entity);
 
-	spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
+	spin_unlock_irqrestore(&g_wcb_lun_ctl->fifo_lock, flags);
 
 	queue_work(requeue_bios_wq, &exdev->yirq);
 #endif	
@@ -293,7 +292,7 @@ bool wcb_available(int nr_ppas)
 	entity = partial_wcb_lun_entity();
 	left = RAID_LUN_SEC_NUM - (entity->pos);
 
-	if ((nr_ppas+extra) >= left && emptysize == 0)
+	if ((nr_ppas+extra) >= left && (emptysize == 0))
 		return false;
 
 	return true;
@@ -452,9 +451,9 @@ void flush_data_to_wcb(struct nvm_exdev *exdev,
 							"to fullfifo");
 				
 				atomic_set(&entitys->fill_cnt, 0);
-				spin_lock_irqsave(&g_wcb_lun_ctl->wcb_lock, flags);
+				spin_lock_irqsave(&g_wcb_lun_ctl->fifo_lock, flags);
 				push_lun_entity_to_fifo(&g_wcb_lun_ctl->full_lun, entitys);
-				spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
+				spin_unlock_irqrestore(&g_wcb_lun_ctl->fifo_lock, flags);
 				
 				wake_up_process(exdev->writer_thread);
 			}

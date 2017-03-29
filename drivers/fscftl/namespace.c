@@ -19,9 +19,10 @@ static const struct block_device_operations nvm_exns_fops = {
 
 blk_qc_t fscftl_make_rq(struct request_queue *q, struct bio *bio)
 {
+	bool avl;
+	unsigned long flags;	
 	struct nvm_exns *exns = q->queuedata;
 	struct nvm_exdev *exdev = exns->ndev;
-	unsigned long flags;
 	struct wcb_bio_ctx wcb_resource;
 	int nr_ppas = get_bio_nppa(bio);
 	sector_t slba = get_bio_slba(bio);
@@ -38,12 +39,17 @@ blk_qc_t fscftl_make_rq(struct request_queue *q, struct bio *bio)
 	memset(&wcb_resource, 0x00, sizeof(wcb_resource));
 
 	spin_lock_irqsave(&g_wcb_lun_ctl->wcb_lock, flags);
+	//wait_event_killable(, (avl = wcb_available(nr_ppas)) == true);
+	
+
 	if (wcb_available(nr_ppas)) {
 		alloc_wcb_core(slba, nr_ppas, &wcb_resource);
 		spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
 	} else {
-		printk("wcb_unavailable resubmit this bio\n");
 		spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
+
+		printk("wcb_unavailable resubmit this bio\n");
+		print_lun_entitys_fifo();
 
 		spin_lock(&g_wcb_lun_ctl->biolist_lock);
 		bio_list_add(&g_wcb_lun_ctl->requeue_wr_bios, bio);
