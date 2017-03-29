@@ -41,15 +41,16 @@ blk_qc_t fscftl_make_rq(struct request_queue *q, struct bio *bio)
 	spin_lock_irqsave(&g_wcb_lun_ctl->wcb_lock, flags);
 	//wait_event_killable(, (avl = wcb_available(nr_ppas)) == true);
 	
-
 	if (wcb_available(nr_ppas)) {
 		alloc_wcb_core(slba, nr_ppas, &wcb_resource);
 		spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
 	} else {
+		print_lun_entitys_fifo();
+	
 		spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
 
-		printk("wcb_unavailable resubmit this bio\n");
-		print_lun_entitys_fifo();
+		printk("wcb_unavailable outstanding Lun:%d\n", 
+			atomic_read(&g_wcb_lun_ctl->outstanding_lun));
 
 		spin_lock(&g_wcb_lun_ctl->biolist_lock);
 		bio_list_add(&g_wcb_lun_ctl->requeue_wr_bios, bio);

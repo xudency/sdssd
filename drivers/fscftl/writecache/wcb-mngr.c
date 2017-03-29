@@ -24,10 +24,14 @@ void print_lun_entitys_fifo(void)
 	struct fsc_fifo *empty_lun = &g_wcb_lun_ctl->empty_lun;
 	struct fsc_fifo *full_lun = &g_wcb_lun_ctl->full_lun;
 
+	struct wcb_lun_entity *partial = partial_wcb_lun_entity();
+
 	/*printk("Lun entitys FIFO size(empty:%d full:%d ongoning:%d)", 
 			g_wcb_lun_ctl->empty_lun.size, 
 			g_wcb_lun_ctl->full_lun.size,
 			g_wcb_lun_ctl->ongoing_lun.size);*/
+
+	printk("partial lun entity pos:%d\n", partial->pos);
 
 	printk("emptyfifo  head:%d tail:%d size:%d\n", empty_lun->head, 
 		empty_lun->tail, empty_lun->size);
@@ -204,6 +208,8 @@ static int wcb_lun_ctl_init(void)
 		return -ENOMEM;
 	}
 
+	atomic_set(&g_wcb_lun_ctl->outstanding_lun, 0);
+
 	spin_lock_init(&g_wcb_lun_ctl->wcb_lock);
 	spin_lock_init(&g_wcb_lun_ctl->fifo_lock);
 	spin_lock_init(&g_wcb_lun_ctl->l2ptbl_lock);
@@ -217,11 +223,6 @@ static int wcb_lun_ctl_init(void)
 		printk("%s-%d  failed\n", __FUNCTION__, debug++);
 		ret = -ENOMEM;
 		goto out_free_ctl;
-	}
-
-	for (i = 0; i < CFG_NAND_LUN_NUM; i++) {
-		g_wcb_lun_ctl->ongoing_pg_num[i] = 0xdead;		
-		g_wcb_lun_ctl->ongoing_pg_cnt[i] = 0;
 	}
 
 	/* fifo init */
@@ -316,8 +317,6 @@ static int wcb_lun_mem_alloc(struct nvm_exdev *exdev)
 		if (wcb_single_lun_alloc(exdev, lun_entitys))
 			goto free_lun_mem;
 	}
-
-	print_lun_entitys_fifo();
 
 	return 0;
 

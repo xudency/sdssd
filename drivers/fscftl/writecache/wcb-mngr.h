@@ -125,16 +125,8 @@ struct wcb_lun_gctl {
 
 	struct wcb_lun_entity *lun_entitys;
 	struct wcb_lun_entity *partial_entity;
-	//u32 entitynum;   // temp
 
-	/* 
-	* 0xdead: this Lun is idle, writer can issue this lun to hw 
-	* else: this Lun has a page outstanding, the val=pagenum
-	*/
-	u16 ongoing_pg_num[CFG_NAND_LUN_NUM];
-
-	/* this must=0 or 1 */
-	u16 ongoing_pg_cnt[CFG_NAND_LUN_NUM];
+	atomic_t outstanding_lun;
 };
 
 /*
