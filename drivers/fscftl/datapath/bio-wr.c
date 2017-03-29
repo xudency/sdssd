@@ -8,6 +8,9 @@
 #include "../writecache/wcb-mngr.h"
 
 static struct workqueue_struct *requeue_bios_wq;
+struct task_struct *bios_rewr_thread;
+struct completion lun_completion;
+
 
 void print_lun_entity_baddr(char *bs, struct wcb_lun_entity *entity, char *as)
 {
@@ -78,13 +81,13 @@ static void fscftl_yirq_workfn(struct work_struct *work)
 	}
 }
 
+// NOTICE: this routine us in IRQ context, 
 // wcb lun entity one line(ch) complete
 static void wrppa_lun_completion(struct request *req, int error)
 {
 	unsigned long flags;
 	struct nvme_ppa_iod *ppa_iod = req->end_io_data;
 	struct wcb_lun_entity *entity = ppa_iod->ctx;
-	struct nvm_exdev *dev = ppa_iod->dev;
 	int idx = ppa_iod->idx;
 	int status = error;			/* No phase tag */
 	u64 result = nvme_req(req)->result.u64; /* 64bit completion btmap */
@@ -111,9 +114,12 @@ static void wrppa_lun_completion(struct request *req, int error)
 
 		print_lun_entity_baddr("this entity cqe back, push", 
 			   		entity, "to emptyfifo");
-		// wcb is available
-		//if (!bio_list_empty(&g_wcb_lun_ctl->requeue_wr_bios))
-		queue_work(requeue_bios_wq, &dev->requeue_ws);
+		
+		queue_work(requeue_bios_wq, &ppa_iod->dev->requeue_ws);
+
+		if (!bio_list_empty(&g_wcb_lun_ctl->requeue_wr_bios)) {
+			complete(&lun_completion);
+		}
 	}
 	
 	kfree(cmd);
@@ -230,33 +236,111 @@ int fscftl_write_kthread(void *data)
 	return 0;
 }
 
+int process_write_bio(struct request_queue *q, struct bio *bio)
+{
+	unsigned long flags;	
+	struct nvm_exns *exns = q->queuedata;
+	struct nvm_exdev *exdev = exns->ndev;
+	struct wcb_bio_ctx wcb_resource;
+	int nr_ppas = get_bio_nppa(bio);
+	sector_t slba = get_bio_slba(bio);
+
+	memset(&wcb_resource, 0x00, sizeof(wcb_resource));
+
+	spin_lock_irqsave(&g_wcb_lun_ctl->wcb_lock, flags);
+	
+	if (wcb_available(nr_ppas)) {
+		alloc_wcb_core(slba, nr_ppas, &wcb_resource);
+		spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
+	} else {
+		print_lun_entitys_fifo();
+	
+		spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
+
+		printk("wcb_unavailable outstanding Lun:%d\n", 
+			atomic_read(&g_wcb_lun_ctl->outstanding_lun));
+
+		return FSCFTL_BIO_RESUBMIT;
+	}
+
+	flush_data_to_wcb(exdev, &wcb_resource, bio);
+
+	spin_lock(&g_wcb_lun_ctl->l2ptbl_lock);
+	set_l2ptbl_write_path(exdev, &wcb_resource);
+	spin_unlock(&g_wcb_lun_ctl->l2ptbl_lock);
+
+	return FSCFTL_BIO_COMPLETE;
+}
+
+void resubmit_wr_bios_list(struct nvm_exdev *exdev)
+{
+	struct nvm_exns *ns = (struct nvm_exns *)exdev->private_data;
+	struct bio *bio;
+	int ret;
+
+	do {
+		spin_lock(&g_wcb_lun_ctl->biolist_lock);
+		if (!bio_list_empty(&g_wcb_lun_ctl->requeue_wr_bios)) {
+			bio = bio_list_pop(&g_wcb_lun_ctl->requeue_wr_bios);
+			spin_unlock(&g_wcb_lun_ctl->biolist_lock);
+		
+			if (!bio)
+				return;
+			
+			ret = process_write_bio(ns->queue, bio);
+			if (ret == FSCFTL_BIO_COMPLETE) {
+				bio_endio(bio);
+			} else {
+				spin_lock(&g_wcb_lun_ctl->biolist_lock);
+				bio_list_add_head(&g_wcb_lun_ctl->requeue_wr_bios, bio);
+				spin_unlock(&g_wcb_lun_ctl->biolist_lock);
+				return;
+			}
+	
+		} else {
+			spin_unlock(&g_wcb_lun_ctl->biolist_lock);
+			return;
+		}
+		
+	} while(1);
+}
+
 static void fscftl_requeue_workfn(struct work_struct *work)
 {
 	struct nvm_exdev *exdev = container_of(work, struct nvm_exdev, requeue_ws);
-	struct nvm_exns *ns = (struct nvm_exns *)exdev->private_data;
-	struct bio_list bios;
-	struct bio *bio;
 
-	bio_list_init(&bios);
+	resubmit_wr_bios_list(exdev);
+}
 
-	spin_lock(&g_wcb_lun_ctl->biolist_lock);
-	bio_list_merge(&bios, &g_wcb_lun_ctl->requeue_wr_bios);
-	bio_list_init(&g_wcb_lun_ctl->requeue_wr_bios);
-	spin_unlock(&g_wcb_lun_ctl->biolist_lock);
+// process the pending write bios
+int fscftl_rewr_kthread(void *data)
+{
+	struct nvm_exdev *exdev = data;
 
-	while ((bio = bio_list_pop(&bios)))
-		fscftl_make_rq(ns->queue, bio);
+	while (!kthread_should_stop()) {
+		set_current_state(TASK_INTERRUPTIBLE);
+		//reinit_completion(&lun_completion);
+		wait_for_completion(&lun_completion);
+
+		resubmit_wr_bios_list(exdev);
+	}
+
+	return 0;
 }
 
 int fscftl_writer_init(struct nvm_exdev *exdev)
 {
 	requeue_bios_wq = alloc_workqueue("bios-dequeue", WQ_UNBOUND, 0);
 
+	init_completion(&lun_completion);
+
+	bios_rewr_thread = kthread_create(fscftl_rewr_kthread, exdev, "fscftl-rewr");
+	wake_up_process(bios_rewr_thread);
+
 	exdev->writer_thread = kthread_create(fscftl_write_kthread, exdev, "fscftl-writer");
+	wake_up_process(exdev->writer_thread);
 
 	//setup_timer(&exdev->cqe_timer, simulate_cqe_back_fn, (unsigned long)exdev);
-
-	wake_up_process(exdev->writer_thread);
 
 	INIT_WORK(&exdev->requeue_ws, fscftl_requeue_workfn);	
 	INIT_WORK(&exdev->yirq, fscftl_yirq_workfn);
@@ -266,10 +350,14 @@ int fscftl_writer_init(struct nvm_exdev *exdev)
 
 void fscftl_writer_exit(struct nvm_exdev *exdev)
 {
+	//del_timer(&exdev->cqe_timer);
 	if (exdev->writer_thread)
 		kthread_stop(exdev->writer_thread);
-	del_timer(&exdev->cqe_timer);
-
+	if (bios_rewr_thread) {
+		complete(&lun_completion);
+		kthread_stop(bios_rewr_thread);
+	}
+
 	destroy_workqueue(requeue_bios_wq);
 }
 

@@ -19,53 +19,39 @@ static const struct block_device_operations nvm_exns_fops = {
 
 blk_qc_t fscftl_make_rq(struct request_queue *q, struct bio *bio)
 {
-	bool avl;
-	unsigned long flags;	
-	struct nvm_exns *exns = q->queuedata;
-	struct nvm_exdev *exdev = exns->ndev;
-	struct wcb_bio_ctx wcb_resource;
-	int nr_ppas = get_bio_nppa(bio);
-	sector_t slba = get_bio_slba(bio);
+	int ret;
 
         // TODO:: trim discard fua etc.
 
+	// TODO:: Read datapath
 	if (bio_data_dir(bio) == READ) {
-                // TODO: Read LBA
 		bio_endio(bio);
 		return BLK_QC_T_NONE;
 	}
-
-	/* Write datapath */
-	memset(&wcb_resource, 0x00, sizeof(wcb_resource));
-
-	spin_lock_irqsave(&g_wcb_lun_ctl->wcb_lock, flags);
-	//wait_event_killable(, (avl = wcb_available(nr_ppas)) == true);
 	
-	if (wcb_available(nr_ppas)) {
-		alloc_wcb_core(slba, nr_ppas, &wcb_resource);
-		spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
-	} else {
-		print_lun_entitys_fifo();
-	
-		spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
-
-		printk("wcb_unavailable outstanding Lun:%d\n", 
-			atomic_read(&g_wcb_lun_ctl->outstanding_lun));
-
-		spin_lock(&g_wcb_lun_ctl->biolist_lock);
+	/*
+	 * therre are peind write bios in list already
+	 * so the following comming bio should add to staging_list
+	 */
+	spin_lock(&g_wcb_lun_ctl->biolist_lock);
+	if (!bio_list_empty(&g_wcb_lun_ctl->requeue_wr_bios)) {
 		bio_list_add(&g_wcb_lun_ctl->requeue_wr_bios, bio);
 		spin_unlock(&g_wcb_lun_ctl->biolist_lock);
-
 		return BLK_QC_T_NONE;
 	}
+	spin_unlock(&g_wcb_lun_ctl->biolist_lock);
 
-	flush_data_to_wcb(exdev, &wcb_resource, bio);
-
-	spin_lock(&g_wcb_lun_ctl->l2ptbl_lock);
-	set_l2ptbl_write_path(exdev, &wcb_resource);
-	spin_unlock(&g_wcb_lun_ctl->l2ptbl_lock);
-
-	bio_endio(bio);
+	// no pending write bio in staging_list, process it right now
+	// try best-effort to guarantee the bio s processed inorder
+	ret = process_write_bio(q, bio);
+	if (ret == FSCFTL_BIO_COMPLETE) {
+		bio_endio(bio);
+	} else {
+		spin_lock(&g_wcb_lun_ctl->biolist_lock);
+		bio_list_add_head(&g_wcb_lun_ctl->requeue_wr_bios, bio);
+		spin_unlock(&g_wcb_lun_ctl->biolist_lock);
+	}
+	
 	return BLK_QC_T_NONE;
 }
 
