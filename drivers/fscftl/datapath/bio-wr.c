@@ -319,7 +319,7 @@ int fscftl_rewr_kthread(void *data)
 
 	while (!kthread_should_stop()) {
 		set_current_state(TASK_INTERRUPTIBLE);
-		//reinit_completion(&lun_completion);
+		reinit_completion(&lun_completion);
 		wait_for_completion(&lun_completion);
 
 		resubmit_wr_bios_list(exdev);
