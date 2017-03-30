@@ -5,7 +5,7 @@
 
 // Write Cache Size=16*4*4*8*10(4KB) = 80MB
 #define PADDING_PAGE_NUM  8
-#define READ_CB_UNITS  	  PADDING_PAGE_NUM
+#define READ_CB_UNITS  	  0//PADDING_PAGE_NUM
 #define WRITE_CB_UNITS 	  2
 #define TOTAL_CB_UNITS	(WRITE_CB_UNITS + READ_CB_UNITS)   // one LUN total
 #define CB_ENTITYS_CNT (TOTAL_CB_UNITS * CFG_NAND_LUN_NUM) // all LUN total
@@ -127,6 +127,7 @@ struct wcb_lun_gctl {
 	struct wcb_lun_entity *partial_entity;
 
 	atomic_t outstanding_lun;
+	//u32 entitynum;
 
 #if 1 //TIMESTAMP_CATCH
 	ktime_t curr_lun_full_ts;  //push to fullfifo
@@ -139,32 +140,6 @@ struct wcb_lun_gctl {
 	ktime_t last_lun_cmpl_ts;
 #endif
 };
-
-/*
- * NOTE, when you use this Macro, pls make sure the FIFO is not empty
- * Or system will Crash
- */
- /*
-#define walk_for_each_fifo(entity, fifo, num) 	\
-	for (num = (fifo)->head, entity = wcb_lun_entity_idx(num); 	\
-		 num != 0xffff;		\
-		 num = entity->prev)
-*/
-
-/*
-#define walk_for_each_fifo(entity, fifo, num) 	\
-do {											\
-	num = (fifo)->head;						\
-	if (num == 0xffff)
-		break;
-	
-
-	while (num != 0xffff) {						\
-		entity = (wcb_lun_entity_idx(num));		\
-		num = entity->prev;						\
-	}											\
-} while(0);
-*/
     
 /* the next available nand ppa address */
 static inline geo_ppa current_ppa(void)

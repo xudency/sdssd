@@ -133,9 +133,9 @@ struct wcb_lun_entity *get_next_lun_entity(geo_ppa curppa)
 {
 	struct wcb_lun_entity *lun_entity;
 
-	/* Round Robin
-	lun_entity = g_wcb_lun_ctl->lun_entitys + \
-			((g_wcb_lun_ctl->entitynum++) % CB_ENTITYS_CNT);*/
+	//und Robin
+	/*lun_entity = g_wcb_lun_ctl->lun_entitys + \
+			//((g_wcb_lun_ctl->entitynum++) % CB_ENTITYS_CNT);*/
 
 	lun_entity = pull_lun_entity_from_fifo(&g_wcb_lun_ctl->empty_lun);
 	if (lun_entity == NULL) {

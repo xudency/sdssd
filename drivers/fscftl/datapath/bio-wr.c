@@ -174,6 +174,7 @@ void nvme_wrppa_lun(struct nvm_exdev *exdev, struct wcb_lun_entity *entity)
 		elapsed_ns);
 
 	printk("\n");*/
+	
 	/*for (int i = 0; i < RAID_LUN_SEC_NUM; i++) {
 		debug_info("ppa[%d]=0x%llx\n", i, entity->ppa[i]);
 	}*/
@@ -444,7 +445,7 @@ int alloc_wcb_core(sector_t slba, u32 nr_ppas, struct wcb_bio_ctx *wcb_resource)
 
 			if (cur_lun_entity->pos == RAID_LUN_SEC_NUM) {	
 				cur_lun_entity = get_next_lun_entity(curppa);
-				if (!cur_lun_entity) // Never
+				if (!cur_lun_entity) // Never failed
 					return -1;
 
 				if (left_len == 0) {
