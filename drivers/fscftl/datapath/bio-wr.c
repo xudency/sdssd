@@ -85,6 +85,7 @@ static void fscftl_yirq_workfn(struct work_struct *work)
 // wcb lun entity one line(ch) complete
 static void wrppa_lun_completion(struct request *req, int error)
 {
+	s64 elapsed_ns;
 	unsigned long flags;
 	struct nvme_ppa_iod *ppa_iod = req->end_io_data;
 	struct wcb_lun_entity *entity = ppa_iod->ctx;
@@ -93,7 +94,7 @@ static void wrppa_lun_completion(struct request *req, int error)
 	u64 result = nvme_req(req)->result.u64; /* 64bit completion btmap */
 	struct nvme_command *cmd = nvme_req(req)->cmd;	/* original sqe */
 
-	if (status != 0) {
+	if (status != 0 || result != 0) {
 		// TODO:: program fail Handle
 		debug_info("result:0x%llx  status:0x%x\n", result, status);
 	}
@@ -107,13 +108,28 @@ static void wrppa_lun_completion(struct request *req, int error)
 	
 	if (entity->cqe_flag == (u16)BIT2MASK(CFG_DRIVE_LINE_NUM)) {
 		spin_lock_irqsave(&g_wcb_lun_ctl->wcb_lock, flags);
-		push_lun_entity_to_fifo(&g_wcb_lun_ctl->empty_lun, entity);
+		push_lun_entity_to_fifo(&g_wcb_lun_ctl->empty_lun, entity);		
+		g_wcb_lun_ctl->curr_lun_cmpl_ts = ktime_get();
 		spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
 
 		atomic_dec(&g_wcb_lun_ctl->outstanding_lun);
+				
+		elapsed_ns = ktime_to_ns(ktime_sub(\
+				   g_wcb_lun_ctl->curr_lun_cmpl_ts, 
+				   g_wcb_lun_ctl->last_lun_cmpl_ts));
 
-		print_lun_entity_baddr("this entity cqe back, push", 
-			   		entity, "to emptyfifo");
+		g_wcb_lun_ctl->last_lun_cmpl_ts = \
+			g_wcb_lun_ctl->curr_lun_cmpl_ts;
+
+		/*printk("LUN[blk:%d pg:%d lun:%d] complete,  time:%lld ns\n", 
+			entity->baddr.nand.blk, 
+			entity->baddr.nand.pg, 
+			entity->baddr.nand.lun,
+			elapsed_ns);
+		printk("\n");*/
+
+		//print_lun_entity_baddr("this entity cqe back, push", 
+			   		//entity, "to emptyfifo");
 		
 		//queue_work(requeue_bios_wq, &ppa_iod->dev->requeue_ws);
 
@@ -129,6 +145,7 @@ static void wrppa_lun_completion(struct request *req, int error)
 // full LUNs submit nvme command to HW, by CH+
 void nvme_wrppa_lun(struct nvm_exdev *exdev, struct wcb_lun_entity *entity)
 {
+	s64 elapsed_ns;
 	int line;
 	void *databuf;
 	dma_addr_t meta_dma, ppa_dma;
@@ -141,12 +158,22 @@ void nvme_wrppa_lun(struct nvm_exdev *exdev, struct wcb_lun_entity *entity)
 
 	atomic_inc(&g_wcb_lun_ctl->outstanding_lun);
 
-	printk("LUN[blk:%d pg:%d lun:%d] wrppa to Nand\n", 
+	g_wcb_lun_ctl->curr_lun_subm_ts = ktime_get();
+
+	elapsed_ns = ktime_to_ns(ktime_sub(\
+			   g_wcb_lun_ctl->curr_lun_subm_ts, 
+			   g_wcb_lun_ctl->last_lun_subm_ts));
+	
+	g_wcb_lun_ctl->last_lun_subm_ts = \
+		g_wcb_lun_ctl->curr_lun_subm_ts;
+
+	/*printk("LUN[blk:%d pg:%d lun:%d] wrppa to Nand,  time:%lld ns\n", 
 		entity->baddr.nand.blk, 
 		entity->baddr.nand.pg, 
-		entity->baddr.nand.lun);
+		entity->baddr.nand.lun, 
+		elapsed_ns);
 
-	printk("\n");
+	printk("\n");*/
 	/*for (int i = 0; i < RAID_LUN_SEC_NUM; i++) {
 		debug_info("ppa[%d]=0x%llx\n", i, entity->ppa[i]);
 	}*/
@@ -257,8 +284,8 @@ int process_write_bio(struct request_queue *q, struct bio *bio)
 	
 		spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
 
-		printk("wcb_unavailable outstanding Lun:%d\n", 
-			atomic_read(&g_wcb_lun_ctl->outstanding_lun));
+		//printk("wcb_unavailable outstanding Lun:%d\n", 
+			//atomic_read(&g_wcb_lun_ctl->outstanding_lun));
 
 		return FSCFTL_BIO_RESUBMIT;
 	}
@@ -320,7 +347,7 @@ int fscftl_rewr_kthread(void *data)
 	while (!kthread_should_stop()) {
 		set_current_state(TASK_INTERRUPTIBLE);
 		reinit_completion(&lun_completion);
-		wait_for_completion(&lun_completion);
+		wait_for_completion_interruptible(&lun_completion);
 
 		resubmit_wr_bios_list(exdev);
 	}
@@ -507,25 +534,26 @@ void bio_memcpy_wcb(struct wcb_ctx *wcb_1ctx, struct bio *bio)
 void flush_data_to_wcb(struct nvm_exdev *exdev, 
                             struct wcb_bio_ctx *wcb_resource, struct bio *bio)
 {
+	s64 elapsed_ns;
 	int i;
 	u32 lba;
 	u16 pos, bpos, epos;
 	unsigned long flags;
 	struct wcb_ctx *wcb_1ctx;
-	struct wcb_lun_entity *entitys = NULL;
+	struct wcb_lun_entity *entity = NULL;
 
 	for (i=0; i < MAX_USED_WCB_ENTITYS; i++) {
 		void *src, *dst;
 		wcb_1ctx = &wcb_resource->bio_wcb[i];
-		entitys = wcb_1ctx->entitys;
-		if (!entitys)
+		entity = wcb_1ctx->entitys;
+		if (!entity)
 			break;
 		
 		bpos = wcb_1ctx->start_pos;
 		epos = wcb_1ctx->end_pos;
 		for (pos = bpos; pos <= epos; pos++) {
-			lba = entitys->lba[pos];
-			dst = wcb_entity_offt_data(entitys->index, pos);
+			lba = entity->lba[pos];
+			dst = wcb_entity_offt_data(entity->index, pos);
 			src = bio_data(bio);
 		
 			if (lba <= MAX_USER_LBA) {
@@ -537,14 +565,30 @@ void flush_data_to_wcb(struct nvm_exdev *exdev,
 			}
 
 			// all travesal ppa need inc, regardless of pagetype
-			if (atomic_inc_return(&entitys->fill_cnt) == RAID_LUN_SEC_NUM) {
+			if (atomic_inc_return(&entity->fill_cnt) == RAID_LUN_SEC_NUM) {				
 				print_lun_entity_baddr("this lun is full push", 
-							entitys, 
+							entity, 
 							"to fullfifo");
+
+				g_wcb_lun_ctl->curr_lun_full_ts = ktime_get();
 				
-				atomic_set(&entitys->fill_cnt, 0);
+				elapsed_ns = ktime_to_ns(ktime_sub(\
+						   g_wcb_lun_ctl->curr_lun_full_ts, 
+						   g_wcb_lun_ctl->last_lun_full_ts));
+				
+				g_wcb_lun_ctl->last_lun_full_ts = \
+					g_wcb_lun_ctl->curr_lun_full_ts;
+				
+				printk("LUN[blk:%d pg:%d lun:%d] Flush data full,  time:%lld ns\n", 
+					entity->baddr.nand.blk, 
+					entity->baddr.nand.pg, 
+					entity->baddr.nand.lun, 
+					elapsed_ns);
+				printk("\n");
+				
+				atomic_set(&entity->fill_cnt, 0);
 				spin_lock_irqsave(&g_wcb_lun_ctl->wcb_lock, flags);
-				push_lun_entity_to_fifo(&g_wcb_lun_ctl->full_lun, entitys);
+				push_lun_entity_to_fifo(&g_wcb_lun_ctl->full_lun, entity);
 				spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
 				
 				wake_up_process(exdev->writer_thread);

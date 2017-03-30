@@ -127,6 +127,17 @@ struct wcb_lun_gctl {
 	struct wcb_lun_entity *partial_entity;
 
 	atomic_t outstanding_lun;
+
+#if 1 //TIMESTAMP_CATCH
+	ktime_t curr_lun_full_ts;  //push to fullfifo
+	ktime_t last_lun_full_ts;
+	
+	ktime_t curr_lun_subm_ts;   //full Lun submit
+	ktime_t last_lun_subm_ts;
+
+	ktime_t curr_lun_cmpl_ts;   // full Lun complete
+	ktime_t last_lun_cmpl_ts;
+#endif
 };
 
 /*

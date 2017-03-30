@@ -143,6 +143,7 @@ struct wcb_lun_entity *get_next_lun_entity(geo_ppa curppa)
 		// to prevent run here
 		// FIXME
 		printk("Can't get_next_lun_entity\n");
+		g_wcb_lun_ctl->partial_entity = NULL;
 		print_lun_entitys_fifo();
 		return NULL;
 	}
@@ -184,7 +185,7 @@ struct wcb_lun_entity *get_lun_entity(geo_ppa startppa)
 	startppa.nand.pl = 0;
 	lun_entity->baddr = startppa;
 	lun_entity->pos = pos;
-	lun_entity->cqe_flag = 0;	
+	lun_entity->cqe_flag = 0;
 
 	g_wcb_lun_ctl->partial_entity = lun_entity;
 
@@ -195,7 +196,6 @@ struct wcb_lun_entity *get_lun_entity(geo_ppa startppa)
 
 	return lun_entity;
 }
-
 
 static int wcb_lun_ctl_init(void)
 {

@@ -15,7 +15,7 @@ void sweepup_disk(struct nvm_exdev *exdev)
 
         for (blk = 0; blk < CFG_NAND_BLOCK_NUM; blk++) {
                 printk("erase blk:%d...", blk);
-                erase_rblk_wait(blk);
+                erase_rblk_wait(exdev, blk);
                 printk("done\n");
         }
 }
