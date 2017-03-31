@@ -580,12 +580,12 @@ void flush_data_to_wcb(struct nvm_exdev *exdev,
 				g_wcb_lun_ctl->last_lun_full_ts = \
 					g_wcb_lun_ctl->curr_lun_full_ts;
 				
-				printk("LUN[blk:%d pg:%d lun:%d] Flush data full,  time:%lld ns\n", 
+				/*printk("LUN[blk:%d pg:%d lun:%d] Flush data full,  time:%lld ns\n", 
 					entity->baddr.nand.blk, 
 					entity->baddr.nand.pg, 
 					entity->baddr.nand.lun, 
 					elapsed_ns);
-				printk("\n");
+				printk("\n");*/
 				
 				atomic_set(&entity->fill_cnt, 0);
 				spin_lock_irqsave(&g_wcb_lun_ctl->wcb_lock, flags);

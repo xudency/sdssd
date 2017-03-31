@@ -144,7 +144,7 @@ void rblk_bbt_check_available(u16 blk)
 				bb_ch++;
 
 			if (bb_ch > 12) {
-				printk("kick blk:%04d out\n", blk);
+				printk("kick blk:%4d out\n", blk);
 				bad_rblk_cnt++;
 				return;
 			}
@@ -212,10 +212,10 @@ free_cmd:
 
 static void sweepup_disk(struct nvm_exdev *exdev)
 {
-        u16 blk;
+        int blk;
 
 	for_each_blk_reverse(blk) {
-                printk("erase blk:%04d\n", blk);
+                printk("erase blk:%4d\n", blk);
                 erase_rblk_wait(exdev, blk);
         }
 }
@@ -225,7 +225,7 @@ static void sweepup_disk(struct nvm_exdev *exdev)
 static void fscftl_bbt_discovery(struct nvm_exdev *exdev)
 {
 	struct device *dmadev = &exdev->pdev->dev;
-	u32 blk;
+	int blk;
 	void *databuf, *metabuf;
 	dma_addr_t datadma, metadma;
 	// to store a raidblk bb check data
@@ -267,7 +267,7 @@ static void fscftl_bbt_discovery(struct nvm_exdev *exdev)
 		rblk_bbt_check_available(blk);
 	}
 
-	printk("totalblk:%04d/ goodblk:%04d/ badblk:%04d\n", 
+	printk("totalblk:%d/ goodblk:%d/ badblk:%d\n", 
 		CFG_NAND_BLOCK_NUM, good_rblk_cnt, bad_rblk_cnt);
 
 	dma_free_coherent(dmadev, metalen, metabuf, metadma);

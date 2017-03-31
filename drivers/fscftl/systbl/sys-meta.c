@@ -88,7 +88,7 @@ u32 get_blk_from_free_list(void)
         	
 	bmi = get_bmi_item(blk);
 
-	printk("open blk:%04d  left cnt:%d\n", blk, statetbl->free_blk_pool.size);
+	printk("open blk:%4d  left cnt:%d\n", blk, statetbl->free_blk_pool.size);
         bmi->bmstate = RAID_BLK_OPEN;
 
 	return blk;
@@ -101,7 +101,7 @@ void insert_blk_to_free_list(u32 blk)
 	push_blk_to_pool(&statetbl->free_blk_pool, blk);
         bmi->bmstate = RAID_BLK_FREE;
 	
-	printk("insert blk:%04d to free_list\n", blk);
+	printk("insert blk:%4d to free_list\n", blk);
 }
 
 int statetbl_init(void)

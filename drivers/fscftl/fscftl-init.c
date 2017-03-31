@@ -25,6 +25,7 @@
 #include "writecache/wcb-mngr.h"
 #include "systbl/sys-meta.h"
 #include "datapath/bio-datapath.h"
+#include "utils/utils.h"
 
 static bool mcp = true;
 module_param(mcp, bool, 0644);
@@ -34,6 +35,7 @@ module_param_string(bdev, exdev_name, 8, 0);   //basedev name
 
 extern struct nvme_ppa_ops exdev_ppa_ops;
 
+#define MDULE_TEST 0
 
 int fscftl_setup(struct nvm_exdev *exdev)
 {
@@ -147,9 +149,6 @@ static int __init fscftl_module_init(void)
 	if (ret)
 		goto err_cleanup;
 
-	/* testcase */
-	//run_testcase(exdev);
-
 	return 0;
 
 err_cleanup:
@@ -171,8 +170,30 @@ static void __exit fscftl_module_exit(void)
 	return;
 }
 
+#if MDULE_TEST
+static int __init fscftl_test_init(void)
+{
+	int blk;
+
+	for_each_blk_reverse(blk) {
+		printk("blk:%4d\n", blk);
+	}
+
+	return 0;
+}
+static void __exit fscftl_test_exit(void)
+{
+	return;
+}
+
+module_init(fscftl_test_init);
+module_exit(fscftl_test_exit);
+
+#else
 module_init(fscftl_module_init);
 module_exit(fscftl_module_exit);
+#endif
+
 MODULE_AUTHOR("Dengcai Xu <dxu@cnexlabs.com>");
 MODULE_LICENSE("GPL v2");
 MODULE_DESCRIPTION("Host-Based Full Stack Control FTL for NVMe SSDs");

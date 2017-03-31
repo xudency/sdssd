@@ -23,6 +23,7 @@
 #define for_each_blk(blk) \
 	for(blk= 0; blk < CFG_NAND_BLOCK_NUM; blk++)
 
+// BEWARE, if use reverse to trasveral blk, blk type MUST int,u16 u32 alway >=0
 #define for_each_blk_reverse(blk) \
 	for(blk = CFG_NAND_BLOCK_NUM-1; blk >= 0 ; blk--)
 
