@@ -173,12 +173,6 @@ static void __exit fscftl_module_exit(void)
 #if MDULE_TEST
 static int __init fscftl_test_init(void)
 {
-	int blk;
-
-	for_each_blk_reverse(blk) {
-		printk("blk:%4d\n", blk);
-	}
-
 	return 0;
 }
 static void __exit fscftl_test_exit(void)

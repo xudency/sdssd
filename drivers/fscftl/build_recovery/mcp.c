@@ -10,16 +10,18 @@ static atomic_t bbt_cmpl_cnt = ATOMIC_INIT(0);
 static int good_rblk_cnt = 0;
 static int bad_rblk_cnt = 0;
 
-// How identify a badblock, pls reference NandFlash datasheet
+/* How identify a badblock, pls reference NandFlash datasheet */
 static void rdpparaw_completion(struct request *req, int error)
 {
 	int i;
 	u32 offt = EXP_PPA_SIZE - 3 * NAND_RAW_SIZE; 
-	struct nvme_ppa_iod *ppa_iod = req->end_io_data;
-	struct nvm_exdev *dev = ppa_iod->dev;
-	/*struct nvme_ppa_command *cmd = \
-		(struct nvme_ppa_command *)nvme_req(req)->cmd;*/
+	struct nvme_command *cmd = nvme_req(req)->cmd;
+	//struct nvme_ppa_iod *ppa_iod = req->end_io_data;
+	struct nvme_ppa_iod *ppa_iod = \
+		ppacmd_to_pdu((struct nvme_ppa_command *)cmd);
 
+	struct nvm_exdev *dev = ppa_iod->dev;
+	
 	/* if any one plane is bb, we regard all these planes all bb */
 	for (i = 0; i < CFG_NAND_PLANE_NUM; i++) {
 		u8 *databuf = (u8 *)(ppa_iod->vaddr_data + (i*EXP_PPA_SIZE));
@@ -34,10 +36,9 @@ static void rdpparaw_completion(struct request *req, int error)
 		}
 	}
 	
-	dma_pool_page_free(dev, ppa_iod->vaddr_ppalist, 
-				ppa_iod->dma_ppalist);
+	dma_pool_page_free(dev, ppa_iod->vaddr_ppalist, ppa_iod->dma_ppalist);
 	
-	kfree(nvme_req(req)->cmd);
+	kfree(cmd);
 	blk_mq_free_request(req);
 
 	if (atomic_inc_return(&bbt_cmpl_cnt) == atomic_read(&bbt_issu_cnt))
@@ -56,13 +57,8 @@ int discovery_bbt_rdpparaw(struct nvm_exdev *exdev, geo_ppa ppa,
 	struct nvme_ppa_command *ppa_cmd;
 	struct nvme_ppa_iod *ppa_iod;
 
-	ppa_cmd = kzalloc(sizeof(struct nvme_ppa_command) + \
-			  sizeof(struct nvme_ppa_iod), GFP_KERNEL);
-	if (!ppa_cmd)
-		return -ENOMEM;
-	
-	ppa_iod = (struct nvme_ppa_iod *)((uintptr_t)ppa_cmd + \
-				sizeof(struct nvme_ppa_command));
+	ppa_cmd = alloc_ppa_rqd_ctx();
+	ppa_iod = ppacmd_to_pdu(ppa_cmd);
 
 	ppalist = dma_pool_page_zalloc(exdev, &ppa_dma);
 	if (!ppalist)
@@ -88,7 +84,7 @@ int discovery_bbt_rdpparaw(struct nvm_exdev *exdev, geo_ppa ppa,
 	ppa_cmd->control = cpu_to_le16(NVM_IO_SNGL_ACCESS);
 
 	nvme_submit_ppa_cmd(exdev, ppa_cmd, databuf, EXP_PPA_SIZE*nr_ppas, 
-			    rdpparaw_completion, ppa_iod);
+			    rdpparaw_completion, NULL);
 	
 	atomic_inc(&bbt_issu_cnt);
 
@@ -135,11 +131,11 @@ void rblk_bbt_check_available(u16 blk)
 	u16 ch, lun;
 	struct bmi_item *bmi = get_bmi_item(blk);
 
-	for (lun = 0; lun < CFG_NAND_LUN_NUM; lun++) {
+	for_each_lun(lun) {
 		u16 bb_ch = 0;
 		u16 bb = bmi->bbt[lun];
-
-		for (ch = 0; ch < 16; ch++) {
+		
+		for_each_ch(ch) {
 			if (BIT_TEST(bb, ch))
 				bb_ch++;
 

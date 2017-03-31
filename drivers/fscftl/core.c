@@ -1,32 +1,5 @@
 #include "fscftl.h"
 
-static void print_cqe_result(struct nvm_rq *rqd)
-{
-	printk("New CQE complete\n");
-
-	switch (rqd->opcode) {
-	case NVM_OP_ESPPA:
-		printk("  ersppa");
-		break;
-	case NVM_OP_WRPPA:
-		printk("  wrppa");
-		break;
-	case NVM_OP_RDPPA:
-		printk("  rdppa");
-		break;
-	case NVM_OP_WRRAW:
-		printk("  wrpparaw");
-		break;
-	case NVM_OP_RDRAW:
-		printk("  rdpparaw");
-		break;
-	}
-
-	printk("  nr_ppas:%d  control:%x\n", rqd->nr_ppas, rqd->flags);
-	printk("  status:0x%x result.u64:0x%llx\n", rqd->error, rqd->ppa_status);
-	printk("\n");
-}
-
 int nvm_exdev_setup_pool(struct nvm_exdev *dev, char *name)
 {
 	struct device *dmadev = &dev->pdev->dev;
@@ -58,6 +31,36 @@ void dma_pool_page_free(struct nvm_exdev *dev, void *vaddr,
 	dma_pool_free(dev->dmapoll, vaddr, dma_handle);
 }
 
+/*************************************************************************
+ *   aligh with LightNVM subsystem
+ ************************************************************************/
+ 
+static void print_cqe_result(struct nvm_rq *rqd)
+{
+	printk("New CQE complete\n");
+
+	switch (rqd->opcode) {
+	case NVM_OP_ESPPA:
+		printk("  ersppa");
+		break;
+	case NVM_OP_WRPPA:
+		printk("  wrppa");
+		break;
+	case NVM_OP_RDPPA:
+		printk("  rdppa");
+		break;
+	case NVM_OP_WRRAW:
+		printk("  wrpparaw");
+		break;
+	case NVM_OP_RDRAW:
+		printk("  rdpparaw");
+		break;
+	}
+
+	printk("  nr_ppas:%d  control:%x\n", rqd->nr_ppas, rqd->flags);
+	printk("  status:0x%x result64:0x%llx\n", rqd->error, rqd->ppa_status);
+	printk("\n");
+}
 int set_rqd_nand_ppalist(struct nvm_exdev *dev, struct nvm_rq *rqd, 
 			struct ppa_addr *ppas, int nr_ppas)
 {
@@ -173,9 +176,8 @@ struct nvme_ppa_ops exdev_ppa_ops = {
 };
 
 /***************************************************************************
- *						    Divide										   *
+ *				Divide										   *
  ***************************************************************************/
-
 static int __nvme_submit_ppa_cmd(struct request_queue *q, 
 		struct nvme_ppa_command *cmd, union nvme_result *result, 
 		void *buffer, unsigned bufflen, unsigned timeout, 
@@ -190,7 +192,8 @@ static int __nvme_submit_ppa_cmd(struct request_queue *q,
 		printk("%s-%d\n", __FUNCTION__, __LINE__);
 		return PTR_ERR(req);
 	}
-
+	
+	req->cmd_flags &= ~REQ_FAILFAST_DRIVER;
 	req->timeout = timeout ? timeout : NVME_IO_TIMEOUT;
 
 	if (buffer && bufflen) {
@@ -215,7 +218,7 @@ static int __nvme_submit_ppa_cmd(struct request_queue *q,
  * this method will bypass dev->ops.submit_io
  * so we don't need prepare a nvm_rq rqd
  * before call this function, Caller should Guarantee:
- *		1. nvme_ppa_command is ready
+ *	1. nvme_ppa_command is ready
  *      2. ppalist metadata DMA buffer is allocated and set in cmd
  *      3. databuff is dma_map inside this fn, so we don't need dma_map it
  */
@@ -230,7 +233,6 @@ int nvme_submit_ppa_cmd(struct nvm_exdev *dev,
 				NVME_QID_ANY, 0, 0, done, ctx);
 }
 
-//nvme_nvm_submit_user_cmd
 static void nvme_ppa_sync_completion(struct request *rq, int error)
 {
 	struct completion *waiting = rq->end_io_data;
@@ -251,6 +253,7 @@ int nvme_submit_ppa_cmd_sync(struct nvm_exdev *dev,
 	if (IS_ERR(req))
 		return PTR_ERR(req);
 
+	req->cmd_flags &= ~REQ_FAILFAST_DRIVER;
 	req->timeout = NVME_IO_TIMEOUT;
 	req->end_io_data = &wait;
 
@@ -266,7 +269,6 @@ int nvme_submit_ppa_cmd_sync(struct nvm_exdev *dev,
 
         //status = req->errors;
 	//result = le64_to_cpu(nvme_req(req)->result.u64);
-        
  out:
 	blk_mq_free_request(req);
 	return ret;

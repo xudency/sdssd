@@ -87,12 +87,14 @@ static void wrppa_lun_completion(struct request *req, int error)
 {
 	s64 elapsed_ns;
 	unsigned long flags;
-	struct nvme_ppa_iod *ppa_iod = req->end_io_data;
+	int status = error;
+	u64 result = nvme_req(req)->result.u64;
+	struct nvme_command *cmd = nvme_req(req)->cmd;
+	//struct nvme_ppa_iod *ppa_iod = req->end_io_data;
+	struct nvme_ppa_iod *ppa_iod = \
+		ppacmd_to_pdu((struct nvme_ppa_command *)cmd);
 	struct wcb_lun_entity *entity = ppa_iod->ctx;
 	int idx = ppa_iod->idx;
-	int status = error;			/* No phase tag */
-	u64 result = nvme_req(req)->result.u64; /* 64bit completion btmap */
-	struct nvme_command *cmd = nvme_req(req)->cmd;	/* original sqe */
 
 	if (status != 0 || result != 0) {
 		// TODO:: program fail Handle
@@ -151,9 +153,6 @@ void nvme_wrppa_lun(struct nvm_exdev *exdev, struct wcb_lun_entity *entity)
 	dma_addr_t meta_dma, ppa_dma;
 	int nr_ppas = CFG_NAND_CHANNEL_NUM;
 	u16 ctrl = NVM_IO_DUAL_ACCESS | NVM_IO_SCRAMBLE_ENABLE;
-	struct nvme_ppa_iod *ppa_iod;
-	struct nvme_ppa_command *ppa_cmd;
-
 	print_lun_entity_baddr("submit wrppa of", entity, "to Nand");
 
 	atomic_inc(&g_wcb_lun_ctl->outstanding_lun);
@@ -180,12 +179,12 @@ void nvme_wrppa_lun(struct nvm_exdev *exdev, struct wcb_lun_entity *entity)
 	}*/
 	
 	entity->cqe_flag = 0;
-	for (line = 0; line < CFG_DRIVE_LINE_NUM; line++) {
-		ppa_cmd = kzalloc(sizeof(struct nvme_ppa_command) + \
-				  sizeof(struct nvme_ppa_iod), GFP_KERNEL);
-
-		ppa_iod = (struct nvme_ppa_iod *)((uintptr_t)ppa_cmd + \
-					sizeof(struct nvme_ppa_command));
+	for (line = 0; line < CFG_DRIVE_LINE_NUM; line++) {		
+		struct nvme_ppa_command *ppa_cmd;
+		struct nvme_ppa_iod *ppa_iod;
+		
+		ppa_cmd = alloc_ppa_rqd_ctx();
+		ppa_iod = ppacmd_to_pdu(ppa_cmd);
 
 		ppa_iod->dev = exdev;
 		ppa_iod->ctx = entity;
@@ -208,7 +207,7 @@ void nvme_wrppa_lun(struct nvm_exdev *exdev, struct wcb_lun_entity *entity)
 
 		nvme_submit_ppa_cmd(exdev, ppa_cmd, databuf, 
 				    nr_ppas * EXP_PPA_SIZE, 
-				    wrppa_lun_completion, ppa_iod);
+				    wrppa_lun_completion, NULL);
 		
 		debug_info("submit line%d\n", line);
 	}	

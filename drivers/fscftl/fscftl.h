@@ -6,6 +6,7 @@
 #include "hwcfg/cfg/flash_cfg.h"
 #include "bootblk/bootblk_mngr.h"
 #include "systbl/sys-meta.h"
+#include "utils/utils.h"
 
 #define SEC_PER_PPA 8 // 4K/512
 #define EXP_PPA_SIZE (4096)
@@ -42,6 +43,21 @@ struct nvme_ppa_command {
 	__le64			resv;
 };
 
+struct nvme_ppa_iod {
+	void *ctx;	// lun entity
+	struct nvm_exdev *dev;
+	
+	void *vaddr_data;
+	dma_addr_t dma_data;
+
+	void *vaddr_meta;
+	dma_addr_t dma_meta;
+
+	u64 *vaddr_ppalist;
+	dma_addr_t dma_ppalist;
+	int idx;   // which line or which ch
+};
+
 static inline sector_t get_bio_slba(struct bio *bio)
 {
 	return bio->bi_iter.bi_sector / SEC_PER_PPA;
@@ -52,6 +68,18 @@ static inline unsigned int get_bio_nppa(struct bio *bio)
 	return  bio->bi_iter.bi_size / EXP_PPA_SIZE;
 }
 
+/** |nvme_ppa_command | nvme_ppa_iod| **/
+static inline struct nvme_ppa_command *alloc_ppa_rqd_ctx(void)
+{
+	return kzalloc(sizeof(struct nvme_ppa_command) + \
+			  sizeof(struct nvme_ppa_iod), GFP_KERNEL);
+}
+
+static inline void *ppacmd_to_pdu(struct nvme_ppa_command *ppa_cmd)
+{
+	return ppa_cmd + 1;
+}
+
 /* extern fn */
 blk_qc_t fscftl_make_rq(struct request_queue *q, struct bio *bio);
 
@@ -60,22 +88,21 @@ void nvm_delete_exns(struct nvm_exdev *exdev);
 
 void free_rqd_nand_ppalist(struct nvm_exdev * dev, struct nvm_rq *rqd);
 int set_rqd_nand_ppalist(struct nvm_exdev *dev, struct nvm_rq *rqd, 
-						 struct ppa_addr *ppas, int nr_ppas);
+			 struct ppa_addr *ppas, int nr_ppas);
 
 int nvm_exdev_setup_pool(struct nvm_exdev *dev, char *name);
 void nvm_exdev_release_pool(struct nvm_exdev *dev);
 void *dma_pool_page_zalloc(struct nvm_exdev *dev, dma_addr_t *dma_handle);
 void dma_pool_page_free(struct nvm_exdev *dev, void *vaddr, 
-							 dma_addr_t dma_handle);
+			dma_addr_t dma_handle);
 
 int nvme_submit_ppa_cmd(struct nvm_exdev *dev, 
-                                struct nvme_ppa_command *cmd,
-				void *buffer, unsigned bufflen, 
-				rq_end_io_fn *done, void *ctx);
+                        struct nvme_ppa_command *cmd,
+			void *buffer, unsigned bufflen, 
+			rq_end_io_fn *done, void *ctx);
 
 int nvme_submit_ppa_cmd_sync(struct nvm_exdev *dev, 
-                                       struct nvme_ppa_command *cmd,
-			               void *buffer, unsigned bufflen);
-
+                             struct nvme_ppa_command *cmd,
+			     void *buffer, unsigned bufflen);
 
 #endif
