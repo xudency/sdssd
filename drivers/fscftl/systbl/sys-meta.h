@@ -69,9 +69,17 @@ struct bmi_item {
 	u32 next;
 };
 
+/* bad or good block */
+enum {
+	GOODB,
+	BADB,
+};
+
 extern struct sys_status_tbl *statetbl;
 extern struct bmi_item *bmitbl;
 extern u32 *vpctbl;   // prevent by l2plock
+
+void mark_bbt_tbl(u32 blk, u32 lun, u32 ch, bool status);
 
 u32 pull_blk_from_pool(struct fsc_fifo *fifo);
 void push_blk_to_pool(struct fsc_fifo *fifo, u32 blk);

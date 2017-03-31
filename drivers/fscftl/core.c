@@ -45,7 +45,11 @@ void nvm_exdev_release_pool(struct nvm_exdev *dev)
 
 void *nvm_exdev_dma_pool_alloc(struct nvm_exdev *dev, dma_addr_t *dma_handle)
 {
-	return dma_pool_alloc(dev->dmapoll, GFP_KERNEL, dma_handle);
+	void *va_pool = dma_pool_alloc(dev->dmapoll, GFP_KERNEL, dma_handle);
+
+	memset(va_pool, 0x00, PAGE_SIZE);
+
+	return va_pool;
 }
 
 void nvm_exdev_dma_pool_free(struct nvm_exdev *dev, void *vaddr, 
@@ -183,15 +187,19 @@ static int __nvme_submit_ppa_cmd(struct request_queue *q,
 	int ret;
 
 	req = nvme_alloc_request(q, (struct nvme_command *)cmd, flags, qid);
-	if (IS_ERR(req))
+	if (IS_ERR(req)) {
+		printk("%s-%d\n", __FUNCTION__, __LINE__);
 		return PTR_ERR(req);
+	}
 
 	req->timeout = timeout ? timeout : NVME_IO_TIMEOUT;
 
 	if (buffer && bufflen) {
 		ret = blk_rq_map_kern(q, req, buffer, bufflen, GFP_KERNEL);
-		if (ret)
+		if (ret) {
+			printk("%s-%d\n", __FUNCTION__, __LINE__);			
 			goto out;
+		}
 	}
 
 	req->end_io_data = ctx;

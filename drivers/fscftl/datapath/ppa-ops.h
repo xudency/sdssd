@@ -16,49 +16,20 @@ struct nvme_ppa_iod {
 	void *ctx;	// lun entity
 	struct nvm_exdev *dev;
 
-	void *vaddr_meta; // 16B
-	dma_addr_t *dma_meta;
+	void *vaddr_data;
+	dma_addr_t dma_data;
+
+	void *vaddr_meta;
+	dma_addr_t dma_meta;
 
 	u64 *vaddr_ppalist;
-	dma_addr_t *dma_ppalist;
+	dma_addr_t dma_ppalist;
 	int idx;   // which line or which ch
 };
-
-typedef union phy_ppa {
-	u64 nandppa;
-	dma_addr_t dma_ppa_list;
-} dmappa;
-
-typedef struct pos_ep_ppa
-{
-  union
-  {
-    // ppa format in nand
-    struct
-    {
-      u16 sec       : EP_BITS;  // 4 sectors per page
-      u16 pl        : PL_BITS;  // 2 planes per LUN
-      u16 ch        : CH_BITS;  // 16 channels
-      u16 resved    : (16-EP_BITS-PL_BITS-CH_BITS);
-    } bits;
-
-    u16 all;
-  };
-} geo_pos;
 
 void get_ppa_each_region(geo_ppa *ppa, u8 *ch, u8 *sec, u8 *pl, 
                                u8 *lun, u16 *pg, u16 *blk);
 
 void set_ppa_nand_addr(geo_ppa *ppa, u8 ch, u8 sec, 
                             u8 pl, u8 lun, u16 pg, u16 blk);
-
-void ppa_step_ep(geo_ppa *ppa);
-
-int nvm_rdpparaw_sync(struct nvm_exdev *exdev, struct physical_address *ppa, 
-                             int nr_ppas, u16 ctrl, void *databuf, void *metabuf);
-
-void run_testcase(struct nvm_exdev *exdev);
-
-int erase_rblk_wait(struct nvm_exdev *exdev, u16 blk);
-
 #endif

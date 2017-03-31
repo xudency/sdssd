@@ -26,7 +26,7 @@
 #include "systbl/sys-meta.h"
 #include "datapath/bio-datapath.h"
 
-static bool mcp = false;
+static bool mcp = true;
 module_param(mcp, bool, 0644);
 
 static char exdev_name[DISK_NAME_LEN] = "nvme0n1";

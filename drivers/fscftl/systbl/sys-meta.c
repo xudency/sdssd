@@ -14,6 +14,17 @@ struct sys_status_tbl *statetbl;
 struct bmi_item *bmitbl;
 u32 *vpctbl;   // prevent by l2plock
 
+// Move to systbl/
+void mark_bbt_tbl(u32 blk, u32 lun, u32 ch, bool status)
+{
+	struct bmi_item *bmi = bmitbl + blk;
+
+	if (status == BADB)
+		bmi->bbt[lun] |= (1<<ch);
+	else
+		bmi->bbt[lun] &= ~(1<<ch);
+}
+
 // TODO::
 // blk-pool lunentity-fifo unify use one interface
 u32 pull_blk_from_pool(struct fsc_fifo *fifo)
