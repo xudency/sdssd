@@ -122,7 +122,7 @@ void rblk_bbt_discovery(struct nvm_exdev * exdev, u16 blk,
 				  (CFG_NAND_PLANE_NUM*NAND_RAW_SIZE);
 
 			//printk("lun:%d ch:%d databuf:0x%lx metadma:0x%lx\n", 
-					//lun, ch, (uintptr_t)databuf, metadma);
+				  //lun, ch, (uintptr_t)databuf, metadma);
 
 			discovery_bbt_rdpparaw(exdev, ppa, databuf, metadma);			
 		}

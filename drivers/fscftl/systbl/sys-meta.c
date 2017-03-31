@@ -35,12 +35,12 @@ u32 pull_blk_from_pool(struct fsc_fifo *fifo)
 	if (old_head == 0xffff)
 		return 0xffff;
 
-	bmi = bmitbl + old_head;
+	bmi = get_bmi_item(old_head);
 
 	if (fifo->head == fifo->tail) {
 		fifo->head = fifo->tail = 0xffff;
-	} else {
-		nhbmi = bmitbl + bmi->prev;
+	} else {		
+		nhbmi = get_bmi_item(bmi->prev);
 		nhbmi->next = 0xffff;
 		fifo->head = bmi->prev;	
 	}
@@ -56,8 +56,8 @@ void push_blk_to_pool(struct fsc_fifo *fifo, u32 blk)
 	u32 old_tail;
 	struct bmi_item *bmi, *ntbmi;
 	
-	old_tail = fifo->tail;
-	bmi = bmitbl + blk;
+	old_tail = fifo->tail;	
+	bmi = get_bmi_item(blk);
 
 	if (old_tail == 0xffff) {
 		fifo->head = fifo->tail = blk;
@@ -66,8 +66,8 @@ void push_blk_to_pool(struct fsc_fifo *fifo, u32 blk)
 	} else {
 		fifo->tail = blk;
 		bmi->next = old_tail;
-		bmi->prev = 0xffff;
-		ntbmi = bmitbl + old_tail;
+		bmi->prev = 0xffff;		
+		ntbmi = get_bmi_item(old_tail);
 		ntbmi->prev = blk;
 	}
 
@@ -85,8 +85,8 @@ u32 get_blk_from_free_list(void)
 		printk("ERROR no free blk !!! \n");
 		return 0;
 	}
-        
-        bmi = bmitbl + blk;
+        	
+	bmi = get_bmi_item(blk);
 
 	printk("open blk:%d  left cnt:%d\n", blk, statetbl->free_blk_pool.size);
         bmi->bmstate = RAID_BLK_OPEN;
@@ -96,7 +96,7 @@ u32 get_blk_from_free_list(void)
 
 void insert_blk_to_free_list(u32 blk)
 {
-        struct bmi_item *bmi = bmitbl + blk;
+        struct bmi_item *bmi = get_bmi_item(blk);
         
 	push_blk_to_pool(&statetbl->free_blk_pool, blk);
         bmi->bmstate = RAID_BLK_FREE;
@@ -133,7 +133,7 @@ int bmitbl_init(void)
 	for (blk = 0; blk < CFG_NAND_BLOCK_NUM; blk++) {
 		bmi = bmitbl + blk;
 		bmi->blknum = blk;
-		bmi->next = 0xffff;		
+		bmi->next = 0xffff;
 		bmi->prev = 0xffff;
 	}
 

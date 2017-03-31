@@ -67,11 +67,8 @@ int fscftl_setup(struct nvm_exdev *exdev)
 	{
 
 	int blk;
-	//struct bmi_item *bmi;
 	geo_ppa startppa;
 	for (blk = CFG_NAND_BLOCK_NUM - 1; blk >= 0; blk--) {
-		// init 1 bmi_item
-		//bmi = bmitbl + blk;
 		insert_blk_to_free_list(blk);	
 	}
 
