@@ -43,7 +43,7 @@ void nvm_exdev_release_pool(struct nvm_exdev *dev)
 	dma_pool_destroy(dev->dmapoll);
 }
 
-void *nvm_exdev_dma_pool_alloc(struct nvm_exdev *dev, dma_addr_t *dma_handle)
+void *dma_pool_page_zalloc(struct nvm_exdev *dev, dma_addr_t *dma_handle)
 {
 	void *va_pool = dma_pool_alloc(dev->dmapoll, GFP_KERNEL, dma_handle);
 
@@ -52,7 +52,7 @@ void *nvm_exdev_dma_pool_alloc(struct nvm_exdev *dev, dma_addr_t *dma_handle)
 	return va_pool;
 }
 
-void nvm_exdev_dma_pool_free(struct nvm_exdev *dev, void *vaddr, 
+void dma_pool_page_free(struct nvm_exdev *dev, void *vaddr, 
 			    dma_addr_t dma_handle)
 {
 	dma_pool_free(dev->dmapoll, vaddr, dma_handle);
@@ -70,7 +70,7 @@ int set_rqd_nand_ppalist(struct nvm_exdev *dev, struct nvm_rq *rqd,
 		return 0;
 	}
 	
-	rqd->ppa_list = nvm_exdev_dma_pool_alloc(dev, &rqd->dma_ppa_list);
+	rqd->ppa_list = dma_pool_page_zalloc(dev, &rqd->dma_ppa_list);
 	if (!rqd->ppa_list) {
 		pr_err("nvm: failed to allocate dma memory\n");
 		return -ENOMEM;
@@ -87,7 +87,7 @@ void free_rqd_nand_ppalist(struct nvm_exdev * dev, struct nvm_rq *rqd)
 	if (!rqd->ppa_list)   //nr_ppa
 		return;
 
-	nvm_exdev_dma_pool_free(dev, rqd->ppa_list, rqd->dma_ppa_list);
+	dma_pool_page_free(dev, rqd->ppa_list, rqd->dma_ppa_list);
 }
 
 static inline void nvm_rqd_to_ppacmd(struct nvm_rq *rqd, int instance, 
@@ -171,7 +171,6 @@ struct nvme_ppa_ops exdev_ppa_ops = {
 	.module			 = THIS_MODULE,
 	.submit_io		 = nvm_submit_ppa,
 };
-
 
 /***************************************************************************
  *						    Divide										   *

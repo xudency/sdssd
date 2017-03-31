@@ -147,7 +147,7 @@ int nvm_rdpparaw_sync(struct nvm_exdev *exdev,
 	if (nr_ppas == 1) {
 		ppa_cmd.ppalist = cpu_to_le64(ppa[0].ppa); 
 	} else {
-		ppalist = nvm_exdev_dma_pool_alloc(exdev, &dma_ppalist);
+		ppalist = dma_pool_page_zalloc(exdev, &dma_ppalist);
 		if (!ppalist) {
 			pr_err("nvm: failed to allocate dma memory\n");
 			return -ENOMEM;
@@ -176,7 +176,7 @@ int nvm_rdpparaw_sync(struct nvm_exdev *exdev,
 					nr_ppas * NAND_RAW_SIZE, DMA_FROM_DEVICE);
 
 	if (nr_ppas > 1)
-		nvm_exdev_dma_pool_free(exdev, ppalist, dma_ppalist);
+		dma_pool_page_free(exdev, ppalist, dma_ppalist);
 
 	return 0;
 }
@@ -225,7 +225,7 @@ static int submit_user_passthru_cmd(struct nvm_exdev *dev,
 	rq->end_io_data = &wait;
 
 	if (ppa_buf && ppa_len) {
-                ppa_list = nvm_exdev_dma_pool_alloc(dev, &ppa_dma);
+                ppa_list = dma_pool_page_zalloc(dev, &ppa_dma);
 		if (!ppa_list) {
 			ret = -ENOMEM;
 			goto err_rq;
@@ -247,7 +247,7 @@ static int submit_user_passthru_cmd(struct nvm_exdev *dev,
 		bio = rq->bio;
 
 		if (meta_buf && meta_len) {
-			metadata = nvm_exdev_dma_pool_alloc(dev, &metadata_dma);
+			metadata = dma_pool_page_zalloc(dev, &metadata_dma);
 			if (!metadata) {
 				ret = -ENOMEM;
 				goto err_map;
@@ -291,7 +291,7 @@ submit:
 	}
 err_meta:
 	if (meta_buf && meta_len)
-		nvm_exdev_dma_pool_free(dev, metadata, metadata_dma);
+		dma_pool_page_free(dev, metadata, metadata_dma);
 err_map:
 	if (bio) {
 		if (disk && bio->bi_bdev)
@@ -300,7 +300,7 @@ err_map:
 	}
 err_ppa:
 	if (ppa_buf && ppa_len)
-		nvm_exdev_dma_pool_free(dev, ppa_list, ppa_dma);
+		dma_pool_page_free(dev, ppa_list, ppa_dma);
 err_rq:
 	blk_mq_free_request(rq);
 err_cmd:

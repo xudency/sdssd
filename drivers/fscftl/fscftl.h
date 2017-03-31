@@ -64,8 +64,8 @@ int set_rqd_nand_ppalist(struct nvm_exdev *dev, struct nvm_rq *rqd,
 
 int nvm_exdev_setup_pool(struct nvm_exdev *dev, char *name);
 void nvm_exdev_release_pool(struct nvm_exdev *dev);
-void *nvm_exdev_dma_pool_alloc(struct nvm_exdev *dev, dma_addr_t *dma_handle);
-void nvm_exdev_dma_pool_free(struct nvm_exdev *dev, void *vaddr, 
+void *dma_pool_page_zalloc(struct nvm_exdev *dev, dma_addr_t *dma_handle);
+void dma_pool_page_free(struct nvm_exdev *dev, void *vaddr, 
 							 dma_addr_t dma_handle);
 
 int nvme_submit_ppa_cmd(struct nvm_exdev *dev, 

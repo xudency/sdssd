@@ -53,7 +53,7 @@ enum raidblk_status {
 struct sys_status_tbl {
 	struct fsc_fifo free_blk_pool;
 	struct fsc_fifo closed_blk_pool;	// Full But VPC!=0
-	struct fsc_fifo gc_blk_pool;        // Full && VPC=0
+	struct fsc_fifo gc_blk_pool;        	// Full && VPC=0
 };
 
 struct bmi_item {

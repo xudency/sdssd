@@ -63,25 +63,6 @@ int fscftl_setup(struct nvm_exdev *exdev)
 	if (ret)
 		goto out_free_wcb;
 
-	// prepare for write MOve to MCP
-	{
-
-	int blk;
-	geo_ppa startppa;
-	for (blk = CFG_NAND_BLOCK_NUM - 1; blk >= 0; blk--) {
-		insert_blk_to_free_list(blk);	
-	}
-
-	startppa.ppa = 0;
-	blk = get_blk_from_free_list();
-	startppa.nand.blk = blk;
-
-	g_wcb_lun_ctl->partial_entity = get_lun_entity(startppa);
-
-	print_lun_entitys_fifo();
-
-	}
-
     return ret;
 	
 out_free_wcb:
@@ -107,6 +88,21 @@ void fscftl_cleanup(struct nvm_exdev *exdev)
 	statetbl_exit();
 
 	return;
+}
+
+// prepare lun_entity && pos && free_list, etc.
+void prepare_write_context(void)
+{
+	int blk;
+	geo_ppa startppa;
+
+	startppa.ppa = 0;
+	blk = get_blk_from_free_list();
+	startppa.nand.blk = blk;
+
+	g_wcb_lun_ctl->partial_entity = get_lun_entity(startppa);
+
+	print_lun_entitys_fifo();
 }
 
 static int __init fscftl_module_init(void)
@@ -141,6 +137,11 @@ static int __init fscftl_module_init(void)
 		if (try_recovery_systbl())
 	    		goto err_cleanup;
 	}
+
+	//for (blk = CFG_NAND_BLOCK_NUM - 1; blk >= 0; blk--)
+		//insert_blk_to_free_list(blk);
+	
+	prepare_write_context();
 
 	ret = nvm_create_exns(exdev);
 	if (ret)

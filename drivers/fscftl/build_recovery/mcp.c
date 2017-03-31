@@ -34,7 +34,7 @@ static void rdpparaw_completion(struct request *req, int error)
 		}
 	}
 	
-	nvm_exdev_dma_pool_free(dev, ppa_iod->vaddr_ppalist, 
+	dma_pool_page_free(dev, ppa_iod->vaddr_ppalist, 
 				ppa_iod->dma_ppalist);
 	
 	kfree(nvme_req(req)->cmd);
@@ -64,7 +64,7 @@ int discovery_bbt_rdpparaw(struct nvm_exdev *exdev, geo_ppa ppa,
 	ppa_iod = (struct nvme_ppa_iod *)((uintptr_t)ppa_cmd + \
 				sizeof(struct nvme_ppa_command));
 
-	ppalist = nvm_exdev_dma_pool_alloc(exdev, &ppa_dma);
+	ppalist = dma_pool_page_zalloc(exdev, &ppa_dma);
 	if (!ppalist)
 		goto free_cmd;
 	
@@ -107,8 +107,8 @@ void rblk_bbt_discovery(struct nvm_exdev * exdev, u16 blk,
 	void *databuf;
 	dma_addr_t metadma;
 
-	for (lun = 0; lun < CFG_NAND_LUN_NUM; lun++) {
-		for (ch = 0; ch < CFG_NAND_CHANNEL_NUM; ch++) {
+	for_each_lun(lun) {
+		for_each_ch(ch) {
 			geo_ppa ppa;
 			set_ppa_nand_addr(&ppa, ch, 3, 0, lun, 0, blk);
 
@@ -120,9 +120,6 @@ void rblk_bbt_discovery(struct nvm_exdev * exdev, u16 blk,
 			metadma = gmetadma + \
 				  (ch + lun*CFG_NAND_CHANNEL_NUM)*\
 				  (CFG_NAND_PLANE_NUM*NAND_RAW_SIZE);
-
-			//printk("lun:%d ch:%d databuf:0x%lx metadma:0x%lx\n", 
-				  //lun, ch, (uintptr_t)databuf, metadma);
 
 			discovery_bbt_rdpparaw(exdev, ppa, databuf, metadma);			
 		}
@@ -147,14 +144,14 @@ void rblk_bbt_check_available(u16 blk)
 				bb_ch++;
 
 			if (bb_ch > 12) {
-				printk("kick raidblk:%04d out\n", blk);
+				printk("kick blk:%04d out\n", blk);
 				bad_rblk_cnt++;
 				return;
 			}
 		}
 	}
 
-	printk("add raidblk:%04d to free_list\n", blk);
+	insert_blk_to_free_list(blk);
 	good_rblk_cnt++;
 }
 
@@ -181,15 +178,15 @@ int erase_rblk_wait(struct nvm_exdev *exdev, u16 blk)
 	else
 		plmode = NVM_IO_SNGL_ACCESS;
 
-        ppalist = nvm_exdev_dma_pool_alloc(exdev, &dma_ppalist);
+        ppalist = dma_pool_page_zalloc(exdev, &dma_ppalist);
         if (!ppalist) {
                 pr_err("nvm: failed to allocate dma memory\n");
                 ret = -ENOMEM;
                 goto free_cmd;
         }
 
-        for (lun = 0; lun < CFG_NAND_LUN_NUM; lun++) {
-                for (ch = 0; ch < CFG_NAND_CHANNEL_NUM; ch++) {
+	for_each_lun(lun) {
+		for_each_ch(ch) {
                         set_ppa_nand_addr(&ppa, ch, 0, 0, lun, 0, blk);
                         ppalist[nlb++] = (u64)ppa.ppa;
                 }
@@ -207,7 +204,7 @@ int erase_rblk_wait(struct nvm_exdev *exdev, u16 blk)
 	//nvme_submit_sync_cmd(q, (struct nvme_command *)&ppa_cmd,
                              //NULL, nr_ppas * 0);
 
-        nvm_exdev_dma_pool_free(exdev, ppalist, dma_ppalist);
+        dma_pool_page_free(exdev, ppalist, dma_ppalist);
 free_cmd:
         kfree(ppa_cmd);
 	return ret;
@@ -217,8 +214,8 @@ static void sweepup_disk(struct nvm_exdev *exdev)
 {
         u16 blk;
 
-        for (blk = 0; blk < CFG_NAND_BLOCK_NUM; blk++) {
-                printk("erase raidblk:%04d\n", blk);
+	for_each_blk_reverse(blk) {
+                printk("erase blk:%04d\n", blk);
                 erase_rblk_wait(exdev, blk);
         }
 }
@@ -254,7 +251,7 @@ static void fscftl_bbt_discovery(struct nvm_exdev *exdev)
 		goto free_data_dma;
 	}
 
-	for (blk = 0; blk < CFG_NAND_BLOCK_NUM; blk++) {
+	for_each_blk_reverse(blk) {
 		init_completion(&bbt_completion);
 
 		//printk("bbt discovery raidblk:%d\n", blk);
@@ -270,8 +267,8 @@ static void fscftl_bbt_discovery(struct nvm_exdev *exdev)
 		rblk_bbt_check_available(blk);
 	}
 
-	printk("totalblk:%d/ goodblk:%d/ badblk:%d\n", 
-			CFG_NAND_BLOCK_NUM, good_rblk_cnt, bad_rblk_cnt);
+	printk("totalblk:%04d/ goodblk:%04d/ badblk:%04d\n", 
+		CFG_NAND_BLOCK_NUM, good_rblk_cnt, bad_rblk_cnt);
 
 	dma_free_coherent(dmadev, metalen, metabuf, metadma);
 free_data_dma:
