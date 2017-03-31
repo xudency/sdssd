@@ -248,6 +248,9 @@ static void fscftl_bbt_discovery(struct nvm_exdev *exdev)
 	}
 
 	for_each_blk_reverse(blk) {
+		if (blk == 0)	// Reserved blk0 as Boot Blk
+			continue;
+		
 		init_completion(&bbt_completion);
 
 		//printk("bbt discovery raidblk:%d\n", blk);
@@ -281,7 +284,7 @@ int do_manufactory_init(struct nvm_exdev * exdev)
 
 	// Now all systbl is clean, don't need Flush down
 	bootblk_flush_bbt();
-	bootblk_flush_primary_page(POWER_DOWN_UNSAFE);
+	bootblk_flush_meta_page(POWER_DOWN_UNSAFE);
 
 	printk("complete %s\n", __FUNCTION__);
 

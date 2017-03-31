@@ -8,7 +8,6 @@
 #include "../writecache/wcb-mngr.h"
 
 static struct workqueue_struct *requeue_bios_wq;
-struct task_struct *bios_rewr_thread;
 struct completion lun_completion;
 
 
@@ -361,8 +360,8 @@ int fscftl_writer_init(struct nvm_exdev *exdev)
 
 	init_completion(&lun_completion);
 
-	bios_rewr_thread = kthread_create(fscftl_rewr_kthread, exdev, "fscftl-rewr");
-	wake_up_process(bios_rewr_thread);
+	exdev->bios_rewr_thread = kthread_create(fscftl_rewr_kthread, exdev, "fscftl-rewr");
+	wake_up_process(exdev->bios_rewr_thread);
 
 	exdev->writer_thread = kthread_create(fscftl_write_kthread, exdev, "fscftl-writer");
 	wake_up_process(exdev->writer_thread);
@@ -380,9 +379,9 @@ void fscftl_writer_exit(struct nvm_exdev *exdev)
 	//del_timer(&exdev->cqe_timer);
 	if (exdev->writer_thread)
 		kthread_stop(exdev->writer_thread);
-	if (bios_rewr_thread) {
+	if (exdev->bios_rewr_thread) {
 		complete(&lun_completion);
-		kthread_stop(bios_rewr_thread);
+		kthread_stop(exdev->bios_rewr_thread);
 	}
 
 	destroy_workqueue(requeue_bios_wq);

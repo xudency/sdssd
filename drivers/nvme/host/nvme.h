@@ -474,7 +474,8 @@ struct nvm_exdev {
         struct nvme_ppa_ops *ops;
         struct pci_dev   *pdev;
         struct dma_pool *dmapoll;
-        struct task_struct *writer_thread;
+        struct task_struct *writer_thread;   //fullfifo submit request to HW
+        struct task_struct *bios_rewr_thread; // pending wr bios
         struct timer_list cqe_timer;
         struct work_struct requeue_ws;	
         struct work_struct yirq;   // simulation irq

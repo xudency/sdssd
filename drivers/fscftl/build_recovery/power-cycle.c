@@ -34,7 +34,7 @@ void flush_down_systbl(void)
 	// 8 padding page of dummy data to stable the User data
 
 	bootblk_flush_bbt();
-	bootblk_flush_primary_page(POWER_DOWN_SAFE);
+	bootblk_flush_meta_page(POWER_DOWN_SAFE);
 
 	printk("complete %s\n", __FUNCTION__);
 
@@ -49,7 +49,7 @@ int try_recovery_systbl(void)
 
 	printk("start %s\n", __FUNCTION__);
 
-	result = bootblk_recovery_primary_page();
+	result = bootblk_recovery_meta_page();
 	if (unlikely(result)) {
 		printk("Don't find primary page in bootblk\n");
 		printk("do your sure you has did manufactory?\n");
@@ -68,7 +68,7 @@ int try_recovery_systbl(void)
 	}
 
 	bootblk_flush_bbt();
-	bootblk_flush_primary_page(POWER_DOWN_UNSAFE);
+	bootblk_flush_meta_page(POWER_DOWN_UNSAFE);
 
 	printk("complete %s\n", __FUNCTION__);
 
