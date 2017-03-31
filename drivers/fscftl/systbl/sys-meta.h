@@ -28,14 +28,17 @@
 #define EXTEND_LBA_BASE    (MAX_USER_LBA + 1)
 #define EXTEND_LBA_BMITBL  (EXTEND_LBA_BASE)
 #define EXTEND_LBA_VPCTBL  (EXTEND_LBA_BMITBL+BMITBL_SEC_NUM)
-#define EXTEND_LBA_L1TBL   (EXTEND_LBA_VPCTBL+VPCTBL_SEC_NUM) //
+#define EXTEND_LBA_L1TBL   (EXTEND_LBA_VPCTBL+VPCTBL_SEC_NUM)
 //#define XXX  (EXTEND_LBA_L1TBL + L1TBL_SEC_NUM)
 
 //#define EXTEND_LBA_END	   ()
 
-
-// PAGE
 #define INVALID_PAGE     0xffffffff
+
+
+extern struct sys_status_tbl *statetbl;
+extern struct bmi_item *bmitbl;
+extern u32 *vpctbl;   // prevent by l2plock
 
 
 enum raidblk_status {
@@ -75,9 +78,12 @@ enum {
 	BADB,
 };
 
-extern struct sys_status_tbl *statetbl;
-extern struct bmi_item *bmitbl;
-extern u32 *vpctbl;   // prevent by l2plock
+static inline struct bmi_item *get_bmi_item(u16 blk)
+{
+	BUG_ON(blk >= CFG_NAND_BLOCK_NUM);
+	
+	return bmitbl + blk;
+}
 
 void mark_bbt_tbl(u32 blk, u32 lun, u32 ch, bool status);
 

@@ -17,7 +17,7 @@ u32 *vpctbl;   // prevent by l2plock
 // Move to systbl/
 void mark_bbt_tbl(u32 blk, u32 lun, u32 ch, bool status)
 {
-	struct bmi_item *bmi = bmitbl + blk;
+	struct bmi_item *bmi = get_bmi_item(blk);
 
 	if (status == BADB)
 		bmi->bbt[lun] |= (1<<ch);

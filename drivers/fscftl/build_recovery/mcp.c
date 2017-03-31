@@ -1,10 +1,14 @@
 #include "power.h"
 #include "../fscftl.h"
 #include "../datapath/ppa-ops.h"
+#include "../utils/utils.h"
 
 static struct completion bbt_completion;
 static atomic_t bbt_issu_cnt = ATOMIC_INIT(0);
 static atomic_t bbt_cmpl_cnt = ATOMIC_INIT(0);
+
+static int good_rblk_cnt = 0;
+static int bad_rblk_cnt = 0;
 
 // How identify a badblock, pls reference NandFlash datasheet
 static void rdpparaw_completion(struct request *req, int error)
@@ -18,7 +22,7 @@ static void rdpparaw_completion(struct request *req, int error)
 
 	/* if any one plane is bb, we regard all these planes all bb */
 	for (i = 0; i < CFG_NAND_PLANE_NUM; i++) {
-		u8 *databuf = (u8 *)(ppa_iod->vaddr_data + i * EXP_PPA_SIZE);
+		u8 *databuf = (u8 *)(ppa_iod->vaddr_data + (i*EXP_PPA_SIZE));
 		if (databuf[offt] != 0xff) {
 			geo_ppa ppa;
 			// add sanity check
@@ -66,8 +70,10 @@ int discovery_bbt_rdpparaw(struct nvm_exdev *exdev, geo_ppa ppa,
 	
 	for (i = 0; i < nr_ppas; i++) {
 		ppa.nand.pl = i;
-		ppalist[i++] = ppa.ppa;
+		ppalist[i] = ppa.ppa;
 	}
+
+	WARN_ON(i != nr_ppas);
 
 	ppa_iod->dev = exdev;
 	ppa_iod->vaddr_ppalist = ppalist;
@@ -83,6 +89,8 @@ int discovery_bbt_rdpparaw(struct nvm_exdev *exdev, geo_ppa ppa,
 
 	nvme_submit_ppa_cmd(exdev, ppa_cmd, databuf, EXP_PPA_SIZE*nr_ppas, 
 			    rdpparaw_completion, ppa_iod);
+	
+	atomic_inc(&bbt_issu_cnt);
 
 	return 0;
 
@@ -92,7 +100,7 @@ free_cmd:
 }
 
 // Micron page=0 ep=3
-void bbt_rblk_discovery(struct nvm_exdev * exdev, u16 blk, 
+void rblk_bbt_discovery(struct nvm_exdev * exdev, u16 blk, 
 			void *gdatabuf, dma_addr_t gmetadma)
 {
 	u16 ch, lun;
@@ -104,16 +112,50 @@ void bbt_rblk_discovery(struct nvm_exdev * exdev, u16 blk,
 			geo_ppa ppa;
 			set_ppa_nand_addr(&ppa, ch, 3, 0, lun, 0, blk);
 
-			// travsal pl inside
-			databuf = (void *)((unsigned long)gdatabuf + (ch + lun*CFG_NAND_CHANNEL_NUM)*(CFG_NAND_PLANE_NUM*EXP_PPA_SIZE));
-
-			metadma = gmetadma + (ch + lun*CFG_NAND_CHANNEL_NUM)*(CFG_NAND_PLANE_NUM*NAND_RAW_SIZE);
-
-			discovery_bbt_rdpparaw(exdev, ppa, databuf, metadma);
+			// rdpparaw will read conver all PLNUM ppas
+			databuf = (void *)((uintptr_t)gdatabuf + \
+					   (ch + lun*CFG_NAND_CHANNEL_NUM)*\
+					   (CFG_NAND_PLANE_NUM*EXP_PPA_SIZE));
 			
-			atomic_inc(&bbt_issu_cnt);
+			metadma = gmetadma + \
+				  (ch + lun*CFG_NAND_CHANNEL_NUM)*\
+				  (CFG_NAND_PLANE_NUM*NAND_RAW_SIZE);
+
+			//printk("lun:%d ch:%d databuf:0x%lx metadma:0x%lx\n", 
+					//lun, ch, (uintptr_t)databuf, metadma);
+
+			discovery_bbt_rdpparaw(exdev, ppa, databuf, metadma);			
 		}
 	}	
+}
+
+/*
+ * a raidblk bbt has get and setted in bmi->bbt
+ * whether insert this raidblk to free_list
+ */
+void rblk_bbt_check_available(u16 blk)
+{
+	u16 ch, lun;
+	struct bmi_item *bmi = get_bmi_item(blk);
+
+	for (lun = 0; lun < CFG_NAND_LUN_NUM; lun++) {
+		u16 bb_ch = 0;
+		u16 bb = bmi->bbt[lun];
+
+		for (ch = 0; ch < 16; ch++) {
+			if (BIT_TEST(bb, ch))
+				bb_ch++;
+
+			if (bb_ch > 12) {
+				printk("kick raidblk:%04d out\n", blk);
+				bad_rblk_cnt++;
+				return;
+			}
+		}
+	}
+
+	printk("add raidblk:%04d to free_list\n", blk);
+	good_rblk_cnt++;
 }
 
 // erase one raidblk
@@ -132,11 +174,12 @@ int erase_rblk_wait(struct nvm_exdev *exdev, u16 blk)
 	if (!ppa_cmd)
 		return -ENOMEM;
 
-        if (CFG_NAND_PLANE_NUM == 4) {
+        if (CFG_NAND_PLANE_NUM == 4)
                 plmode = NVM_IO_QUAD_ACCESS;
-        } else if (CFG_NAND_PLANE_NUM == 2) {
+        else if (CFG_NAND_PLANE_NUM == 2)
                 plmode = NVM_IO_DUAL_ACCESS;
-        }
+	else
+		plmode = NVM_IO_SNGL_ACCESS;
 
         ppalist = nvm_exdev_dma_pool_alloc(exdev, &dma_ppalist);
         if (!ppalist) {
@@ -174,10 +217,8 @@ static void sweepup_disk(struct nvm_exdev *exdev)
 {
         u16 blk;
 
-	printk("sweepup the whole disk\n");
-
         for (blk = 0; blk < CFG_NAND_BLOCK_NUM; blk++) {
-                printk("erase raidblk:%d\n", blk);
+                printk("erase raidblk:%04d\n", blk);
                 erase_rblk_wait(exdev, blk);
         }
 }
@@ -192,11 +233,13 @@ static void fscftl_bbt_discovery(struct nvm_exdev *exdev)
 	dma_addr_t datadma, metadma;
 	// to store a raidblk bb check data
 	size_t datalen = \
-	    CFG_NAND_CHANNEL_NUM*CFG_NAND_LUN_NUM*CFG_PLANE_NUM*EXP_PPA_SIZE;
+	    CFG_NAND_CHANNEL_NUM*CFG_NAND_LUN_NUM*\
+	    CFG_NAND_PLANE_NUM*EXP_PPA_SIZE;
 	size_t metalen = \
-	    CFG_NAND_CHANNEL_NUM*CFG_NAND_LUN_NUM*CFG_PLANE_NUM*NAND_RAW_SIZE;
+	    CFG_NAND_CHANNEL_NUM*CFG_NAND_LUN_NUM*\
+	    CFG_NAND_PLANE_NUM*NAND_RAW_SIZE;
 
-	BUILD_BUG_ON(datalen > DMA_ALLOC_MAX);	
+	BUILD_BUG_ON(datalen > DMA_ALLOC_MAX);
 	BUILD_BUG_ON(metalen > DMA_ALLOC_MAX);
 	
 	databuf = dma_alloc_coherent(dmadev, datalen, &datadma, GFP_KERNEL);
@@ -211,16 +254,24 @@ static void fscftl_bbt_discovery(struct nvm_exdev *exdev)
 		goto free_data_dma;
 	}
 
-	for (blk = 0; blk < 1; blk++) {  //CFG_NAND_BLOCK_NUM
+	for (blk = 0; blk < CFG_NAND_BLOCK_NUM; blk++) {
 		init_completion(&bbt_completion);
 
-		printk("bbt discovery raidblk:%d\n", blk);
-		bbt_rblk_discovery(exdev, blk, databuf, metadma);
+		//printk("bbt discovery raidblk:%d\n", blk);
+				
+		rblk_bbt_discovery(exdev, blk, databuf, metadma);
 
-		// as request may not enough
-		// so wait a bit prevent nvme_alloc_request failed
+		/* 
+		 * as request may not enough if we squash cmd with nowait
+		 * so It's better to wait, prevent nvme_alloc_request failed
+		 */
 		wait_for_completion(&bbt_completion);
+
+		rblk_bbt_check_available(blk);
 	}
+
+	printk("totalblk:%d/ goodblk:%d/ badblk:%d\n", 
+			CFG_NAND_BLOCK_NUM, good_rblk_cnt, bad_rblk_cnt);
 
 	dma_free_coherent(dmadev, metalen, metabuf, metadma);
 free_data_dma:
@@ -228,17 +279,14 @@ free_data_dma:
 	return;
 }
 
-
 int do_manufactory_init(struct nvm_exdev * exdev)
 {
 	printk("start %s\n", __FUNCTION__);
 
 	sweepup_disk(exdev);
-
-	//fscftl_bbt_discovery(exdev);  //set bootblk bbt && bmi->bb
+	fscftl_bbt_discovery(exdev);
 
 	// Now all systbl is clean, don't need Flush down
-
 	bootblk_flush_bbt();
 	bootblk_flush_primary_page(POWER_DOWN_UNSAFE);
 
@@ -246,3 +294,4 @@ int do_manufactory_init(struct nvm_exdev * exdev)
 
 	return 0;
 }
+
