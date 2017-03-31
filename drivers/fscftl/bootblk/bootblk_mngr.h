@@ -17,6 +17,8 @@
 #define BOOTBLK_BBT_MDW3 0x6d617073
 
 // here the PAGE metapage bbtpage means all EP*PL i.e. 32KB/64KB
+#define BOOTBLK_PORTION_SIZE (CFG_NAND_EP_SIZE*CFG_DRIVE_LINE_NUM)
+
 struct bootblk_bbt_page {
 	u32 magic_dw[NUM_OF_MW_DWORDS];
 	u16 bbt[CFG_NAND_BLOCK_NUM][CFG_NAND_LUN_NUM];
@@ -26,7 +28,9 @@ struct bootblk_meta_page {
 	u32 magic_dw[NUM_OF_MW_DWORDS];
 };
 
-// TODO:: MOve to new file bootblk/bootblk.c bootblk.h
+int bootblk_page_init(void);
+void bootblk_page_exit(void);
+
 int bootblk_recovery_meta_page(void);
 void bootblk_flush_meta_page(enum power_down_flag flag);
 void bootblk_flush_bbt(void);

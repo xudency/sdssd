@@ -45,9 +45,13 @@ int fscftl_setup(struct nvm_exdev *exdev)
 	if (ret)
 		return ret;
 
-	ret = bmitbl_init();
+	ret = bootblk_page_init();
 	if (ret)
 		goto out_free_statetbl;
+
+	ret = bmitbl_init();
+	if (ret)
+		goto out_free_bootpage;
 
         ret = vpctbl_init();
         if (ret)
@@ -75,6 +79,8 @@ out_free_vpctbl:
         vpctbl_exit();
 out_free_bmitbl:
 	bmitbl_exit();
+out_free_bootpage:
+	bootblk_page_exit();
 out_free_statetbl:
 	statetbl_exit();
 	return ret;
@@ -87,6 +93,7 @@ void fscftl_cleanup(struct nvm_exdev *exdev)
 	l2ptbl_exit(exdev);
         vpctbl_exit();
 	bmitbl_exit();	
+	bootblk_page_exit();
 	statetbl_exit();
 
 	return;
