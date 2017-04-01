@@ -146,9 +146,6 @@ static int __init fscftl_module_init(void)
 		if (try_recovery_systbl(exdev))
 	    		goto err_cleanup;
 	}
-
-	//for (blk = CFG_NAND_BLOCK_NUM - 1; blk >= 0; blk--)
-		//insert_blk_to_free_list(blk);
 	
 	prepare_write_context();
 

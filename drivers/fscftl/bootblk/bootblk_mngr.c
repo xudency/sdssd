@@ -5,6 +5,38 @@
 struct bootblk_bbt_page *boot_bbt_page_info;
 struct bootblk_meta_page *boot_meta_page_info;
 
+static bool bootblk_page_mdw_check(void *buf, int cmdtype)
+{
+	struct bootblk_bbt_page *bbtpg = buf;
+	struct bootblk_meta_page *metapg = buf;
+
+	switch (cmdtype) {
+	case FSCFTL_BBTPG_READ:
+		if ((bbtpg->magic_dw[0] == BOOTBLK_BBT_MDW0) && \
+		    (bbtpg->magic_dw[1] == BOOTBLK_BBT_MDW1) && \
+		    (bbtpg->magic_dw[2] == BOOTBLK_BBT_MDW2) && \
+		    (bbtpg->magic_dw[3] == BOOTBLK_BBT_MDW3)) {
+			return true;
+		}
+		
+		return false;
+
+	case FSCFTL_METAPG_READ:				
+		if ((metapg->magic_dw[0] == BOOTBLK_META_MDW0) && \
+		    (metapg->magic_dw[1] == BOOTBLK_META_MDW0) && \
+		    (metapg->magic_dw[2] == BOOTBLK_META_MDW0) && \
+		    (metapg->magic_dw[3] == BOOTBLK_META_MDW0)) {
+			return true;
+		}
+		
+		return false;
+
+	default:
+		TRACE_TAG("Invalid cmdtype:%d", cmdtype);
+		return false;
+	}
+}
+
 int bootblk_page_init(void)
 {
 	int i;
@@ -60,12 +92,12 @@ static void bootblk_flush_completion(struct request *req, int error)
 		ppacmd_to_pdu((struct nvme_ppa_command *)cmd);
 
 	struct nvm_exdev *dev = ppa_iod->dev;
-	int cmdtype = ppa_iod->cmdtype;
+	/*int cmdtype = ppa_iod->cmdtype;
 
 	if (cmdtype == FSCFTL_METAPG_WRITE)
 		TRACE_TAG("metapage lun%d flush complete", ppa_iod->idx);
 	else
-		TRACE_TAG("bbtpage lun%d flush complete", ppa_iod->idx);
+		TRACE_TAG("bbtpage lun%d flush complete", ppa_iod->idx);*/
 
 	// TODO:: when Bootblk jmp channel
 
@@ -76,7 +108,7 @@ static void bootblk_flush_completion(struct request *req, int error)
 	blk_mq_free_request(req);
 }
 
-u8 bootblk_bbt_channel_jmp(u8 last)
+static u8 bootblk_bbt_channel_jmp(u8 last)
 {
 	int i;
 	u8 curr;
@@ -97,7 +129,7 @@ u8 bootblk_bbt_channel_jmp(u8 last)
 	return curr;
 }
 
-geo_ppa bootblk_get_next_bbt_pos(void)
+static geo_ppa bootblk_get_next_bbt_pos(void)
 {
 	bool carry;
 	u8 channel;
@@ -124,7 +156,7 @@ geo_ppa bootblk_get_next_bbt_pos(void)
 	return curpos;
 }
 
-u8 bootblk_meta_channel_jmp(u8 last)
+static u8 bootblk_meta_channel_jmp(u8 last)
 {
 	int i;
 	u8 curr;
@@ -145,7 +177,7 @@ u8 bootblk_meta_channel_jmp(u8 last)
 	return curr;
 }
 
-geo_ppa bootblk_get_next_meta_pos(void)
+static geo_ppa bootblk_get_next_meta_pos(void)
 {
 	bool carry;
 	u8 channel;
@@ -248,7 +280,7 @@ void bootblk_flush_meta_page(struct nvm_exdev *dev, enum power_down_flag flag)
 	TRACE_TAG("on ch:%d page%d", meta_pos.nand.ch, meta_pos.nand.pg);
 }
 
-/* update boot_bbtpage from bmi->bbt then flush the latest bbt info to bootblk */
+/* update boot_bbt_pg from bmi->bbt then flush the latest bbt info to bootblk */
 void bootblk_flush_bbt_page(struct nvm_exdev *dev)
 {
 	int blk, lun;
@@ -270,13 +302,128 @@ void bootblk_flush_bbt_page(struct nvm_exdev *dev)
 	TRACE_TAG("on ch:%d page%d", bbt_pos.nand.ch, bbt_pos.nand.pg);
 }
 
-int bootblk_recovery_meta_page(void)
+// TODO
+static geo_ppa binary_search_meta_page(void)
 {
-	return 0;
+	geo_ppa meta_pos;
+
+	meta_pos.ppa = 0;
+	meta_pos.nand.ch = boot_meta_page_info->meta_ch_iter[0];
+	meta_pos.nand.pg = 1;
+
+	TRACE_TAG("find meta in ch:%d pg:%d", meta_pos.nand.ch, meta_pos.nand.pg);
+
+	return meta_pos;
 }
 
-void bootblk_recovery_bbt_page(void)
+static int bootblk_get_mirror(struct nvm_exdev *dev, int cmdtype, 
+				void *databuf, geo_ppa bootppa)
 {
-	return;
+	int status, i, pl, sec, lun;
+	int ch = bootppa.nand.ch;
+	int pg = bootppa.nand.pg;
+	geo_ppa ppa;
+	u64 *ppalist;
+	void *metabuf;
+	dma_addr_t meta_dma, ppa_dma;
+	int nr_ppas = CFG_DRIVE_LINE_NUM;	
+	u16 ctrl = NVM_IO_DUAL_ACCESS | NVM_IO_SCRAMBLE_ENABLE;
+
+	struct nvme_ppa_command *cmd;
+	cmd = kzalloc(sizeof(struct nvme_ppa_command), GFP_KERNEL);
+	if (!cmd)
+		return -ENOMEM;
+	
+	ppalist = dma_pool_page_zalloc(dev, &ppa_dma);
+	metabuf = dma_pool_page_zalloc(dev, &meta_dma);
+	
+	for_each_lun(lun) {
+		i = 0;
+		memset(ppalist, 0x00, PAGE_SIZE);
+		for_each_pl(pl) {
+			for_each_sec(sec){
+				set_ppa_nand_addr(&ppa, ch, sec, pl, lun, pg, 0);
+				ppalist[i++] = ppa.ppa;
+			}
+		}
+
+		cmd->opcode = NVM_OP_RDPPA;
+		cmd->nsid = dev->bns->ns_id;
+		cmd->nlb = cpu_to_le16(nr_ppas - 1);
+		cmd->control = cpu_to_le16(ctrl);
+		cmd->ppalist = cpu_to_le64(ppa_dma);
+		cmd->metadata = cpu_to_le64(meta_dma);
+
+		memset(databuf, 0x00, BOOTBLK_PORTION_SIZE);
+
+		status = nvme_submit_ppa_cmd_sync(dev, cmd, databuf, 
+						   BOOTBLK_PORTION_SIZE);
+		if (status)
+			continue;
+
+		if (bootblk_page_mdw_check(databuf, cmdtype))
+			break;
+	}
+	
+	dma_pool_page_free(dev, metabuf, meta_dma);	
+	dma_pool_page_free(dev, ppalist, ppa_dma);
+	kfree(cmd);
+
+	if (lun < CFG_NAND_LUN_NUM)
+		return 0;
+	else
+		return -1;
+}
+
+// 0-get success else no correct bbtpage in bootblk
+int bootblk_recovery_bbt_page(struct nvm_exdev *dev)
+{
+	int result = 0;
+	geo_ppa bbt_pos;
+	void *databuf = kzalloc(BOOTBLK_PORTION_SIZE, GFP_KERNEL);
+	if (!databuf) 
+		return -ENOMEM;
+
+	bbt_pos = bootblk_get_bbt_pos();
+
+	WARN_ON(bbt_pos.ppa == INVALID_PAGE);
+
+	result = bootblk_get_mirror(dev, FSCFTL_BBTPG_READ, databuf, bbt_pos);	
+	if (result)
+		TRACE_TAG("Can't Find correct bbtpage in bootblk");
+	else
+		TRACE_TAG("Find correct bbtpage in ch:%d pg:%d", 
+				bbt_pos.nand.ch, bbt_pos.nand.pg);
+	
+	memcpy(boot_bbt_page_info, databuf, BOOTBLK_PORTION_SIZE);
+
+	kfree(databuf);
+	return result;
+}
+
+// 0-get success else no correct bbtpage in bootblk
+int bootblk_recovery_meta_page(struct nvm_exdev *dev)
+{
+	int result = 0;
+	geo_ppa meta_pos;
+	void *databuf = kzalloc(BOOTBLK_PORTION_SIZE, GFP_KERNEL);
+	if (!databuf) 
+		return -ENOMEM;
+
+	meta_pos = binary_search_meta_page();
+
+	WARN_ON(meta_pos.ppa == INVALID_PAGE);
+	
+	result = bootblk_get_mirror(dev, FSCFTL_METAPG_READ, databuf, meta_pos);	
+	if (result)
+		TRACE_TAG("Can't Find correct metapage in bootblk");
+	else
+		TRACE_TAG("Find correct metapage in ch:%d pg:%d", 
+				meta_pos.nand.ch, meta_pos.nand.pg);
+	
+	memcpy(boot_meta_page_info, databuf, BOOTBLK_PORTION_SIZE);
+
+	kfree(databuf);
+	return result;
 }
 

@@ -49,12 +49,13 @@ int try_recovery_systbl(struct nvm_exdev *exdev)
 
 	printk("start %s\n", __FUNCTION__);
 
-	result = bootblk_recovery_meta_page();
-	if (unlikely(result)) {
-		printk("Don't find primary page in bootblk\n");
-		printk("do your sure you has did manufactory?\n");
+	result = bootblk_recovery_meta_page(exdev);
+	if (unlikely(result))
 		return 1;
-	}
+
+	result = bootblk_recovery_bbt_page(exdev);
+	if (unlikely(result))
+		return 1;
 
 	print_pdf(power_flag);
 

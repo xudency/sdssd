@@ -49,9 +49,9 @@ static inline geo_ppa bootblk_get_meta_pos(void)
 int bootblk_page_init(void);
 void bootblk_page_exit(void);
 
-int bootblk_recovery_meta_page(void);
+int bootblk_recovery_meta_page(struct nvm_exdev *dev);
+int bootblk_recovery_bbt_page(struct nvm_exdev *dev);
 void bootblk_flush_meta_page(struct nvm_exdev *dev, enum power_down_flag flag);
 void bootblk_flush_bbt_page(struct nvm_exdev *dev);
-void bootblk_recovery_bbt_page(void);
 
 #endif
