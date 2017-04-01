@@ -283,8 +283,8 @@ int do_manufactory_init(struct nvm_exdev * exdev)
 	fscftl_bbt_discovery(exdev);
 
 	// Now all systbl is clean, don't need Flush down
-	bootblk_flush_bbt(exdev);
-	bootblk_flush_meta_page(POWER_DOWN_UNSAFE);
+	bootblk_flush_bbt_page(exdev);
+	bootblk_flush_meta_page(exdev, POWER_DOWN_UNSAFE);
 
 	printk("complete %s\n", __FUNCTION__);
 

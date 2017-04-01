@@ -33,8 +33,8 @@ void flush_down_systbl(struct nvm_exdev *exdev)
 
 	// 8 padding page of dummy data to stable the User data
 
-	bootblk_flush_bbt(exdev);
-	bootblk_flush_meta_page(POWER_DOWN_SAFE);
+	bootblk_flush_bbt_page(exdev);
+	bootblk_flush_meta_page(exdev, POWER_DOWN_SAFE);
 
 	printk("complete %s\n", __FUNCTION__);
 
@@ -67,8 +67,8 @@ int try_recovery_systbl(struct nvm_exdev *exdev)
 		return 1;
 	}
 
-	bootblk_flush_bbt(exdev);
-	bootblk_flush_meta_page(POWER_DOWN_UNSAFE);
+	bootblk_flush_bbt_page(exdev);
+	bootblk_flush_meta_page(exdev, POWER_DOWN_UNSAFE);
 
 	printk("complete %s\n", __FUNCTION__);
 

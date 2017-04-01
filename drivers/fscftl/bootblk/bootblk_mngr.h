@@ -29,7 +29,9 @@ struct bootblk_bbt_page {
 
 struct bootblk_meta_page {
 	u32 magic_dw[NUM_OF_MW_DWORDS];
+	enum power_down_flag pdf;
 	geo_ppa bbt_page_address;	// current address, ch page
+	geo_ppa meta_page_address;
 	u8 bbt_ch_iter[4];
 	u8 meta_ch_iter[4];
 };
@@ -39,12 +41,17 @@ static inline geo_ppa bootblk_get_bbt_pos(void)
 	return boot_meta_page_info->bbt_page_address;
 }
 
+static inline geo_ppa bootblk_get_meta_pos(void)
+{
+	return boot_meta_page_info->meta_page_address;
+}
+
 int bootblk_page_init(void);
 void bootblk_page_exit(void);
 
 int bootblk_recovery_meta_page(void);
-void bootblk_flush_meta_page(enum power_down_flag flag);
-void bootblk_flush_bbt(struct nvm_exdev *dev);
-void bootblk_recovery_bbt(void);
+void bootblk_flush_meta_page(struct nvm_exdev *dev, enum power_down_flag flag);
+void bootblk_flush_bbt_page(struct nvm_exdev *dev);
+void bootblk_recovery_bbt_page(void);
 
 #endif

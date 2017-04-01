@@ -26,6 +26,17 @@ enum {
 	NVM_OP_RDRAW		= 0x96,
 };
 
+enum {
+	FSCFTL_HOST_WRITE,	
+	FSCFTL_HOST_READ,
+	FSCFTL_GC_WRITE,
+	FSCFTL_GC_READ,
+	FSCFTL_METAPG_WRITE,
+	FSCFTL_METAPG_READ,
+	FSCFTL_BBTPG_WRITE,
+	FSCFTL_BBTPG_READ,
+};
+
 // ppa sqe
 struct nvme_ppa_command {
 	__u8			opcode;
@@ -56,6 +67,7 @@ struct nvme_ppa_iod {
 	u64 *vaddr_ppalist;
 	dma_addr_t dma_ppalist;
 	int idx;   // which line or which ch
+	int cmdtype;
 };
 
 static inline sector_t get_bio_slba(struct bio *bio)
