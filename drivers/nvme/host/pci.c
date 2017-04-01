@@ -1841,11 +1841,14 @@ static const struct nvme_ctrl_ops nvme_pci_ctrl_ops = {
 static int nvme_dev_map(struct nvme_dev *dev)
 {
 	struct pci_dev *pdev = to_pci_dev(dev->dev);
+	u32 barlen = pci_resource_len(pdev, 0);
 
 	if (pci_request_mem_regions(pdev, "nvme"))
 		return -ENODEV;
 
-	dev->bar = ioremap(pci_resource_start(pdev, 0), 8192);
+	printk("NVMe Controller Bar length:0x%x\n", barlen);
+
+	dev->bar = ioremap(pci_resource_start(pdev, 0), barlen);
 	if (!dev->bar)
 		goto release;
 
@@ -1860,7 +1863,7 @@ static int nvme_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	int node, result = -ENOMEM;
 	struct nvme_dev *dev;
 
-	printk("Controller Class code:0x%08x\n", id->class);
+	printk("NVMe Controller Class code:0x%08x\n", id->class);
 
 	node = dev_to_node(&pdev->dev);
 	if (node == NUMA_NO_NODE)

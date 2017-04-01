@@ -129,7 +129,7 @@ static int __init fscftl_module_init(void)
 
 	exdev->ops = &exdev_ppa_ops;
 
-	ctrl_reg_setup(exdev->ctrl);
+	ctrl_register_config(exdev->ctrl);
 
 	ret = nvm_exdev_setup_pool(exdev, "prp-ppa-list");
 	if (ret) 
