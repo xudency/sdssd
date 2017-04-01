@@ -2,7 +2,7 @@
 #define _FSCFTL_UTILIS_H_
 
 #define TRACE_TAG(fmt, arg...) \
-	printk("%s-%d"fmt"\n", __FUNCTION__, __LINE__, ##arg)
+	printk("%s-%d "fmt"\n", __FUNCTION__, __LINE__, ##arg)
 
 
 #define BIT_TEST(f, bitnum)   			(0 != ((f)&(1<<bitnum)))
@@ -13,6 +13,9 @@
 
 #define for_each_ch(ch) \
 	for(ch= 0; ch < CFG_NAND_CHANNEL_NUM; ch++)
+
+#define for_each_sec(sec) \
+		for(sec= 0; sec < CFG_NAND_EP_NUM; sec++)
 		
 #define for_each_pl(pl) \
 	for(pl= 0; pl < CFG_NAND_PLANE_NUM; pl++)

@@ -1,7 +1,7 @@
 #include "power.h"
 #include "../bootblk/bootblk_mngr.h"
 
-int rebuild_systbl(void)
+int rebuild_systbl(struct nvm_exdev *exdev)
 {
 	printk("start %s\n", __FUNCTION__);
 
@@ -19,7 +19,7 @@ int rebuild_systbl(void)
 	return 0;
 }
 
-void flush_down_systbl(void)
+void flush_down_systbl(struct nvm_exdev *exdev)
 {
 	printk("start %s\n", __FUNCTION__);
 
@@ -33,7 +33,7 @@ void flush_down_systbl(void)
 
 	// 8 padding page of dummy data to stable the User data
 
-	bootblk_flush_bbt();
+	bootblk_flush_bbt(exdev);
 	bootblk_flush_meta_page(POWER_DOWN_SAFE);
 
 	printk("complete %s\n", __FUNCTION__);
@@ -42,7 +42,7 @@ void flush_down_systbl(void)
 }
 
 // return 0: rebuild systbl success, or rebuild fail
-int try_recovery_systbl(void)
+int try_recovery_systbl(struct nvm_exdev *exdev)
 {
 	int result;
 	enum power_down_flag power_flag = POWER_DOWN_SAFE;
@@ -59,15 +59,15 @@ int try_recovery_systbl(void)
 	print_pdf(power_flag);
 
 	if (power_flag == POWER_DOWN_SAFE) {
-		result = rebuild_systbl();
+		result = rebuild_systbl(exdev);
 	} else if (power_flag == POWER_DOWN_UNSAFE) {
-		result = crash_recovery();
+		result = crash_recovery(exdev);
 	} else {
 		printk("primary page power_flag:%d invalid\n", power_flag);
 		return 1;
 	}
 
-	bootblk_flush_bbt();
+	bootblk_flush_bbt(exdev);
 	bootblk_flush_meta_page(POWER_DOWN_UNSAFE);
 
 	printk("complete %s\n", __FUNCTION__);

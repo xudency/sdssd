@@ -241,8 +241,8 @@ static void nvme_ppa_sync_completion(struct request *rq, int error)
 }
 
 int nvme_submit_ppa_cmd_sync(struct nvm_exdev *dev, 
-                                       struct nvme_ppa_command *cmd,
-			               void *buffer, unsigned bufflen)
+                             struct nvme_ppa_command *cmd,
+			     void *buffer, unsigned bufflen)
 {
 	int ret = 0;
 	struct request_queue *q = dev->bns->queue;
@@ -267,6 +267,7 @@ int nvme_submit_ppa_cmd_sync(struct nvm_exdev *dev,
 
 	wait_for_completion_io(&wait);
 
+	ret = req->errors;
         //status = req->errors;
 	//result = le64_to_cpu(nvme_req(req)->result.u64);
  out:

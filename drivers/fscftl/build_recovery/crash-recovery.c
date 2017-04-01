@@ -1,6 +1,6 @@
 #include "power.h"
 
-int crash_recovery(void)
+int crash_recovery(struct nvm_exdev * exdev)
 {
 	printk("start %s\n", __FUNCTION__);
 

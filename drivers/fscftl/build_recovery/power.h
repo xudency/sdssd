@@ -18,10 +18,10 @@ static inline void print_pdf(enum power_down_flag flag)
 		printk("POWER_DOWN FLAG Invalid\n");
 }
 
-int crash_recovery(void);
+int crash_recovery(struct nvm_exdev * exdev);
 int do_manufactory_init(struct nvm_exdev * exdev);
-int try_recovery_systbl(void);
-void flush_down_systbl(void);
+int try_recovery_systbl(struct nvm_exdev * exdev);
+void flush_down_systbl(struct nvm_exdev * exdev);
 
 #endif
 

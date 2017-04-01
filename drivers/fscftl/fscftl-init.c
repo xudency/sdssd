@@ -143,7 +143,7 @@ static int __init fscftl_module_init(void)
 		if (do_manufactory_init(exdev))
 	    		goto err_cleanup;
 	} else {
-		if (try_recovery_systbl())
+		if (try_recovery_systbl(exdev))
 	    		goto err_cleanup;
 	}
 
@@ -170,7 +170,7 @@ static void __exit fscftl_module_exit(void)
 	struct nvm_exdev *exdev = nvm_find_exdev(exdev_name);
 
 	nvm_delete_exns(exdev);
-	flush_down_systbl();
+	flush_down_systbl(exdev);
 	fscftl_cleanup(exdev);
 	nvm_exdev_release_pool(exdev);
     

@@ -52,7 +52,8 @@
 #define CFG_NAND_EP_NUM              (1<<EP_BITS)
 #define CFG_NAND_CHANNEL_NUM         16
 #define CFG_NAND_LUN_NUM             8
-#define CFG_NAND_BLOCK_NUM           1048
+//#define CFG_NAND_BLOCK_NUM           1048
+#define CFG_NAND_BLOCK_NUM           128
 #define CFG_NAND_PAGE_NUM            512
 #define CFG_NAND_PLANE_NUM           2
 #define CFG_NAND_PAGE_SIZE           16384

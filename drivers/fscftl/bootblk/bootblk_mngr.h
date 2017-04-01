@@ -19,6 +19,9 @@
 // here the PAGE metapage bbtpage means all EP*PL i.e. 32KB/64KB
 #define BOOTBLK_PORTION_SIZE (CFG_NAND_EP_SIZE*CFG_DRIVE_LINE_NUM)
 
+extern struct bootblk_bbt_page *boot_bbt_page_info;
+extern struct bootblk_meta_page *boot_meta_page_info;
+
 struct bootblk_bbt_page {
 	u32 magic_dw[NUM_OF_MW_DWORDS];
 	u16 bbt[CFG_NAND_BLOCK_NUM][CFG_NAND_LUN_NUM];
@@ -26,14 +29,22 @@ struct bootblk_bbt_page {
 
 struct bootblk_meta_page {
 	u32 magic_dw[NUM_OF_MW_DWORDS];
+	geo_ppa bbt_page_address;	// current address, ch page
+	u8 bbt_ch_iter[4];
+	u8 meta_ch_iter[4];
 };
+
+static inline geo_ppa bootblk_get_bbt_pos(void)
+{
+	return boot_meta_page_info->bbt_page_address;
+}
 
 int bootblk_page_init(void);
 void bootblk_page_exit(void);
 
 int bootblk_recovery_meta_page(void);
 void bootblk_flush_meta_page(enum power_down_flag flag);
-void bootblk_flush_bbt(void);
+void bootblk_flush_bbt(struct nvm_exdev *dev);
 void bootblk_recovery_bbt(void);
 
 #endif
