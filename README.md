@@ -5,8 +5,14 @@ NVMe SSD Host-Based(Linux Kernel) FLash Translation Layer
 base CNEXLabs WestLake controller and NVM++ PPA command set   
 
 the controller need provide physical page address(PPA) interace to Host          
-we use CNEXLabs Vendor specified command:PPA command to manage NandFlash    
-wrppa rdppa ersppa wrpparaw rdpparaw    
+we use CNEXLabs Vendor specified PPA command to manage NandFlash    
+these ppa command is needed for io request   
+- wrppa(Write PPA)    
+- rdppa(Read PPA)        
+- ersppa(Erase PPA)   
+- wrpparaw(write raw)        
+- rdpparaw(read raw)   
+
 
 ## Motivation
 FTL is the core component of SSD, It's the determing factor of SSD performance   
@@ -59,7 +65,7 @@ compare device-base and host-based
 **NandFlash**     
 
 
-## Host-based storage stack   
+## Host-based FTL storage stack    
 ++++++++++++++++++++++++++++++++   
 **Page Cache**      
     buffer_head         
