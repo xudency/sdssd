@@ -15,7 +15,7 @@ static void user_passthru_cmd_completion(struct request *rq, int error)
 	complete(waiting);
 }
 
-static int submit_user_passthru_cmd(struct nvm_exdev *dev,
+static int handle_user_ppa_cmd(struct nvm_exdev *dev,
 				struct nvme_ppa_command *cmd,
 				void __user *ubuf, unsigned int bufflen,
 				void __user *meta_buf, unsigned int meta_len,
@@ -150,7 +150,7 @@ static int nvme_submit_user_ppa_cmd(struct nvm_exdev *dev, struct nvme_user_io *
 	c.nlb = cpu_to_le16(vio.nblocks);
         c.dsmgmt = cpu_to_le32(vio.dsmgmt);
 
-	ret = submit_user_passthru_cmd(dev, &c,
+	ret = handle_user_ppa_cmd(dev, &c,
                      (void __user *)(uintptr_t)vio.addr, datalen,
                      (void __user *)(uintptr_t)vio.metadata, metalen,
 		     (void __user *)(uintptr_t)vio.slba, nlb, 0);
