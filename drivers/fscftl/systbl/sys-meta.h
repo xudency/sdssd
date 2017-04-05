@@ -40,6 +40,14 @@ extern struct sys_status_tbl *statetbl;
 extern struct bmi_item *bmitbl;
 extern u32 *vpctbl;   // prevent by l2plock
 
+typedef enum {
+	USR_DATA,
+	DUMMY_DATA,
+	BAD_BLK,
+	XOR_PARITY,
+	FIRST_PAGE,
+	FTL_LOG,
+} PPA_TYPE;
 
 enum raidblk_status {
 	RAID_BLK_FREE,		// in free pool
@@ -86,6 +94,8 @@ static inline struct bmi_item *get_bmi_item(u16 blk)
 }
 
 void mark_bbt_tbl(u32 blk, u32 lun, u32 ch, bool status);
+bool is_ppa_badblock(geo_ppa ppa);
+PPA_TYPE sys_get_ppa_type(geo_ppa ppa);
 
 u32 pull_blk_from_pool(struct fsc_fifo *fifo);
 void push_blk_to_pool(struct fsc_fifo *fifo, u32 blk);

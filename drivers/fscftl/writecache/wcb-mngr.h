@@ -24,15 +24,6 @@ extern void *g_vdata;
 extern dma_addr_t g_dmadata;
 extern struct wcb_lun_gctl *g_wcb_lun_ctl;
 
-typedef enum {
-	USR_DATA,
-	DUMMY_DATA,
-	BAD_BLK,
-	XOR_PARITY,
-	FIRST_PAGE,
-	FTL_LOG,
-} PPA_TYPE;
-
 struct fsc_fifo {
 	u32 head;	
 	u32 tail;

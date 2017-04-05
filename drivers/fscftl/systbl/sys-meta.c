@@ -14,7 +14,6 @@ struct sys_status_tbl *statetbl;
 struct bmi_item *bmitbl;
 u32 *vpctbl;   // prevent by l2plock
 
-// Move to systbl/
 void mark_bbt_tbl(u32 blk, u32 lun, u32 ch, bool status)
 {
 	struct bmi_item *bmi = get_bmi_item(blk);
@@ -23,6 +22,29 @@ void mark_bbt_tbl(u32 blk, u32 lun, u32 ch, bool status)
 		bmi->bbt[lun] |= (1<<ch);
 	else
 		bmi->bbt[lun] &= ~(1<<ch);
+}
+
+bool is_ppa_badblock(geo_ppa ppa)
+{
+	struct bmi_item *bmi = get_bmi_item(ppa.nand.blk);
+	u16 bbt = bmi->bbt[ppa.nand.lun];
+
+	return BIT_TEST(bbt, ppa.nand.ch);
+}
+
+PPA_TYPE sys_get_ppa_type(geo_ppa ppa)
+{
+	// badblock
+	//if (is_ppa_badblock(ppa))
+		//return BAD_BLK;
+	
+	// xor parity
+
+	// firstpage
+
+	// ftllog
+
+	return USR_DATA;
 }
 
 // TODO::

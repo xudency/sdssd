@@ -387,19 +387,6 @@ void fscftl_writer_exit(struct nvm_exdev *exdev)
 	destroy_workqueue(requeue_bios_wq);
 }
 
-PPA_TYPE sys_get_ppa_type(geo_ppa ppa)
-{
-	// lookup BMI->bb
-
-	// xor last ch
-
-	// ep pl ln pg=0
-
-	// 255 511 pg ep=3
-
-	return USR_DATA;
-}
-
 bool wcb_available(int nr_ppas)
 {
 	u16 left;
@@ -423,27 +410,27 @@ int alloc_wcb_core(sector_t slba, u32 nr_ppas, struct wcb_bio_ctx *wcb_resource)
 	int num = 0;
 	geo_ppa curppa;
 	u32 left_len = nr_ppas;
-	struct wcb_lun_entity *cur_lun_entity = partial_wcb_lun_entity();
+	struct wcb_lun_entity *entity = partial_wcb_lun_entity();
 
-	wcb_resource->bio_wcb[num].entitys = cur_lun_entity;	
-	wcb_resource->bio_wcb[num].start_pos = cur_lun_entity->pos;	
-	wcb_resource->bio_wcb[num].end_pos = cur_lun_entity->pos;
+	wcb_resource->bio_wcb[num].entitys = entity;	
+	wcb_resource->bio_wcb[num].start_pos = entity->pos;	
+	wcb_resource->bio_wcb[num].end_pos = entity->pos;
 	
-	curppa.ppa = cur_lun_entity->baddr.ppa + cur_lun_entity->pos;
+	curppa.ppa = entity->baddr.ppa + entity->pos;
 
 	while (loop) 
 	{
 		switch (sys_get_ppa_type(curppa)) {
 		case USR_DATA:
 			left_len--;
-			cur_lun_entity->lba[cur_lun_entity->pos] = slba++;
-			cur_lun_entity->ppa[cur_lun_entity->pos] = curppa.ppa;
-			wcb_resource->bio_wcb[num].end_pos = cur_lun_entity->pos;
-			cur_lun_entity->pos++;
+			entity->lba[entity->pos] = slba++;
+			entity->ppa[entity->pos] = curppa.ppa;
+			wcb_resource->bio_wcb[num].end_pos = entity->pos;
+			entity->pos++;
 
-			if (cur_lun_entity->pos == RAID_LUN_SEC_NUM) {	
-				cur_lun_entity = get_next_lun_entity(curppa);
-				if (!cur_lun_entity) // Never failed
+			if (entity->pos == RAID_LUN_SEC_NUM) {	
+				entity = get_next_lun_entity(curppa);
+				if (!entity) // Never failed
 					return -1;
 
 				if (left_len == 0) {
@@ -452,11 +439,11 @@ int alloc_wcb_core(sector_t slba, u32 nr_ppas, struct wcb_bio_ctx *wcb_resource)
 				}
 				
 				num++;
-				wcb_resource->bio_wcb[num].entitys = cur_lun_entity;
-				wcb_resource->bio_wcb[num].start_pos = cur_lun_entity->pos;
-				wcb_resource->bio_wcb[num].end_pos = cur_lun_entity->pos;
+				wcb_resource->bio_wcb[num].entitys = entity;
+				wcb_resource->bio_wcb[num].start_pos = entity->pos;
+				wcb_resource->bio_wcb[num].end_pos = entity->pos;
 
-				curppa = cur_lun_entity->baddr;
+				curppa = entity->baddr;
 			} else {
                                 curppa.ppa++;
 			}
