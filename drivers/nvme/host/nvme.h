@@ -20,6 +20,7 @@
 #include <linux/blk-mq.h>
 #include <linux/lightnvm.h>
 #include <linux/sed-opal.h>
+#include <linux/miscdevice.h>
 
 //#ifndef CONFIG_NVM
 //#define CONFIG_NVM
@@ -464,11 +465,14 @@ void nvme_core_exit(void);
 // represent a ExposeSSD device
 struct nvm_exdev {
         struct list_head devices;    /* all nvm_exdev linked in nvm_exdev_list */	
-        u32 magic_dw;
+        u32 magic_dw;	
+	struct miscdevice miscdev;     /* BackEnd Device */
+	char miscname[DISK_NAME_LEN];  /* Miscdev name */
         int node;
         char bdiskname[DISK_NAME_LEN];
-        void *private_data;			/* Expose device nvme0n1_exp1 */
-        struct nvme_ns *bns;    	/* underlying device nvme0n1 */
+        void *private_data;		/* Expose device nvm_exns*/
+	struct kref kref;
+	struct nvme_ns *bns;    	/* underlying device nvme0n1 */
         struct nvme_dev  *ndev;
         struct nvme_ctrl *ctrl;
         struct nvme_ppa_ops *ops;

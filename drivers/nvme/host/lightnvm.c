@@ -1322,7 +1322,6 @@ next:
 void nvm_check_write_cmd_correct(void *data) {}
 #endif
 
-
 ////////////////////expose ppa nvme ssd extend/////////////////////
 ////////////////////drivers/nvme/host/exppa.c//////////////////////
 static LIST_HEAD(nvm_exdev_list);
@@ -1330,27 +1329,28 @@ static DECLARE_RWSEM(nvm_exdev_lock);
 
 int nvm_exdev_register(struct nvme_ctrl *ctrl, struct nvme_ns *ns, char *disk_name)
 {
-    int node;
-    struct nvm_exdev *exdev;
-    struct nvme_dev *ndev;
-    struct pci_dev *pdev;
-        
+	int node;
+	struct nvm_exdev *exdev;
+	struct nvme_dev *ndev;
+	struct pci_dev *pdev;
+
 	node = dev_to_node(ctrl->dev);
-    ndev = to_nvme_dev(ctrl);
-    pdev = to_pci_dev(ndev->dev);
+	ndev = to_nvme_dev(ctrl);
+	pdev = to_pci_dev(ndev->dev);
 
 	exdev = kzalloc_node(sizeof(struct nvm_exdev), GFP_KERNEL, node);
-    if (!exdev)
-        return -ENOMEM;
+	if (!exdev)
+		return -ENOMEM;
 
-    exdev->magic_dw = 0xdc28c124;   //FSCFTL Mark
-    exdev->node = node;
-    exdev->ndev = ndev;
-    exdev->ctrl = ctrl;
+	exdev->magic_dw = 0xdc28c124;   //FSCFTL Mark
+	exdev->node = node;
+	exdev->ndev = ndev;
+	exdev->ctrl = ctrl;
 	exdev->bns = ns;
-    exdev->pdev = pdev;
+	exdev->pdev = pdev;
 	memcpy(exdev->bdiskname, disk_name, DISK_NAME_LEN);
 
+	kref_init(&exdev->kref);
 	//INIT_LIST_HEAD(&exdev->exns);
 	idr_init(&exdev->nsid_idr);
 	//mutex_init(&exdev->nslist_mutex);
@@ -1361,12 +1361,12 @@ int nvm_exdev_register(struct nvme_ctrl *ctrl, struct nvme_ns *ns, char *disk_na
 
 	printk("ExposeSSD support, Register base bdevice:%s\n", exdev->bdiskname);
 
-    return 0;
+	return 0;
 }
 
 void nvm_exdev_unregister(struct nvme_ctrl *ctrl)
 {
-    struct nvm_exdev *exdev = to_nvm_exdev(ctrl);
+	struct nvm_exdev *exdev = to_nvm_exdev(ctrl);
 
 	down_write(&nvm_exdev_lock);
 	list_del(&exdev->devices);
@@ -1376,7 +1376,7 @@ void nvm_exdev_unregister(struct nvme_ctrl *ctrl)
 
 	idr_destroy(&exdev->nsid_idr);
 
-    kfree(exdev);
+	kfree(exdev);
 }
 
 struct nvm_exdev *nvm_find_exdev(const char *name)
@@ -1387,7 +1387,7 @@ struct nvm_exdev *nvm_find_exdev(const char *name)
 		if (!strcmp(name, dev->bdiskname))
 			return dev;
 
-    printk("Can't find Expose ppa NVMe device:%s", name);
+	printk("Can't find Expose ppa NVMe device:%s", name);
 	return NULL;
 }
 EXPORT_SYMBOL(nvm_find_exdev);
