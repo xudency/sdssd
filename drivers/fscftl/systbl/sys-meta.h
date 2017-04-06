@@ -4,6 +4,10 @@
 #include "../fscftl.h"
 #include "../writecache/wcb-mngr.h"
 
+extern struct sys_status_tbl *statetbl;
+extern struct bmi_item *bmitbl;
+extern u32 *vpctbl;   // prevent by l2plock
+
 /* Bootblk+SYSTBL+BB+GC+SpecialPPA(XOR FistPage Ftllog) */
 //#define OP_CAPACITY		(CAPACITY - USER_CAPACITY)
 /* User data Byte */
@@ -35,17 +39,20 @@
 
 #define INVALID_PAGE     0xffffffff
 
-
-extern struct sys_status_tbl *statetbl;
-extern struct bmi_item *bmitbl;
-extern u32 *vpctbl;   // prevent by l2plock
+// special LBA
+#define BADBLOCK_PAGE	0xffffffff
+#define PRGFAIL_PAGE    0xfffffffe
+#define DUMMY_PAGE      0xfffffffd
+#define FIRST_PAGE   	0xfffffffc
+#define FTLLOG_PAGE     0xfffffffb
+#define XOR1DX_PAGE     0xfffffffa
 
 typedef enum {
 	USR_DATA,
 	DUMMY_DATA,
 	BAD_BLK,
 	XOR_PARITY,
-	FIRST_PAGE,
+	FIRST_LOG,
 	FTL_LOG,
 } PPA_TYPE;
 

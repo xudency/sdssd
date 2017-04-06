@@ -133,16 +133,12 @@ struct wcb_lun_entity *get_next_lun_entity(geo_ppa curppa)
 {
 	struct wcb_lun_entity *lun_entity;
 
-	//und Robin
+	//Round Robin
 	/*lun_entity = g_wcb_lun_ctl->lun_entitys + \
 			//((g_wcb_lun_ctl->entitynum++) % CB_ENTITYS_CNT);*/
 
 	lun_entity = pull_lun_entity_from_fifo(&g_wcb_lun_ctl->empty_lun);
 	if (lun_entity == NULL) {
-		// Never Run here, we should keep a eye beforehand
-		// to prevent run here
-		// FIXME
-		printk("Can't get_next_lun_entity\n");
 		g_wcb_lun_ctl->partial_entity = NULL;
 		print_lun_entitys_fifo();
 		return NULL;
@@ -151,6 +147,7 @@ struct wcb_lun_entity *get_next_lun_entity(geo_ppa curppa)
 	lun_entity->baddr = get_next_entity_baddr(curppa);
 	lun_entity->pos = 0;
 	lun_entity->cqe_flag = 0;
+	atomic_set(&lun_entity->fill_cnt, 0);
 
 	g_wcb_lun_ctl->partial_entity = lun_entity;
 

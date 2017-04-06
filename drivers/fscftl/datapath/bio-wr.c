@@ -264,7 +264,8 @@ int fscftl_write_kthread(void *data)
 
 int process_write_bio(struct request_queue *q, struct bio *bio)
 {
-	unsigned long flags;	
+	int ret;
+	unsigned long flags;
 	struct nvm_exns *exns = q->queuedata;
 	struct nvm_exdev *exdev = exns->ndev;
 	struct wcb_bio_ctx wcb_resource;
@@ -273,8 +274,16 @@ int process_write_bio(struct request_queue *q, struct bio *bio)
 
 	memset(&wcb_resource, 0x00, sizeof(wcb_resource));
 
+#if 0
 	spin_lock_irqsave(&g_wcb_lun_ctl->wcb_lock, flags);
+	ret = alloc_wcb_core(slba, nr_ppas, &wcb_resource);
+	spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
+
+	if (ret) 
+		return FSCFTL_BIO_RESUBMIT;
 	
+#else
+	spin_lock_irqsave(&g_wcb_lun_ctl->wcb_lock, flags);
 	if (wcb_available(nr_ppas)) {
 		alloc_wcb_core(slba, nr_ppas, &wcb_resource);
 		spin_unlock_irqrestore(&g_wcb_lun_ctl->wcb_lock, flags);
@@ -288,6 +297,7 @@ int process_write_bio(struct request_queue *q, struct bio *bio)
 
 		return FSCFTL_BIO_RESUBMIT;
 	}
+#endif
 
 	flush_data_to_wcb(exdev, &wcb_resource, bio);
 
@@ -403,6 +413,33 @@ bool wcb_available(int nr_ppas)
 	return true;
 }
 
+void wcb_entity_context_restore(struct wcb_bio_ctx *wcb_resource)
+{
+	int i;
+	struct wcb_ctx *wcb_1ctx;
+	struct wcb_lun_entity *entity = NULL;
+
+	for (i=0; i < MAX_USED_WCB_ENTITYS; i++) {
+		wcb_1ctx = &wcb_resource->bio_wcb[i];
+		entity = wcb_1ctx->entitys;
+		if (!entity) {
+			TRACE_TAG("idx:%d is NULL", i);
+			break;
+		}
+
+		TRACE_TAG("wcb_resource[%d] bpos:%d epos:%d", i, 
+			    wcb_1ctx->start_pos, wcb_1ctx->end_pos);
+
+		if (i == 0) {
+			g_wcb_lun_ctl->partial_entity = entity;
+			entity->pos = wcb_1ctx->start_pos;
+		} else {
+			push_lun_entity_to_fifo(&g_wcb_lun_ctl->empty_lun, entity);
+		}		
+	}
+
+}
+
 // alloc len valid Normal PPA for this coming io
 int alloc_wcb_core(sector_t slba, u32 nr_ppas, struct wcb_bio_ctx *wcb_resource)
 {
@@ -412,8 +449,10 @@ int alloc_wcb_core(sector_t slba, u32 nr_ppas, struct wcb_bio_ctx *wcb_resource)
 	u32 left_len = nr_ppas;
 	struct wcb_lun_entity *entity = partial_wcb_lun_entity();
 
-	wcb_resource->bio_wcb[num].entitys = entity;	
-	wcb_resource->bio_wcb[num].start_pos = entity->pos;	
+	BUG_ON(entity == NULL);
+
+	wcb_resource->bio_wcb[num].entitys = entity;
+	wcb_resource->bio_wcb[num].start_pos = entity->pos;
 	wcb_resource->bio_wcb[num].end_pos = entity->pos;
 	
 	curppa.ppa = entity->baddr.ppa + entity->pos;
@@ -430,8 +469,12 @@ int alloc_wcb_core(sector_t slba, u32 nr_ppas, struct wcb_bio_ctx *wcb_resource)
 
 			if (entity->pos == RAID_LUN_SEC_NUM) {	
 				entity = get_next_lun_entity(curppa);
-				if (!entity) // Never failed
-					return -1;
+				if (!entity) {
+					// context restore
+					printk("wcb not enough, restore\n");
+					wcb_entity_context_restore(wcb_resource);
+					return 1;
+				}
 
 				if (left_len == 0) {
 					loop = 0;
@@ -457,8 +500,27 @@ int alloc_wcb_core(sector_t slba, u32 nr_ppas, struct wcb_bio_ctx *wcb_resource)
 		case DUMMY_DATA:
 			break;
 
-		case BAD_BLK:
-			break;
+		/*case BAD_BLK:
+			entity->lba[entity->pos] = BADBLOCK_PAGE;
+			entity->ppa[entity->pos] = curppa.ppa;
+			wcb_resource->bio_wcb[num].end_pos = entity->pos;
+			entity->pos++;
+
+			if (entity->pos == RAID_LUN_SEC_NUM) {	
+				entity = get_next_lun_entity(curppa);
+				if (!entity) // Never failed
+					return -1;
+				
+				num++;
+				wcb_resource->bio_wcb[num].entitys = entity;
+				wcb_resource->bio_wcb[num].start_pos = entity->pos;
+				wcb_resource->bio_wcb[num].end_pos = entity->pos;
+
+				curppa = entity->baddr;
+			} else {
+                                curppa.ppa++;
+			}			
+			break;*/
 
 		default:
 			break;

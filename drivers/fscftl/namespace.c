@@ -42,7 +42,7 @@ blk_qc_t fscftl_make_rq(struct request_queue *q, struct bio *bio)
 	spin_unlock(&g_wcb_lun_ctl->biolist_lock);
 
 	// no pending write bio in staging_list, process it right now
-	// try best-effort to guarantee the bio s processed inorder
+	// try best-effort to guarantee the bio is processed inorder
 	ret = process_write_bio(q, bio);
 	if (ret == FSCFTL_BIO_COMPLETE) {
 		bio_endio(bio);

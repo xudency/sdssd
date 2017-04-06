@@ -32,17 +32,28 @@ bool is_ppa_badblock(geo_ppa ppa)
 	return BIT_TEST(bbt, ppa.nand.ch);
 }
 
+bool is_ppa_firstpage(geo_ppa ppa)
+{
+	if ((ppa.nand.sec == 0) &&
+	    (ppa.nand.pl == 0)  &&
+	    (ppa.nand.lun == 0) &&
+	    (ppa.nand.pg == 0))
+	    return true;
+
+	return false;
+}
+
 PPA_TYPE sys_get_ppa_type(geo_ppa ppa)
 {
 	// badblock
 	//if (is_ppa_badblock(ppa))
 		//return BAD_BLK;
 	
-	// xor parity
-
 	// firstpage
 
 	// ftllog
+
+	// xor parity
 
 	return USR_DATA;
 }
