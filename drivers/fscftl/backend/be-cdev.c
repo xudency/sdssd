@@ -158,11 +158,27 @@ static int nvme_submit_user_ppa_cmd(struct nvm_exdev *dev, struct nvme_user_io *
 	return ret;
 }
 
+static int nvme_be_ioctl_test(struct nvm_exdev *dev, struct nvme_user_io *uvio)
+{
+	struct nvme_user_io vio;
+	
+	if (copy_from_user(&vio, uvio, sizeof(vio)))
+		return -EFAULT;
+
+	printk("opcode     :0x%x\n", vio.opcode);
+	printk("nlb        :%d\n", vio.nblocks);
+	printk("control    :0x%x\n", vio.control);
+	printk("dsmgmt     :0x%x\n", vio.dsmgmt);
+
+	return 0;
+}
+
+
 static int backend_dev_open(struct inode *inode, struct file *f)
 {
 	struct nvm_exdev *dev = container_of(f->private_data, \
 					struct nvm_exdev, miscdev);
-	kref_get(&dev->kref);
+	//kref_get(&dev->kref);
 	f->private_data = dev;
 
 	return 0;
@@ -170,9 +186,9 @@ static int backend_dev_open(struct inode *inode, struct file *f)
 
 static int backend_dev_release(struct inode *inode, struct file *f)
 {
-	struct nvm_exdev *dev = f->private_data;
+	//struct nvm_exdev *dev = f->private_data;
 	
-	kref_put(&dev->kref, NULL);
+	//kref_put(&dev->kref, NULL);
 	
 	return 0;
 }
@@ -181,6 +197,9 @@ static long backend_dev_ioctl(struct file *f, unsigned int cmd, unsigned long ar
 {
 	struct nvm_exdev *dev = f->private_data;
 	switch (cmd) {
+	case FSCFTL_IOCTL_SMOKE_TEST:
+		return nvme_be_ioctl_test(dev, (void __user *)arg);
+		
 	case FSCFTL_IOCTL_USER_PPA_CMD:
 		return nvme_submit_user_ppa_cmd(dev, (void __user *)arg);
 	default:

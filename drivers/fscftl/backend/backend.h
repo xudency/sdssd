@@ -3,6 +3,7 @@
 
 #include "../fscftl.h"
 
+#define FSCFTL_IOCTL_SMOKE_TEST      _IOW('M', 0x3d, struct nvme_user_io)
 #define FSCFTL_IOCTL_USER_PPA_CMD    _IOW('M', 0x90, struct nvme_user_io)
 
 int backend_miscdev_create(struct nvm_exdev *dev);

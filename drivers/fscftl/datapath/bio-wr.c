@@ -264,7 +264,7 @@ int fscftl_write_kthread(void *data)
 
 int process_write_bio(struct request_queue *q, struct bio *bio)
 {
-	int ret;
+	//int ret;
 	unsigned long flags;
 	struct nvm_exns *exns = q->queuedata;
 	struct nvm_exdev *exdev = exns->ndev;
