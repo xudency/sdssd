@@ -160,19 +160,26 @@ static int nvme_submit_user_ppa_cmd(struct nvm_exdev *dev, struct nvme_user_io *
 
 static int nvme_be_ioctl_test(struct nvm_exdev *dev, struct nvme_user_io *uvio)
 {
+	int i;
+	u64 ppa_list[MAX_PPA_PER_CMD];
 	struct nvme_user_io vio;
 	
 	if (copy_from_user(&vio, uvio, sizeof(vio)))
 		return -EFAULT;
+
+	if (copy_from_user(ppa_list, (void __user *)vio.slba,
+			sizeof(u64) * (vio.nblocks + 1)))
 
 	printk("opcode     :0x%x\n", vio.opcode);
 	printk("nlb        :%d\n", vio.nblocks);
 	printk("control    :0x%x\n", vio.control);
 	printk("dsmgmt     :0x%x\n", vio.dsmgmt);
 
+	for (i = 0; i <= vio.nblocks; i++)
+		printk("Kernel ppa[%d]=0x%llx\n", i, ppa_list[i]);
+
 	return 0;
 }
-
 
 static int backend_dev_open(struct inode *inode, struct file *f)
 {
