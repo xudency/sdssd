@@ -270,6 +270,9 @@ int nvme_submit_ppa_cmd_sync(struct nvm_exdev *dev,
 	ret = req->errors;
         //status = req->errors;
 	//result = le64_to_cpu(nvme_req(req)->result.u64);
+	//TRACE_TAG("opcode:0x%x  status:0x%x  result.u64:0x%llx", 
+		//cmd->opcode, req->erroe, nvme_req(req)->result.u64);
+	
  out:
 	blk_mq_free_request(req);
 	return ret;

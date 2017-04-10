@@ -23,9 +23,9 @@ static bool bootblk_page_mdw_check(void *buf, int cmdtype)
 
 	case FSCFTL_METAPG_READ:				
 		if ((metapg->magic_dw[0] == BOOTBLK_META_MDW0) && \
-		    (metapg->magic_dw[1] == BOOTBLK_META_MDW0) && \
-		    (metapg->magic_dw[2] == BOOTBLK_META_MDW0) && \
-		    (metapg->magic_dw[3] == BOOTBLK_META_MDW0)) {
+		    (metapg->magic_dw[1] == BOOTBLK_META_MDW1) && \
+		    (metapg->magic_dw[2] == BOOTBLK_META_MDW2) && \
+		    (metapg->magic_dw[3] == BOOTBLK_META_MDW3)) {
 			return true;
 		}
 		
@@ -319,7 +319,7 @@ static geo_ppa binary_search_meta_page(void)
 static int bootblk_get_mirror(struct nvm_exdev *dev, int cmdtype, 
 				void *databuf, geo_ppa bootppa)
 {
-	int status, i, pl, sec, lun;
+	int status = 0, i, pl, sec, lun;
 	int ch = bootppa.nand.ch;
 	int pg = bootppa.nand.pg;
 	geo_ppa ppa;

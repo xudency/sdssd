@@ -11,6 +11,13 @@
 static void user_passthru_cmd_completion(struct request *rq, int error)
 {
 	struct completion *waiting = rq->end_io_data;
+	
+	/*int status = error;
+	u64 result = nvme_req(req)->result.u64;
+
+	if (status) {
+		printk("status:0x%x  result.u64:0x%llx\n", status, error);
+	}*/
 
 	complete(waiting);
 }
@@ -32,7 +39,7 @@ static int handle_user_ppa_cmd(struct nvm_exdev *dev,
 	__le64 *metadata = NULL;
 	dma_addr_t metadata_dma;
 	DECLARE_COMPLETION_ONSTACK(wait);
-	int ret;
+	int ret, status = 0;
 
 	rq = nvme_alloc_request(q, (struct nvme_command *)cmd, 0, NVME_QID_ANY);
 	if (IS_ERR(rq)) {
@@ -57,8 +64,11 @@ static int handle_user_ppa_cmd(struct nvm_exdev *dev,
 			goto err_ppa;
 		}
 		cmd->ppalist = cpu_to_le64(ppa_dma);
+		//for (i = 0; i <=nlb; i++)
+			//printk("ppa[%d]=0x%llx\n", i, ppa_list[i]);
 	} else {
 		cmd->ppalist = cpu_to_le64((uintptr_t)ppa_buf);
+		//printk("ppa=0x%llx\n", cmd->ppalist);
 	}
 
 	if (ubuf && bufflen) {
@@ -100,8 +110,9 @@ submit:
 
 	wait_for_completion_io(&wait);
 
-	printk("status:0x%x  result.u64:0x%llx\n", 
-		rq->errors, nvme_req(rq)->result.u64);
+	status = rq->errors;
+	printk("opcode:0x%x  status:0x%x  result.u64:0x%llx\n", 
+		cmd->opcode, status, nvme_req(rq)->result.u64);
 
 	if (metadata && !ret && !write) {
 		if (copy_to_user(meta_buf, (void *)metadata, meta_len))
@@ -122,7 +133,7 @@ err_ppa:
 err_rq:
 	blk_mq_free_request(rq);
 err_cmd:
-	return ret;
+	return status;
 }
 
 static int nvme_submit_user_ppa_cmd(struct nvm_exdev *dev, struct nvme_user_io *uvio)
