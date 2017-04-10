@@ -100,6 +100,20 @@ static inline struct bmi_item *get_bmi_item(u16 blk)
 	return bmitbl + blk;
 }
 
+static inline void vpc_dec(geo_ppa ppa)
+{
+	BUG_ON(ppa.nand.blk >= CFG_NAND_BLOCK_NUM);
+
+	vpctbl[ppa.nand.blk]--;
+}
+
+static inline void vpc_inc(geo_ppa ppa)
+{
+	BUG_ON(ppa.nand.blk >= CFG_NAND_BLOCK_NUM);
+
+	vpctbl[ppa.nand.blk]++;
+}
+
 void mark_bbt_tbl(u32 blk, u32 lun, u32 ch, bool status);
 bool is_ppa_badblock(geo_ppa ppa);
 PPA_TYPE sys_get_ppa_type(geo_ppa ppa);

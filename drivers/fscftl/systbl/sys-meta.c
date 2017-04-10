@@ -144,7 +144,7 @@ int statetbl_init(void)
 	if (!statetbl)
 		return -ENOMEM;
 
-	fsc_fifo_init(&statetbl->closed_blk_pool);	
+	fsc_fifo_init(&statetbl->closed_blk_pool);
 	fsc_fifo_init(&statetbl->free_blk_pool);
 	fsc_fifo_init(&statetbl->gc_blk_pool);
 

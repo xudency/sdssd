@@ -656,14 +656,18 @@ inline geo_ppa get_l2ptbl_mapping(struct nvm_exdev *dev, u32 lba)
 
 void set_l2ptbl_incache(struct nvm_exdev *dev, u32 lba, u32 ppa)
 {
-	geo_ppa prev, mapping;
-	mapping.ppa = ppa;
-	mapping.cache.in_cache = 1;
+	geo_ppa prev, update;
+	update.ppa = ppa;
+	update.cache.in_cache = 1;
 	
 	if (lba <= MAX_USER_LBA) {
 		prev = get_l2ptbl_mapping(dev, lba);
+
+		if (prev.nand.blk < CFG_NAND_BLOCK_NUM)
+			vpc_dec(prev);
 		
-		dev->l2ptbl[lba] = mapping.ppa;
+		dev->l2ptbl[lba] = update.ppa;
+		vpc_inc(update);
 	} else {
 
 	}
