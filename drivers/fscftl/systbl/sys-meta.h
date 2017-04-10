@@ -4,10 +4,6 @@
 #include "../fscftl.h"
 #include "../writecache/wcb-mngr.h"
 
-extern struct sys_status_tbl *statetbl;
-extern struct bmi_item *bmitbl;
-extern u32 *vpctbl;   // prevent by l2plock
-
 /* Bootblk+SYSTBL+BB+GC+SpecialPPA(XOR FistPage Ftllog) */
 //#define OP_CAPACITY		(CAPACITY - USER_CAPACITY)
 /* User data Byte */
@@ -30,10 +26,11 @@ extern u32 *vpctbl;   // prevent by l2plock
 // LBA zone
 //[0 MAX_USER_LBA] //User zone
 #define EXTEND_LBA_BASE    (MAX_USER_LBA + 1)
-#define EXTEND_LBA_BMITBL  (EXTEND_LBA_BASE)
+#define EXTEND_LBA_UFTL	   (EXTEND_LBA_BASE)
+#define EXTEND_LBA_BMITBL  (EXTEND_LBA_UFTL + USR_FTLTBL_SEC_NUM)
 #define EXTEND_LBA_VPCTBL  (EXTEND_LBA_BMITBL+BMITBL_SEC_NUM)
 #define EXTEND_LBA_L1TBL   (EXTEND_LBA_VPCTBL+VPCTBL_SEC_NUM)
-//#define XXX  (EXTEND_LBA_L1TBL + L1TBL_SEC_NUM)
+#define EXTEND_LBA_RSVD0   (EXTEND_LBA_L1TBL + L1TBL_SEC_NUM)
 
 //#define EXTEND_LBA_END	   ()
 
@@ -61,7 +58,7 @@ enum raidblk_status {
 	RAID_BLK_OPEN,		// partial used, write pointer, atmost has 2 OPEN
 	RAID_BLK_CLOSED,	// all cqe of this raidblk has back
 	RAID_BLK_TOGC,		// in gc_blk_pool, vpc decrease to 0, can be GC
-	RAID_BLK_GCING		// GC this raid blk
+	RAID_BLK_GCING,		// GC this raid blk
 };
 
 // flush to primary page
@@ -92,6 +89,10 @@ enum {
 	GOODB,
 	BADB,
 };
+
+extern struct sys_status_tbl *statetbl;
+extern struct bmi_item *bmitbl;
+extern u32 *vpctbl;   // prevent by l2plock
 
 static inline struct bmi_item *get_bmi_item(u16 blk)
 {
@@ -137,4 +138,3 @@ int l2ptbl_init(struct nvm_exdev *exdev);
 void l2ptbl_exit(struct nvm_exdev *exdev);
 
 #endif
-

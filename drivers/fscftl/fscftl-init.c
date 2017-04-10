@@ -186,6 +186,17 @@ static void __exit fscftl_module_exit(void)
 #if MDULE_TEST
 static int __init fscftl_test_init(void)
 {
+	printk("MAX_USER_LBA:0x%llx  EXTEND_LBA_BASE:0x%llx\n", 
+		MAX_USER_LBA, EXTEND_LBA_BASE);
+	printk("L2Ptbl need PPAs:%lld [0x%llx-0x%llx]\n", 
+		USR_FTLTBL_SEC_NUM, EXTEND_LBA_UFTL, EXTEND_LBA_BMITBL-1);
+	printk("BMItbl need PPAs:%ld [0x%llx-0x%llx]\n", 
+		BMITBL_SEC_NUM, EXTEND_LBA_BMITBL, EXTEND_LBA_VPCTBL-1);
+	printk("VPCtbl need PPAs:%d [0x%llx-0x%llx]\n", 
+		VPCTBL_SEC_NUM, EXTEND_LBA_VPCTBL, EXTEND_LBA_L1TBL-1);
+	printk("L1tbl need PPAs:%lld [0x%llx-0x%llx]\n", 
+		L1TBL_SEC_NUM, EXTEND_LBA_L1TBL, EXTEND_LBA_RSVD0-1);
+
 	return 0;
 }
 static void __exit fscftl_test_exit(void)

@@ -676,7 +676,7 @@ void set_l2ptbl_incache(struct nvm_exdev *dev, u32 lba, u32 ppa)
 }
 
 void set_l2ptbl_write_path(struct nvm_exdev *exdev, 
-						   struct wcb_bio_ctx *wcb_resource)
+			   struct wcb_bio_ctx *wcb_resource)
 {
 	int i;
 	u16 pos, bpos, epos;
