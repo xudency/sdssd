@@ -92,7 +92,7 @@ enum {
 
 extern struct sys_status_tbl *statetbl;
 extern struct bmi_item *bmitbl;
-extern u32 *vpctbl;   // prevent by l2plock
+extern u32 *vpctbl;
 
 static inline struct bmi_item *get_bmi_item(u16 blk)
 {

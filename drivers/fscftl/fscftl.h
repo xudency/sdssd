@@ -4,7 +4,7 @@
 #include "../../include/linux/lightnvm.h"
 #include "../nvme/host/nvme.h"
 #include "hwcfg/cfg/flash_cfg.h"
-#include "bootblk/bootblk_mngr.h"
+#include "bootblk/bootblk-mngr.h"
 #include "systbl/sys-meta.h"
 #include "utils/utils.h"
 

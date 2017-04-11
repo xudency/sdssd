@@ -3,6 +3,20 @@
 
 #include "../build_recovery/power.h"
 #include "../hwcfg/cfg/flash_cfg.h"
+#include "../systbl/sys-meta.h"
+
+/*
+#include "../../nvme/host/nvme.h"
+#include "../fscftl.h"
+#include "../writecache/wcb-mngr.h"
+#include "../hwcfg/cfg/flash_cfg.h"
+#include "../hwcfg/regrw.h"
+#include "../build_recovery/power.h"
+#include "../datapath/ppa-ops.h"
+#include "../writecache/wcb-mngr.h"
+#include "../datapath/bio-datapath.h"
+#include "../utils/utils.h"*/
+
 
 #define NUM_OF_MW_DWORDS 4
 
@@ -16,7 +30,7 @@
 #define BOOTBLK_BBT_MDW2 0x73626974
 #define BOOTBLK_BBT_MDW3 0x6d617073
 
-// here the PAGE metapage bbtpage means all EP*PL i.e. 32KB/64KB
+// here the PAGE metapage bbtpage means all EP*PL i.e. MCR(32KB)/TSB(64KB)
 #define BOOTBLK_PORTION_SIZE (CFG_NAND_EP_SIZE*CFG_DRIVE_LINE_NUM)
 
 struct bootblk_bbt_page {

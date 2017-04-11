@@ -13,31 +13,6 @@
  * 		6.call core io handle fn
  *
  *********************************************************************/
-
-void get_ppa_each_region(geo_ppa *ppa, u8 *ch, u8 *sec, 
-                                u8 *pl, u8 *lun, u16 *pg, u16 *blk) 
-{
-    *ch = ppa->nand.ch;
-    *sec = ppa->nand.sec;
-    *pl = ppa->nand.pl;
-    *lun = ppa->nand.lun;
-    *pg = ppa->nand.pg;
-    *blk = ppa->nand.blk;
-}
-
-
-void set_ppa_nand_addr(geo_ppa *ppa, u8 ch, u8 sec, 
-                            u8 pl, u8 lun, u16 pg, u16 blk)
-{
-	ppa->ppa = 0;
-        ppa->nand.ch  = ch;
-        ppa->nand.sec = sec;
-        ppa->nand.pl  = pl;
-        ppa->nand.lun = lun;
-        ppa->nand.pg  = pg;
-        ppa->nand.blk = blk;
-}
-
 /*
 static void print_ppa_cqe(struct nvme_ppa_command *cmd, u64 result, int status)
 {

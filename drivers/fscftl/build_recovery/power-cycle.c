@@ -1,5 +1,5 @@
 #include "power.h"
-#include "../bootblk/bootblk_mngr.h"
+#include "../bootblk/bootblk-mngr.h"
 
 int rebuild_systbl(struct nvm_exdev *exdev)
 {

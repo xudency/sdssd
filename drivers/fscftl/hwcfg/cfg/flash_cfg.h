@@ -6,8 +6,39 @@
 #include "cfg_2TB_MCL95B.h"
 //#include "cfg_2TB_TH58TFG9DFK.h"
 
-/* the name is too long */
+typedef unsigned char u8;
+typedef unsigned short u16;
+typedef unsigned int u32;
+typedef unsigned long long u64;
+
 typedef struct physical_address geo_ppa;
+
+#define INCRE_BOUNDED(n, bits, carry) { if (++n == (1 << bits)) { n = 0; carry = 1; } else { carry = 0; } }
+#define IF_CARRY_THEN_INCRE_BOUNDED(carry, n, bits) { if (carry) { carry = 0; INCRE_BOUNDED(n, bits, carry); } }
+
+static inline void get_ppa_each_region(geo_ppa *ppa, u8 *ch, u8 *sec, 
+                                       u8 *pl, u8 *lun, u16 *pg, u16 *blk) 
+{
+    *ch = ppa->nand.ch;
+    *sec = ppa->nand.sec;
+    *pl = ppa->nand.pl;
+    *lun = ppa->nand.lun;
+    *pg = ppa->nand.pg;
+    *blk = ppa->nand.blk;
+}
+
+
+static inline void set_ppa_nand_addr(geo_ppa *ppa, u8 ch, u8 sec, 
+                            	      u8 pl, u8 lun, u16 pg, u16 blk)
+{
+	ppa->ppa = 0;
+        ppa->nand.ch  = ch;
+        ppa->nand.sec = sec;
+        ppa->nand.pl  = pl;
+        ppa->nand.lun = lun;
+        ppa->nand.pg  = pg;
+        ppa->nand.blk = blk;
+}
 
 #endif /* FLASH_CFG_H_ */
 

@@ -1,4 +1,4 @@
-#include "bootblk_mngr.h"
+#include "bootblk-mngr.h"
 #include "../fscftl.h"
 #include "../datapath/ppa-ops.h"
 
@@ -84,7 +84,6 @@ void bootblk_page_exit(void)
 	kfree(boot_bbt_page_info);
 }
 
-/* How identify a badblock, pls reference NandFlash datasheet */
 static void bootblk_flush_completion(struct request *req, int error)
 {
 	struct nvme_command *cmd = nvme_req(req)->cmd;
