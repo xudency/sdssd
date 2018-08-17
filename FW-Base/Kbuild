@@ -1,0 +1,7 @@
+kdftl-objs  := ./main/main.o
+
+dftl-y += ./main/main.o
+
+ccflags-y += -g
+
+obj-m := dftl.o

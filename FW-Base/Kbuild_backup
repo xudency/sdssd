@@ -1,0 +1,15 @@
+kdftl-objs  := ./main/main.o
+kdftl-objs  += ./init/init.o
+kdftl-objs  += ./namespace.o
+kdftl-objs  += ./bootblock/bootblk_mgmt.o
+kdftl-objs  += ./ftl/rblock_mgmt.o
+
+dftl-y += ./main/main.o
+dftl-y := ./init/init.o
+dftl-y += ./bootblock/bootblk_mgmt.o
+dftl-y += ./ftl/rblock_mgmt.o
+
+
+ccflags-y += -g
+
+obj-m := dftl.o
