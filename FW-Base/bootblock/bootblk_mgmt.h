@@ -1,7 +1,6 @@
 #ifndef __BOOT_BLK_MGMT__
 #define __BOOT_BLK_MGMT__
 
-#define MW_DWORD_NUM 	  4
 #define BOOT_BLK_COPIES   (CFG_NAND_PL_NUM*CFG_NAND_LUN_NUM)
 #define BOOT_BLK0  		  0
 #define BOOT_BLK1  		  1
@@ -14,6 +13,18 @@
 #define BOOT_LUN_TEMPORY			5		// this is shared by fw-image/bbt/bootloader
 
 #define BOOT_LUN_NUM 		CFG_NAND_LUN_NUM
+
+#define MW_DWORD_NUM 	  4
+
+#define BOOT_BBT_PRIMARY_MDW0 0x6E657875
+#define BOOT_BBT_PRIMARY_MDW1 0x73707269
+#define BOOT_BBT_PRIMARY_MDW2 0x6d617279
+#define BOOT_BBT_PRIMARY_MDW3 0X626F6F74
+
+#define BOOT_BBT_PAGE_MDW0 0x6261646c
+#define BOOT_BBT_PAGE_MDW1 0x6c6f636b
+#define BOOT_BBT_PAGE_MDW2 0x73626974
+#define BOOT_BBT_PAGE_MDW3 0x6d617073
 
 
 typedef enum _POWER_DOWN_STATE {
