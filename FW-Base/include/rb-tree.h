@@ -27,16 +27,17 @@
 
 
 struct rb_node {
-	u16  color;
-	struct rb_node *parent;
-	struct rb_node *right;
-	struct rb_node *left;
+	u16  rb_color;
+	struct rb_node *rb_parent;
+	struct rb_node *rb_right;
+	struct rb_node *rb_left;
 } __attribute__((aligned(sizeof(long))));
 
 typedef struct rb_node rb_node_t;
 
 typedef struct rb_root {
 	struct rb_node *rb_node;
+	u32 count;
 } rb_root_t;
 
 
@@ -59,14 +60,14 @@ typedef struct rb_tree_root {
 
 
 
-#define rb_parent(r)       ((rb_node_t *)((r)->parent))
-#define rb_left_child(r)   ((rb_node_t *)((r)->left))
-#define rb_right_child(r)  ((rb_node_t *)((r)->right))
-#define rb_color(r)        ((r)->color)
-#define rb_is_red(r)       ((r)->color & RB_RED)
-#define rb_is_black(r)     ((r)->color & RB_BLACK)
-#define rb_set_red(r)      ((r)->color = RB_RED)
-#define rb_set_black(r)    ((r)->color = RB_BLACK)
+#define rb_parent(r)       ((rb_node_t *)((r)->rb_parent))
+#define rb_left_child(r)   ((rb_node_t *)((r)->rb_left))
+#define rb_right_child(r)  ((rb_node_t *)((r)->rb_right))
+#define rb_color(r)        ((r)->rb_color)
+#define rb_is_red(r)       ((r)->rb_color & RB_RED)
+#define rb_is_black(r)     ((r)->rb_color & RB_BLACK)
+#define rb_set_red(r)      ((r)->rb_color = RB_RED)
+#define rb_set_black(r)    ((r)->rb_color = RB_BLACK)
 
 #define RB_ROOT (rb_root_t) {RB_NODE_NULL, 0}
 #define RB_NODE (rb_node_t) {RB_RED, RB_NODE_NULL, RB_NODE_NULL, RB_NODE_NULL}
@@ -74,7 +75,7 @@ typedef struct rb_tree_root {
 
 static inline void RB_NODE_INIT(rb_node_t *node)
 {
-	node->left = node->right = node->parent = RB_NODE_NULL;
+	node->rb_left = node->rb_right = node->rb_parent = RB_NODE_NULL;
 }
 
 static inline void RB_ROOT_INIT(rb_root_t *root)
@@ -85,29 +86,29 @@ static inline void RB_ROOT_INIT(rb_root_t *root)
 
 static inline void rb_set_parent(rb_node_t* node, rb_node_t* p) 
 {
-	node->parent = p;
+	node->rb_parent = p;
 }
 
 static inline void rb_set_left(rb_node_t* node, rb_node_t* child) 
 {
-	node->left = child;
+	node->rb_left = child;
 	rb_set_parent(child, node);
 }
 
 static inline void rb_set_right(rb_node_t* node, rb_node_t* child) 
 {
-	node->right = child;
+	node->rb_right = child;
 	rb_set_parent(child, node);
 }
 
 static inline bool rb_is_left(rb_node_t* node, rb_node_t* p) 
 {
-	return p->left == node;
+	return p->rb_left == node;
 }
 
 static inline bool rb_is_right(rb_node_t* node, rb_node_t* p) 
 {
-	return p->right == node;
+	return p->rb_right == node;
 }
 
 

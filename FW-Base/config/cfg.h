@@ -28,7 +28,7 @@ typedef union
 	// ppa format in nand
 	struct
 	{
-		unsigned int ep			: CP_BITS;  	// this is PAGE Offset
+		unsigned int cp			: CP_BITS;  	// this is PAGE Offset
 		unsigned int pl        	: PL_BITS;  
 		unsigned int ch        	: CH_BITS;  
 		unsigned int lun       	: LUN_BITS;  

@@ -75,23 +75,6 @@ typedef union
 } read_retry_para;
 
 
-typedef struct first_page
-{
-	u16 blk;
-	u16 sequence;			 /* band sequence */
-	time_t timestamp;     /* Erase Safe, data retention */
-	u8 cri;				/* code rate index */
-	u8 band;					/* host/recycle/system */
-	u8 state;				/* FREE/OPEN/CLOSED/ERASE */
-	u8 bb_grown_flag;   	/* BMI_FLAG_PRG_ERR/BMI_FLAG_UECC GC-P0*/
-	u16 pecycle;			/* Program Erase Cycle */
-	u16 bb_cnt;				/* MAX is CH*PL*LUN */
-	u16 bbt[lun][pl]		/* when latest bbt lost, merge it to previous bbt */
-	read_retry_para fthr;
-	u8 rsvd[];  // 4KB align
-} first_page_t;
-
-
 typedef struct _cp_attr {
 	u32 cpa;    		// this EP's CPA
 	time_t timestamp;
