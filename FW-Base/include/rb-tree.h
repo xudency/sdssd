@@ -26,6 +26,21 @@
 #define	RB_BLACK	1
 
 
+struct rb_node {
+	u16  color;
+	struct rb_node *parent;
+	struct rb_node *right;
+	struct rb_node *left;
+} __attribute__((aligned(sizeof(long))));
+
+typedef struct rb_node rb_node_t;
+
+typedef struct rb_root {
+	struct rb_node *rb_node;
+} rb_root_t;
+
+
+/*
 // RB tree node is a BMI
 typedef struct rb_tree_node {
 	u16 color;
@@ -40,22 +55,21 @@ typedef struct rb_tree_root {
 	u16 count; //rb_node in this tree
 	// root is black
 	//compare();
-} rb_root_t;
+} rb_root_t;*/
 
+
+
+#define rb_parent(r)       ((rb_node_t *)((r)->parent))
+#define rb_left_child(r)   ((rb_node_t *)((r)->left))
+#define rb_right_child(r)  ((rb_node_t *)((r)->right))
+#define rb_color(r)        ((r)->color)
+#define rb_is_red(r)       ((r)->color & RB_RED)
+#define rb_is_black(r)     ((r)->color & RB_BLACK)
+#define rb_set_red(r)      ((r)->color = RB_RED)
+#define rb_set_black(r)    ((r)->color = RB_BLACK)
 
 #define RB_ROOT (rb_root_t) {RB_NODE_NULL, 0}
 #define RB_NODE (rb_node_t) {RB_RED, RB_NODE_NULL, RB_NODE_NULL, RB_NODE_NULL}
-
-
-/*
-#define rb_parent(x)   ((rb_node_t *)((x)->parent))
-#define rb_left(x)     ((rb_node_t *)((x)->left))
-#define rb_right(x)    ((rb_node_t *)((x)->right))
-#define rb_color(x)    ((x)->color)
-#define __rb_is_black(pc)  __rb_color(pc)
-#define __rb_is_red(pc)    (!__rb_color(pc))*/
-
-//rb_to_bmi()
 
 
 static inline void RB_NODE_INIT(rb_node_t *node)
@@ -69,6 +83,32 @@ static inline void RB_ROOT_INIT(rb_root_t *root)
 	root->count = 0;
 }
 
+static inline void rb_set_parent(rb_node_t* node, rb_node_t* p) 
+{
+	node->parent = p;
+}
+
+static inline void rb_set_left(rb_node_t* node, rb_node_t* child) 
+{
+	node->left = child;
+	rb_set_parent(child, node);
+}
+
+static inline void rb_set_right(rb_node_t* node, rb_node_t* child) 
+{
+	node->right = child;
+	rb_set_parent(child, node);
+}
+
+static inline bool rb_is_left(rb_node_t* node, rb_node_t* p) 
+{
+	return p->left == node;
+}
+
+static inline bool rb_is_right(rb_node_t* node, rb_node_t* p) 
+{
+	return p->right == node;
+}
 
 
 #endif
