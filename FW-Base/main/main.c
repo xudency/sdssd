@@ -10,11 +10,13 @@ static int __init fw_init(void)
 {
 	ddr_init();
 
+	sram_init();
+
 	nandflash_init();
 
 	cpu_init();
 
-	cfg_load();
+	hw_init();
 
 	printk("FW start run ...\n");
 	
