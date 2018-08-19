@@ -8,7 +8,7 @@
 
 static int __init fw_init(void)
 {
-	ddr_init();
+	/*ddr_init();
 
 	sram_init();
 
@@ -16,7 +16,8 @@ static int __init fw_init(void)
 
 	cpu_init();
 
-	hw_init();
+	hw_init();*/
+
 
 	printk("FW start run ...\n");
 	
