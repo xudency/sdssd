@@ -56,15 +56,46 @@ void clear_bbt(u16 blk, u8 lun, u8 ch, u8 pl)
 }
 
 // last one Good block in a R-Block, it is resv for LOG Page(raif, if enable)
-bool get_last1_good_blk(u16 blk)
+bool get_lastn_good_blk(u16 blk, u16 n, ppa_t *result)
 {
-	int lun, ch, pl; // MUST use int rather than u8
+    int counter = 0;
+    u16 bitmap;
+    int lun, ch, pl; // MUST use int rather than u8
+    ppa_t ppa = 0; 
 	
 	u16 *b = get_blk_bbt_base(blk);
 
-	for (pl = CFG_NAND_PL_NUM; pl >=0; pl--) {
-		for (lun = CFG_NAND_LUN_NUM-1; lun >= 0; lun--) {
-
+	for (lun = CFG_NAND_LUN_NUM-1; lun >= 0; lun--) {
+        for(ch = CFG_NAND_CH_NUM; ch >= 0; ch--) {
+	        for (pl = CFG_NAND_PL_NUM; pl >=0; pl--) {
+                bitmap = b[lun][pl];
+                //bitmap = *(b + pl + lun*CFG_NAND_PL_NUM);
+                if (TEST_BIT(ch)) {
+                    // bad block  
+                    continue;
+                } else {
+                    // find a good block
+                    ppa.all = 0;
+                    ppa.nand.cp = 0;
+                    ppa.nand.pl = pl;
+                    ppa.nand.ch = ch;
+                    ppa.nand.lun = lun;
+                    ppa.nand.pg = 0;
+                    ppa.nand.blk = blk;
+                    result[counter++] = ppa;
+                    if (counter == n)
+                        break;
+                }
+            }
 		}
 	}
+
+    if (counter == n) {
+        // find it, the last n good block's pl lun ch
+        return true;
+    } else {
+        // Don't find due to no enough Good Block(less than n)
+        return false;
+    }
 }
+
