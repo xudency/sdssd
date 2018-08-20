@@ -37,3 +37,8 @@ modules.order
 # Debug files
 *.dSYM/
 *.su
+
+# vim plugin files
+*.files
+tags
+
