@@ -34,28 +34,6 @@ typedef enum _POWER_DOWN_STATE {
 }POWER_DOWN_STATE;
 
 
-typedef struct {
-	u8 type;
-	u16 open_blk;
-	
-	// rbtree is sort by pecycle &&vpc&&sequence, this is the list_head, sort by sequence
-	dlist closed_blk_list;
-	
-	ppa_t current_ppa;
-	u32 current_seq;
-
-	recov_logs_t last_log_page;    // pfail and pdown, it save the last LOG Page
-
-	// fast crash recovery, Scan-Merge LOG Pages Window
-	recov_logs_t base_log_page;
-	recov_logs_t anchor_log_page;
-
-	///////////// below only exist in memory
-	log_page_t *current_log_page;   // updating
-	WPB *wpb[2];
-	WPB *wpb_hist[SB_NUM];			// buffer UP until XP WPB is rdy, program both together
-} band_info_t;
-
 typedef struct
 {
 	u32 magic_word[MW_DWORD_NUM];  // for sanity check
@@ -135,10 +113,10 @@ typedef struct {
 #if 1
 	// dlist O(N)
 	dlist free_blk_list;
-	dlist closed_blk_list;
+	dlist closed_blk_list[BAND_NUM];
 	dlist obsolete_blk_list;
 #else
-	rb-tree O(logN)
+	// rb-tree O(logN)
 	rb_tree_t free_blk_rbtree;
 	rb_tree_t close_blk_rbtree[BAND_NUM];  // sort by pecycle&&vpc
 	rb_tree_t obsolete_blk_rbtree;
@@ -158,7 +136,7 @@ typedef struct {
 	u8 bb_grown;    		// flag,  1:bbt-page need flushed when Pfail.
 	u16 blun_wait_erase;  	// bitmap 1:these B-LUN need erase.
 	//u8 ......... 
-} boot_blk_ctx;
+} boot_blk_ctl_ctx;
 
 
 
@@ -166,5 +144,11 @@ static inline boot_blk_primary_page *get_primary_page(void)
 {
 	return g_primary_page;
 }
+
+static inline boot_blk_primary_page *get_bbt_page(void)
+{
+	return g_bbt_page;
+}
+
 
 #endif

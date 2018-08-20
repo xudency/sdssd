@@ -240,22 +240,6 @@ ppa_t get_next_log_page_ppa(u8 band, ppa_t ppa)
 }
 
 
-static inline band_info_t *get_band_info(u8 band)
-{
-	return &(g_primary_page->page.bandinfo[band]);
-}
-
-pg_type sys_get_pg_type(ppa_t ppa)
-{
-	// bbt, particular pos
-}
-
-pg_mode sys_get_pg_mode(ppa_t ppa)
-{
-	// LP UP XP
-}
-
-
 // recovery need Scan-Merge LOG Pages window fwd
 void ckpt_start_log_page_anchor()
 {

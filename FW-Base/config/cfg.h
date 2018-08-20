@@ -48,10 +48,6 @@ typedef union
 } ppa_t;
 
 
-//#define BIT_TEST(f, bitnum)                     (0 != ((f)&(1<<bitnum)))
-//#define BIT_SET(f, bitnum)                      ((f) |= (1<<bitnum))
-//#define BIT_CLEAR(f, bitnum)                    ((f) &= ~(1<<bitnum))
-
 #define for_each_ch(ch) \
         for(ch= 0; ch < CFG_NAND_CH_NUM; ch++)
 

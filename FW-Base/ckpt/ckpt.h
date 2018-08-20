@@ -29,26 +29,6 @@
 #define FTL_TABLE_L2_SIZE (FTL_TABLE_L1_SIZE/1024)	//store in boot blk in primary_page
 
 
-// sys band + host band + wl band
-#define BAND_NUM 3
-
-
-typedef enum {
-	NORMAL_PG = 0,
-	BADBLK_PG,			// badblock
-	MASK_PG,			// some FPA is rsvd
-	FTLLOG_PG,
-	RAIF1_PG,
-	RAIF2_PG
-} pg_type;
-
-
-typedef enum {
-	LP,
-	UP,
-	XP
-} pg_mode;
-
 
 typedef union 
 {
@@ -75,18 +55,6 @@ typedef union
 } read_retry_para;
 
 
-typedef struct _cp_attr {
-	u32 cpa;    		// this EP's CPA
-	time_t timestamp;
-} cp_attr;
-
-typedef struct ftl_log_page {
-	cp_attr cpats[CH_NUM*LUN_NUM*PL_NUM*EP_NUM];
-	u8 band;
-	u16 pos;     // 0 - (CH_NUM*LUN_NUM*PL_NUM*EP_NUM-1)
-	ppa_t ppa;   // this log_page address, ep=0 pl=0
-	//log_page_t next;
-} log_page_t;
 
 // recovery need Scan-Merge LOG Pages
 typedef struct recov_log_pages {
@@ -94,12 +62,6 @@ typedef struct recov_log_pages {
 	u16 pos;		// scan from here rather than start0, version0.1, No use
 } recov_logs_t;
 
-
-
-typedef struct cp_header {
-	cp_attr cpats;
-	u8 rsvd[10];
-} CPH;
 
 
 // CKPT Control Block
