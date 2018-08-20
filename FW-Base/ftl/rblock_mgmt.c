@@ -14,13 +14,15 @@
 
 
 #include "list.h"
- 
+
+ bmi_t *g_bmi_tbl = NULL;
+
  
  // push at tail
 void push_to_rblk_dlist(dlist *dlist, u16 blk)
 {
     u16 old_tail;
-	bmi *item, *nitem;
+	bmi_t *item, *nitem;
 	 
 	old_tail = dlist->tail;
 	item = GET_BMI(blk);
@@ -44,7 +46,7 @@ void push_to_rblk_dlist(dlist *dlist, u16 blk)
  // pull from head
 u16 pull_from_rblk_dlist(dlist *dlist)
 {
-	bmi *item, *pitem;
+	bmi_t *item, *pitem;
 	u16 old_head = dlist->head;
 
 	if (old_head == 0xffff)
@@ -71,7 +73,7 @@ u16 pull_from_rblk_dlist(dlist *dlist)
 u16 get_blk_from_free_list(void)
 {
 	u16 blk;
-	bmi *item;
+	bmi_t *item;
 
 	boot_blk_primary_page *primary_page = get_primary_page();
 
@@ -91,7 +93,7 @@ u16 get_blk_from_free_list(void)
 
 void add_blk_to_free_list(u16 blk)
 {
-	bmi *item = GET_BMI(blk);
+	bmi_t *item = GET_BMI(blk);
 	boot_blk_primary_page *primary_page = get_primary_page();
 
 	push_to_rblk_dlist(&primary_page->page.free_blk_list, blk);

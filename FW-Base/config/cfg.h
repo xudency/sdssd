@@ -2,7 +2,7 @@
 #define __CFG_H__
 
 
-//// Move Flash type related to cfg_NANDtype_xxx.h
+//////////////////////////////// Move Flash type related to cfg_NANDtype_xxx.h
 #define CH_BITS    4
 #define CP_BITS    2
 #define PL_BITS    2
@@ -19,6 +19,13 @@
 #define CFG_NAND_PG_NUM    2304
 #define CFG_NAND_BLK_NUM   504
 
+#define PPA_PER_RPAGE   (CFG_NAND_CP_NUM*CFG_NAND_PL_NUM*CFG_NAND_LUN_NUM*CFG_NAND_CH_NUM)
+#define PPA_PER_RBLOCK  (PPA_PER_RPAGE*CFG_NAND_PG_NUM)
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define CP_SIZE 	0x1000  		 // Control Page Size
+#define CFG_NAND_PAGE_SIZE  (CP_SIZE*CFG_NAND_CP_NUM)     //16KB
 
 // The defiCPnition of PPA address
 typedef union

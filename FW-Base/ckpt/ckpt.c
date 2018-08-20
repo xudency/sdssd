@@ -10,9 +10,7 @@ ckpt_cb *g_ckpt_ctx;
 // DDR
 ppa_t *g_map_tbl;
 ppa_t *g_map_index;
-bmi g_bmi_tbl[CFG_NAND_BLK_NUM];
 
-log_page_t *g_log_pages[BAND_NUM][CFG_NAND_PG_NUM];
 
 
 //////////////////////////////////////////////////////////////////////////

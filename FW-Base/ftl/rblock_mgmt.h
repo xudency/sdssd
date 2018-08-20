@@ -14,8 +14,6 @@
 #ifndef __RAID_BLOCK_H__
 #define __RAID_BLOCK_H__
 
-extern bmi g_bmi_tbl[CFG_NAND_BLK_NUM];
-
 typedef enum
 {
     RBLK_FREE = 0,
@@ -27,7 +25,7 @@ typedef enum
 } bmi_block_status_e;
 
 
-typedef struct rblk_info {
+typedef struct blk_manage_info {
 	u16 blk;
 	u16 sequence;			/* band sequence */
 	time64_t timestamp;     /* Erase Safe, data retention */
@@ -37,22 +35,24 @@ typedef struct rblk_info {
 	u8 bb_grown_flag;   	/* BMI_FLAG_PRG_ERR/BMI_FLAG_UECC GC-P0*/
 	u16 pecycle;			/* Program Erase Cycle */
 	u16 bb_cnt;				/* MAX is CH*PL*LUN */
+	ppa_t log_page[LOG_PAGE_NUM]; /* 3X16=48KB is enough */
 	read_retry_para fthr;   /* optimal read retry */
 	rb_node_t rbnode;		/* bmi linked in a RB-Tree */
 	u16 prev;
 	u16 next;
-	//u8 rsvd[];
-} bmi;//__attribute__(align)
+} bmi_t;//__attribute__(align)
+
+extern bmi_t *g_bmi_tbl;
 
 
-#define GET_BMI(blk) (bmi *)(g_bmi_tbl + blk)
+#define GET_BMI(blk) (bmi_t *)(g_bmi_tbl + blk)
 #define SET_BMI_STATE(blk, val) (g_bmi_tbl[blk].state=val)
 
 #define BMI_NEXT_BLK(blk)  (g_bmi_tbl[blk].next)
 #define BMI_PREV_BLK(blk)  (g_bmi_tbl[blk].prev)
 
 /* get next Rblk's BMI in dlist*/
-static inline bmi* get_next_bmi(u16 blk)
+static inline bmi_t* get_next_bmi(u16 blk)
 {
 	u16 next_blk = BMI_NEXT_BLK(blk);
 
@@ -62,7 +62,7 @@ static inline bmi* get_next_bmi(u16 blk)
 		return NULL;
 }
 
-static inline bmi* get_prev_bmi(u16 blk)
+static inline bmi_t* get_prev_bmi(u16 blk)
 {
 	u16 prev_blk = BMI_PREV_BLK(blk);
 

@@ -40,7 +40,7 @@
 }							\
 )
 
-#define _DIV_ROUND_UP(n, d) (((n) + (d) - 1) / (d))
+#define DIV_ROUND_UP(n, d) (((n) + (d) - 1) / (d))
 
 
 static void printfmt_ppa(const char * title, ppa_t addr)
