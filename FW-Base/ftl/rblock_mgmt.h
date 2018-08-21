@@ -19,8 +19,9 @@ typedef enum
     RBLK_FREE = 0,
     RBLK_OPEN ,		// 1
     RBLK_CLOSED,		// 2
+	RBLK_RECYCLING, // 4	
     RBLK_OBSOLETED,	// 3
-    RBLK_RECYCLING,	// 4
+    RBLK_ERASING,
     RBLK_OFFLINE,	// 5
 } bmi_block_status_e;
 

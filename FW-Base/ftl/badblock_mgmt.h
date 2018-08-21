@@ -8,7 +8,7 @@
     u8 ch   :
     u8 lun;
     u16 blk;
-} bbt_uint;
+} bbt_uint;bad
 */ 
 
 extern u16 *get_blk_bbt_base(u16 blk);

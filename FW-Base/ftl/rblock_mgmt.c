@@ -104,3 +104,9 @@ void add_blk_to_free_list(u16 blk)
 	item->sequence = 0;
 }
 
+
+// when new bb grown, the rsvd insert ppas for Log Page, first page,raif may changed
+rblock_dist_upate(u16 blk)
+{
+
+}

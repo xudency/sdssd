@@ -70,9 +70,8 @@ typedef struct cp_log {
 
 // log page linked in a BlockChain
 typedef struct ftl_log_page {
-	//cp_log_t cpats[CFG_NAND_LUN_NUM][CFG_NAND_CH_NUM][CFG_NAND_PL_NUM][CFG_NAND_CP_NUM];
 	cp_log_t cpats[PPA_PER_RPAGE];
-} log_page_t; //6=36KB
+} log_page_t; //6*3K=36KB
 
 
 typedef struct write_prepare_block {

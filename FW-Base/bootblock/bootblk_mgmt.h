@@ -39,7 +39,7 @@ typedef struct
 	u32 magic_word[MW_DWORD_NUM];  // for sanity check
 	u32 sequence_id;   //max is newest
 	u32 left_space;    // when new bb grown, decrease the new bb space
-	u16 bbt[CFG_NAND_BLK_NUM][CFG_NAND_LUN_NUM][CFG_NAND_PL_NUM];
+	u16 bbt[CFG_NAND_BLK_NUM][CFG_NAND_LUN_NUM]; // plane-insensitive
 } boot_blk_bbt_page;
 
 struct device_cfg
