@@ -284,9 +284,9 @@ pg_type get_page_type_fast(ppa_t ppa)
 	return type;
 }
 
-int die_move_fwd(u8 lun, u8 ch, u8 n)
+int move_die_fwd(u8 lun, u8 ch, u8 n)
 {
-	// move the die foward to the good die which to this gap=n
+	// move the die foward to the good die which gap to this die =n
 }
 
 //build a pg to type Map table, each entry is the type of a quad plane
@@ -298,15 +298,24 @@ void update_bmi_page_type(ppa_t new_bb)
 	// when new bb grow, the r-block data distribution will changed
 	// if new bb is raif/ftl log, we should move fwd die
 
-	set_page_type(new_bb, BADBLK_PAGE);
+	bool r;
+	bmi_t *bmi = GET_BMI(new_bb.nand.blk);
+	set_page_type(new_bb, BADBLK_PAGE);
+	
 
 	// TODO:  FTL_LOG RAIF1/RAIF2 need adjust
-	is_raif_page(new_bb);
-
-
-	is_ftl_log_page(new_bb) {
+	r = is_ppa_in_the_same_die(new_bb, bmi->log_page);
+	if (r) {
+		move_die_fwd(u8 lun, u8 ch, 1);
+		bmi->log_page = ;
+	}
+	
+	r = is_ppa_in_the_same_die(new_bb, bmi->raif1);
+	if (r) {
 
 	}
+
+	//is_ftl_log_page(new_bb) {}
 		
 }
 
