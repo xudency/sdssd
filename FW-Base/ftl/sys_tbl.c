@@ -66,7 +66,7 @@ void update_first_page(u16 blk, u8 band)
 	assert(band < BAND_NUM);
 	assert(blk < CFG_NAND_BLK_NUM);
 
-	u8 pl, lun;
+	u8 lun;
 	u16 *bbt;
     first_page_t *firstpage = GET_FIRST_PAGE(band);
     bmi_t* bmi = GET_BMI(blk);
@@ -86,11 +86,9 @@ void update_first_page(u16 blk, u8 band)
 
 	// bad block from bbt-page
 	bbt = get_blk_bbt_base(blk);
-	for_each_pl(pl) {
-		for_each_lun(lun) {
-			//first_page->bbt[lun][pl] = (bbt + lun*CFG_NAND_PL_NUM + pl);
-			first_page->bbt[lun][pl] = bbt[lun][pl];
-		}
+	for_each_lun(lun) {
+		//first_page->bbt[lun] = (bbt + lun);
+		first_page->bbt[lun] = bbt[lun];
 	}
 
     return;
@@ -124,11 +122,6 @@ void ftl_log_page_buff_exit(void)
 }
 
 // TODO: gc_ftl_log_buff
-// caller should guarantee Log Page has load in CBUFF.
-/*cp_log_t get_cpa_from_log_page()
-{
-	
-}*/
 
 
 /* calculate the offset(index) in 36KB LOG Page
@@ -167,15 +160,21 @@ bool is_ppa_in_the_same_page(ppa_t p1, ppa_t p2)
 	return ((p1 >> CP_BITS) == (p2 >> CP_BITS))
 }
 
-// log page record in BMI
+bool is_ppa_in_the_same_die(ppa_t p1, ppa_t p2)
+{
+	return ((p1 >> DIE_BITS) == (p2 >> DIE_BITS))
+}
+
 bool is_ftl_log_page(ppa_t ppa)
 {
 	int i;
 	bmi_t *bmi = GET_BMI(ppa.nand.blk);
+	ppa_t tmp = bmi->log_page;
 
-	for (i=0; i<LOG_PAGE_NUM; i++) {
-		ppa_t tmp = bmi->log_page[i];
-		if (is_ppa_in_the_same_page(ppa, tmp))
+	if (is_ppa_in_the_same_die(ppa, tmp)) {
+		// most likely PPA_PER_LOG_PAGE < PPA_PER_DIE
+		u8 cpl = (ppa.all & CPL_MASK);
+		if (cpl >= LOG_PAGE_START_CPL)
 			return true;
 	}
 

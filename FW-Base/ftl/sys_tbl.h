@@ -12,14 +12,16 @@
 #define LOG_PAGES_PER_BAND  	2
 
 // WPB nnumber per band, as 3D TLC pair/share page, we need more WPB.
-#define WPB_PER_BAND					6
+#define WPB_PER_BAND			6
 
-#define FIRST_PAGE_SIZE		CP_SIZE
-#define LOG_PAGE_SIZE		(roundup(PPA_PER_RPAGE*sizeof(cp_log_t), CP_SIZE))    //3K*12B=36KB
+#define FIRST_PAGE_SIZE			CP_SIZE
+#define LOG_PAGE_SIZE			(roundup(PPA_PER_RPAGE*sizeof(cp_log_t), CP_SIZE))    //3K*12B=36KB
 
-#define LOG_PPA_NUM 		(DIV_ROUND_UP(LOG_PAGE_SIZE, CP_SIZE))			// need 9 PPA
-#define LOG_PAGE_NUM 		(DIV_ROUND_UP(LOG_PAGE_SIZE, CFG_NAND_PAGE_SIZE))  //need 3 PAGE
+#define PPA_PER_LOG_PAGE 		(DIV_ROUND_UP(LOG_PAGE_SIZE, CP_SIZE))			// need 9 PPA
 
+// LOG Page is in the last3 Die(last1-RAIF1  last2-RAIF2), But it don't take all PPAs in this Die
+// for exapmle, PPA_PER_LOG_PAGE=9, the other7 PPA can used for host data.
+#define LOG_PAGE_START_CPL		(PPA_PER_DIE - PPA_PER_LOG_PAGE)				// PL|CP
 
 #define for_each_band(band) \
         for(band = 0; band < CFG_NAND_CH_NUM; band++)
@@ -57,7 +59,7 @@ typedef struct first_page
 	/* when latest boot block bbt page lost, merge it to previous bbt, 
 	 * as we only support up to 12 channel, bit[15:12] is no used
 	 */
-	u16 bbt[CFG_NAND_LUN_NUM][CFG_NAND_PL_NUM];
+	u16 bbt[CFG_NAND_LUN_NUM];
 	read_retry_para fthr;
 } first_page_t;    // 4KB
 

@@ -12,6 +12,7 @@
 */ 
 
 extern u16 *get_blk_bbt_base(u16 blk);
+extern bool get_lastn_good_die(u16 blk, u16 n, ppa_t *result);
 
 
 

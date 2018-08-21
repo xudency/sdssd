@@ -9,6 +9,8 @@
 #define bit_test(f, bitnum)   			(0 != ((f)&(1<<bitnum)))
 #define bit_set(f, bitnum)    			((f) |= (1<<bitnum))
 #define bit_clear(f, bitnum)  			((f) &= ~(1<<bitnum))
+#define bit_mask(width) 				((1 << (width)) - 1)
+
 // TODO: ported bitops from linux/bitops.h and arch/arc/bitops.h
 
 

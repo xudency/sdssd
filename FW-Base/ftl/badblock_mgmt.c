@@ -59,7 +59,7 @@ void clear_bbt(u16 blk, u8 lun, u8 ch)
 // last1 if raif2, last2 is raif1, last3 is log page
 // result[n] is alloced outside by the caller
 // TODO: if raif is 12/24/36 .... 12*n granularity, we should get the lastn in a given range(chx-chy, lunx-luny)
-bool get_lastn_good_blk(u16 blk, u16 n, ppa_t *result)
+bool get_lastn_good_die(u16 blk, u16 n, ppa_t *result)
 {
     int counter = 0;
     u16 bitmap;
