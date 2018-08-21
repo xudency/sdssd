@@ -57,9 +57,8 @@ void clear_bbt(u16 blk, u8 lun, u8 ch)
 
 // last n Good block in a R-Block, it is resv for LOG Page(raif, if enable)
 // last1 if raif2, last2 is raif1, last3 is log page
-// result[n] is alloced outside by the caller
-// TODO: if raif is 12/24/36 .... 12*n granularity, we should get the lastn in a given range(chx-chy, lunx-luny)
-bool get_lastn_good_die(u16 blk, u16 n, ppa_t *result)
+// this is in all dies [0 - 191]
+/*bool get_lastn_good_die(u16 blk, u16 n, ppa_t *result)
 {
     int counter = 0;
     u16 bitmap;
@@ -69,7 +68,7 @@ bool get_lastn_good_die(u16 blk, u16 n, ppa_t *result)
 	u16 *b = get_blk_bbt_base(blk);
 
 	for (lun = CFG_NAND_LUN_NUM-1; lun >= 0; lun--) {
-        for(ch = CFG_NAND_CH_NUM; ch >= 0; ch--) {
+        for(ch = CFG_NAND_CH_NUM-1; ch >= 0; ch--) {
             bitmap = b[lun];
             //bitmap = *(b + pl + lun*CFG_NAND_PL_NUM);
             if (bit_test(ch)) {
@@ -97,5 +96,55 @@ bool get_lastn_good_die(u16 blk, u16 n, ppa_t *result)
         // Don't find due to no enough Good Block(less than n)
         return false;
     }
+}*/
+
+/*
+ *last n Good block in a R-Block, it is resv for LOG Page(raif, if enable)
+ *get lastn good dies in a given die range, die is compose of LUN|CH
+ *the result is a ppa_t but we only care about ch and lun, 
+ *BEWARE: res[0] is last1, res[1] is last2
+ *if you want search in all Dies, you can call this fn as
+ * 		get_lastn_good_die_within_range(blk, 0, 0, CFG_NAND_LUN_NUM-1, CFG_NAND_CH_NUM-1, n, &res)
+ */
+bool get_lastn_good_die_within_range(u16 blk, u8 start_lun, u8 start_ch, 
+											  u8 end_lun, u8 end_ch, 
+											  u16 n, ppa_t *res)
+{
+	int counter = 0;
+	u16 bitmap;
+	int lun, ch; // MUST use int rather than u8
+	ppa_t ppa = 0; 
+	
+	u16 *b = get_blk_bbt_base(blk);
+
+	for (lun = end_lun; lun >= start_lun; lun--) {
+		for(ch = end_ch; ch >= start_ch; ch--) {
+			bitmap = b[lun];
+			//bitmap = *(b + pl + lun*CFG_NAND_PL_NUM);
+			if (bit_test(ch)) {
+				// bad block  
+				continue;
+			} else {
+				// find a good block
+				ppa.all = 0;
+				ppa.nand.cp = 0;
+				ppa.nand.ch = ch;
+				ppa.nand.lun = lun;
+				ppa.nand.pg = 0;
+				ppa.nand.blk = blk;
+				res[counter++] = ppa;
+				if (counter == n)
+					break;
+			}
+		}
+	}
+
+	if (counter == n) {
+		// find it, the last n good block's pl lun ch
+		return true;
+	} else {
+		// Don't find due to no enough Good Block(less than n)
+		return false;
+	}
 }
 

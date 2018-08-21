@@ -6,6 +6,15 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 
+
+// Check we didin't inadvertently grow the command struct and valid configuration
+// XXX, can it check when complie, thus can save time for power on
+bool validate_check()
+{
+	//data struct size check
+	//config validate check
+}
+
 static int __init fw_init(void)
 {
 	/*ddr_init();

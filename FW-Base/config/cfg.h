@@ -23,12 +23,11 @@
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-//a Die is a Nand Parallel Unit(NPU)
-#define DIE_BITS 			(CP_BITS+PL_BITS)
+#define CPL_BITS 			(CP_BITS+PL_BITS)
 #define PPA_PER_DIE 		(CFG_NAND_CP_NUM*CFG_NAND_PL_NUM)
-
 #define PPA_PER_RPAGE   	(CFG_NAND_CP_NUM*CFG_NAND_PL_NUM*CFG_NAND_LUN_NUM*CFG_NAND_CH_NUM)
 #define PPA_PER_RBLOCK  	(PPA_PER_RPAGE*CFG_NAND_PG_NUM)
+#define CFG_NAND_DIE_NUM	(CFG_NAND_CH_NUM*CFG_NAND_LUN_NUM)
 
 #define CP_SIZE 			0x1000  		// Control Page Size
 #define PPA_SIZE    		CP_SIZE			// PPA represent a CP = (FPA+offset)
@@ -36,8 +35,11 @@
 #define CFG_NAND_DIE_SIZE   (PPA_SIZE*PPA_PER_DIE)     	   //64KB
 
 // Filed Mask
-#define CPL_MASK 			bit_mask(DIE_BITS)
+#define CPL_MASK 			(bit_mask(CPL_BITS))
 
+#define PPA_TO_DIE(x) 	    (u8)((x).nand.ch + (x).nand.lun*CFG_NAND_CH_NUM)   //x is ppa_t
+#define DIE_TO_CH(x) 		(u8)((x) % CFG_NAND_CH_NUM)	//x is u8
+#define DIE_TO_LUN(x)  		(u8)((x)/CFG_NAND_CH_NUM)   //x is u8
 
 // The defiCPnition of PPA address
 typedef union

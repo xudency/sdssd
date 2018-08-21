@@ -35,7 +35,7 @@ typedef struct blk_manage_info {
 	u8 state;				/* FREE/OPEN/CLOSED/ERASE */
 	u8 bb_grown_flag;   	/* BMI_FLAG_PRG_ERR/BMI_FLAG_UECC GC-P0*/
 	u16 pecycle;			/* Program Erase Cycle */
-	u16 bb_cnt;				/* MAX is CH*PL*LUN */
+	u16 bb_cnt;				/* MAX is CH*LUN */
 	ppa_t log_page; 		/* log page Die(CH X LUN) */
 	read_retry_para fthr;   /* optimal read retry */
 	rb_node_t rbnode;		/* bmi linked in a RB-Tree */

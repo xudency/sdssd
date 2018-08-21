@@ -29,8 +29,9 @@
 
 typedef enum {
 	NORMAL_PG = 0,
-	BADBLK_PG,			// badblock
-	MASK_PG,			// some FPA is rsvd
+	BADBLK_PG,
+	MASK_PG,
+	FIRST_PG,			
 	FTLLOG_PG,
 	RAIF1_PG,
 	RAIF2_PG
