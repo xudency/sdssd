@@ -28,13 +28,13 @@
 
 
 typedef enum {
-	NORMAL_PG = 0,
-	BADBLK_PG,
-	MASK_PG,
-	FIRST_PG,			
-	FTLLOG_PG,
-	RAIF1_PG,
-	RAIF2_PG
+	NORMAL_PAGE = 0,
+	BADBLK_PAGE,
+	FIRST_PAGE,			
+	FTL_LOG_PAGE,
+	RAIF1_PAGE,
+	RAIF2_PAGE,
+	INVALID_PAGE
 } pg_type;
 
 
@@ -108,6 +108,11 @@ struct band_ctl_ctx {
 	u8 half;  // 2 loage page/band, this indicate the first half or second half
 	WPB *wpb[WPB_PER_BAND];
 };
+
+/*typedef struct page_type_item {
+	u8  pg_type[CFG_NAND_LUN_NUM][CFG_NAND_CH_NUM];
+} page_type_item_t;*/
+
 
 // extern global variable for other .c
 extern first_page_t* g_first_page[BAND_NUM];

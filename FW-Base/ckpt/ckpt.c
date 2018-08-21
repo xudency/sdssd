@@ -367,29 +367,28 @@ bool atc_assign_fpa(u8 band, u32 scpa, u16 nppas, ppa_t *ppalist)
 	ppa_t current_ppa = bandinfo->current_ppa;
 
 	while(1) {
-		pg_type = sys_get_pg_type(current_ppa);
+		pg_type = get_page_type(current_ppa);
 
-		if ((pg_type == NORMAL_PG) && (idx >= nppas))
+		if ((pg_type == NORMAL_PAGE) && (idx >= nppas))
 			break;   // guarantee the fpa next kick in is Normal
 	
 		switch (pg_type) {
-		case NORMAL_PG:
+		case NORMAL_PAGE:
 			ppalist[idx] = current_ppa;
 			cpa = scpa + idx;
 			idx++;
 			break;
-		case BADBLK_PG:
-		case MASK_PG:
+		case BADBLK_PAGE:
 			cpa = SPECIAL_CPA_INVALID;
 			break;
-		case FTLLOG_PG:
+		case FTL_LOG_PAGE:
 			cpa = SPECIAL_CPA_FTLLOG;
 			flush_log_page = true;
 			break;
-		case RAIF1_PG:
+		case RAIF1_PAGE:
 			cpa = SPECIAL_CPA_RAIF1;
 			break;
-		case RAIF2_PG:
+		case RAIF2_PAGE:
 			cpa = SPECIAL_CPA_RAIF2;			
 			break;
 		}
@@ -419,7 +418,7 @@ bool atc_assign_fpa(u8 band, u32 scpa, u16 nppas, ppa_t *ppalist)
 			commit_raif2();
 		}
 
-		// XXX: ep pl ch lun pg blk, when  switch blk, get from free_rbtree
+		//XXX: ep pl ch lun pg blk, when  switch blk, get from free_rbtree
 		increase_ppa(current_ppa);
 	}
 

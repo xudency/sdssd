@@ -24,7 +24,7 @@ u16 *get_blk_bbt_base(u16 blk)
 	return &(bbt_pg->bbt[blk][0]);
 }
 
-bool get_bbt(u16 blk, u8 lun, u8 ch)
+bool __get_bbt(u16 blk, u8 lun, u8 ch)
 {
 	u16 b = 0;
 	
@@ -35,12 +35,22 @@ bool get_bbt(u16 blk, u8 lun, u8 ch)
 	return ((b >> ch) & 0x0001);
 }
 
-bool is_bad_block(u16 blk, u8 lun, u8 ch)
+void get_bbt(ppa_t ppa)
 {
-	return get_bbt(blk, lun, ch);
+	return __get_bbt(ppa.nand.blk, ppa.nand.lun, ppa.nand.ch);
 }
 
-void set_bbt(u16 blk, u8 lun, u8 ch)
+bool __is_bad_block(u16 blk, u8 lun, u8 ch)
+{
+	return __get_bbt(blk, lun, ch);
+}
+
+bool is_bad_block(ppa_t ppa)
+{
+	return get_bbt(ppa);
+}
+
+void __set_bbt(u16 blk, u8 lun, u8 ch)
 {
 	boot_blk_bbt_page* bbt_pg = get_bbt_page();
 
@@ -48,12 +58,23 @@ void set_bbt(u16 blk, u8 lun, u8 ch)
 	//bit_set(bbt_pg->bbt[blk][lun], ch)
 }
 
-void clear_bbt(u16 blk, u8 lun, u8 ch)
+void set_bbt(ppa_t ppa)
+{
+	__set_bbt(ppa.nand.blk, ppa.nand.lun, ppa.nand.ch);
+}
+
+void __clear_bbt(u16 blk, u8 lun, u8 ch)
 {
 	boot_blk_bbt_page* bbt_pg = get_bbt_page();
 
 	bbt_pg->bbt[blk][lun] &= ~(1<<ch);
 }
+
+void clear_bbt(ppa_t ppa)
+{
+	__clear_bbt(ppa.nand.blk, ppa.nand.lun, ppa.nand.ch);
+}
+
 
 // last n Good block in a R-Block, it is resv for LOG Page(raif, if enable)
 // last1 if raif2, last2 is raif1, last3 is log page

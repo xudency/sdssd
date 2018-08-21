@@ -30,6 +30,7 @@ void *dummy_date_buff = NULL;
 void *raif1_buff = NULL;
 void *raif2_buff = NULL;
 
+page_type
 
 ///////////////////////////////////////////////below is first page //////////////////////////////////////////////
 void first_page_buff_init(void)
@@ -217,7 +218,6 @@ int is_raif_page(ppa_t ppa)
 									end_lun, end_ch, number, res);
 
 	//if (is_ppa_in_the_same_die(ppa, res[0/1]))
-	
 	if (number == 1) {
 		// raif1
 		raif1_die = PPA_TO_DIE(res[0]);
@@ -246,10 +246,99 @@ int is_raif_page(ppa_t ppa)
 
 ///////////////////////////////////////////////XXXXXXXXXXXXX//////////////////////////////////////////////
 
-pg_type sys_tbl_get_pg_type(ppa_t ppa)
+void __set_page_type(u16 blk, u8 lun, u8 ch, u8 type)
 {
-	// bbt, particular pos
+	bmi_t *bmi = GET_BMI(blk);
+	bmi->pgtype[lun][ch] = type;
 }
+
+void set_page_type(ppa_t ppa, u8 type)
+{
+	__set_page_type(ppa.nand.blk, ppa.nand.lun, ppa.nand.ch, type);
+}
+
+pg_type get_page_type_fast(ppa_t ppa)
+{
+	bmi_t *bmi = GET_BMI(ppa.nand.blk);
+
+	u8 type = bmi->pgtype[ppa.nand.lun][ppa.nand.ch];
+	
+	//bmi->pgtye only identify (normal, badblock, raif1, raif2)
+	//to short pgtype size in bmi, we assign the same type for a CPL
+	//actually, mostly the same CPL is for the same data type
+	//while first page only use 1 cp, ftl log only use PPA_PER_LOG_PAGE
+	//so we need do some check and type convert
+
+	// in bmi->type it is mark as NORMAL
+	if (is_first_ppa(ppa)) {
+		type = FIRST_PAGE;
+	}
+
+	// in bmi->type it is mark as NORMAL	
+	if (is_ftl_log_page(ppa)) {
+		type = FTL_LOG_PAGE;
+	}
+
+	// other don't need convert
+
+	return type;
+}
+
+int die_move_fwd(u8 lun, u8 ch, u8 n)
+{
+	// move the die foward to the good die which to this gap=n
+}
+
+//build a pg to type Map table, each entry is the type of a quad plane
+//so the map table entry num is (CH X LUN X BLK), each entry is u8
+//so the table size is about 94KB, simple to manage, we integrate it in bmi
+//with this map table, in wdp, fw can get page type much fastly.
+void update_bmi_page_type(ppa_t new_bb)
+{
+	// when new bb grow, the r-block data distribution will changed
+	// if new bb is raif/ftl log, we should move fwd die
+
+	set_page_type(new_bb, BADBLK_PAGE);
+
+	// TODO:  FTL_LOG RAIF1/RAIF2 need adjust
+	is_raif_page(new_bb);
+
+
+	is_ftl_log_page(new_bb) {
+
+	}
+		
+}
+
+// this ppa is for host data oe insert sys data or badblock
+// delete, this is too slow, cpu-consume, 
+// because page type not change frequently, very time to re-cal is not worth
+/*pg_type get_page_type(ppa_t ppa)
+{
+	int type;
+	
+	if (is_bad_block(ppa)) {
+		return BADBLK_PAGE;
+	}
+
+	if (is_first_ppa(ppa)) {
+		return FIRST_PAGE;
+	}
+
+	if (is_ftl_log_page(ppa)) {
+		return FTL_LOG_PAGE;
+	}
+
+	type = is_raif_page(ppa);
+	if (type == 0) {
+		return NORMAL_PAGE;
+	} else if (type == 1) {
+		return RAIF1_PAGE;
+	} else if (type == 2) {
+		return RAIF2_PAGE;
+	}
+}
+*/
 
 pg_mode sys_tbl_get_pg_mode(ppa_t ppa)
 {
