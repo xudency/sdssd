@@ -9,7 +9,7 @@
 
 // Check we didin't inadvertently grow the command struct and valid configuration
 // XXX, can it check when complie, thus can save time for power on
-bool validate_check()
+bool validity_check()
 {
 	//data struct size check
 	//config validate check
