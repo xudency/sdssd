@@ -35,11 +35,14 @@
 #define CFG_NAND_DIE_SIZE   (PPA_SIZE*PPA_PER_DIE)     	   //64KB
 
 // Filed Mask
-#define CPL_MASK 			(bit_mask(CPL_BITS))
+#define CPL_MASK 				(bit_mask(CPL_BITS))
 
-#define PPA_TO_DIE(x) 	    (u8)((x).nand.ch + (x).nand.lun*CFG_NAND_CH_NUM)   //x is ppa_t
-#define DIE_TO_CH(x) 		(u8)((x) % CFG_NAND_CH_NUM)	//x is u8
-#define DIE_TO_LUN(x)  		(u8)((x)/CFG_NAND_CH_NUM)   //x is u8
+// LUN CH simple decode/encode, because CH_BITS=4, while CH_NUM=12 NOT 2^4, 
+// it make us can't get it via bitmask 
+#define LUNCH_TO_DIE(lun, ch)	(u8)((ch) + (lun)*CFG_NAND_CH_NUM)
+#define PPA_TO_DIE(x) 	    	(u8)((x).nand.ch + (x).nand.lun*CFG_NAND_CH_NUM)   //x is ppa_t
+#define DIE_TO_CH(x) 			(u8)((x) % CFG_NAND_CH_NUM)	//x is u8
+#define DIE_TO_LUN(x)  			(u8)((x)/CFG_NAND_CH_NUM)   //x is u8
 
 // The defiCPnition of PPA address
 typedef union

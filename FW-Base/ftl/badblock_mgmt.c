@@ -122,19 +122,16 @@ void clear_bbt(ppa_t ppa)
 /*
  *last n Good block in a R-Block, it is resv for LOG Page(raif, if enable)
  *get lastn good dies in a given die range, die is compose of LUN|CH
- *the result is a ppa_t but we only care about ch and lun, 
  *BEWARE: res[0] is last1, res[1] is last2
  *if you want search in all Dies, you can call this fn as
- * 		get_lastn_good_die_within_range(blk, 0, 0, CFG_NAND_LUN_NUM-1, CFG_NAND_CH_NUM-1, n, &res)
+ * 		get_lastn_good_die_within_range(blk, 0, 0, CFG_NAND_LUN_NUM-1, CFG_NAND_CH_NUM-1, n, &dies)
  */
 bool get_lastn_good_die_within_range(u16 blk, u8 start_lun, u8 start_ch, 
-											  u8 end_lun, u8 end_ch, 
-											  u16 n, ppa_t *res)
+											  u8 end_lun, u8 end_ch, u16 n, u8 *dies)
 {
 	int counter = 0;
 	u16 bitmap;
 	int lun, ch; // MUST use int rather than u8
-	ppa_t ppa = 0; 
 	
 	u16 *b = get_blk_bbt_base(blk);
 
@@ -142,18 +139,12 @@ bool get_lastn_good_die_within_range(u16 blk, u8 start_lun, u8 start_ch,
 		for(ch = end_ch; ch >= start_ch; ch--) {
 			bitmap = b[lun];
 			//bitmap = *(b + pl + lun*CFG_NAND_PL_NUM);
-			if (bit_test(ch)) {
+			if (bit_test(bitmap, ch)) {
 				// bad block  
 				continue;
 			} else {
-				// find a good block
-				ppa.all = 0;
-				ppa.nand.cp = 0;
-				ppa.nand.ch = ch;
-				ppa.nand.lun = lun;
-				ppa.nand.pg = 0;
-				ppa.nand.blk = blk;
-				res[counter++] = ppa;
+				// find a good block;
+				dies[counter++] = LUNCH_TO_DIE(lun, ch)
 				if (counter == n)
 					break;
 			}
@@ -168,4 +159,5 @@ bool get_lastn_good_die_within_range(u16 blk, u8 start_lun, u8 start_ch,
 		return false;
 	}
 }
+
 

@@ -153,94 +153,44 @@ void wdp_update_ftl_log(u8 band, ppa_t ppa, u32 cpa)
 
 }
 
-// test if the 2 ppa belong the same Page
-// the same Page has the same PG_TYPE
-/*bool is_ppa_in_the_same_page(ppa_t p1, ppa_t p2)
+/*bool is_ftl_log_page(ppa_t ppa)
 {
-	// ignore cp, other is all the same
-	return ((p1 >> CP_BITS) == (p2 >> CP_BITS))
-}*/
-
-// test if the 2 ppa belong the Die
-bool is_ppa_in_the_same_die(ppa_t p1, ppa_t p2)
-{
-	// blk ch lun, ignore Page
-	return ((p1.nand.blk == p2.nand.blk) && \
-		    (PPA_TO_DIE(p1) == PPA_TO_DIE(p2)));
-}
-
-bool is_ftl_log_page(ppa_t ppa)
-{
-	int i;
-	bmi_t *bmi = GET_BMI(ppa.nand.blk);
-	ppa_t tmp = bmi->log_page;
-
-	if (is_ppa_in_the_same_die(ppa, tmp)) {
-		// most likely PPA_PER_LOG_PAGE < PPA_PER_DIE
-		u8 cpl = (ppa.all & CPL_MASK);
-		if (cpl >= LOG_PAGE_START_CPL)
-			return true;
-	}
+	u8 cpl = (ppa.all & CPL_MASK);
+	if (cpl >= LOG_PAGE_START_CPL)
+		return true;
 
 	return false;
-}
+}*/
 
-
-///////////////////////////////////////////////below is raif page//////////////////////////////////////////////
-
-// when raif not enable, never call this
-// return value:
-//     0:  NOT raif page
-//    -1:  error RAIF MODE config
-//	   1:  this is a raif1 page
-//	   2:  this is a raif2 page
-int is_raif_page(ppa_t ppa)
+// ftl log page move forward
+//   1.log page is wort-out to be BADBLK, fwd to next good
+//   2.RAIF1 worn-out it occupy log page, so we need fwd to next good closed raif1
+//   3.RAIF2 worn-out it occupy raif1, so raif1 fwd occupy log page
+//   4.RAIF2 and RAIF1 all worn-out
+// anyway, Log Page is Close the last RPU's Raif1, so after raif die has recalibrate
+// call this fn to recalibrate Log Page die
+void ftl_log_page_die_recalibrate(u16 blk)
 {
-#if (RAIF_MODE == RAIF_DISABLE)
-	// no any raif page
-	return 0;
-
-#elif ((RAIF_MODE == RAIF1_ENABLE) || (RAIF_MODE == RAIF2_ENABLE))
-	u8 number = RAIF_MODE;
-	ppa_t res[RAIF_MODE];
-	u8 current_die;
-	u8 raif1_die = 0xff;
-	u8 raif2_die = 0xff;
-	
-	u8 start_die  = rpu_start_die(ppa);
-	u8 end_die = start_die + RAIF_DIES_NUM - 1;
+	u8 dies[RAIF_MODE+1];
+	// the last RPU Die range
+	u8 start_die = CFG_NAND_DIE_NUM-RPU_DIES_NUM_CFG;
+	u8 end_die = start_die + RPU_DIES_NUM_CFG - 1;
 	u8 start_lun = DIE_TO_LUN(start_die);
 	u8 start_ch  = DIE_TO_CH(start_die);
 	u8 end_lun = DIE_TO_LUN(end_die);
-	u8 end_ch  = DIE_TO_CH(end_die);
+	u8 end_ch	= DIE_TO_CH(end_die);
+	u8 ch, lun;
 
-	get_lastn_good_die_within_range(ppa.nand.blk, start_lun, start_ch, 
-									end_lun, end_ch, number, res);
+	//bmi_t *bmi = GET_BMI(blk);
 
-	//if (is_ppa_in_the_same_die(ppa, res[0/1]))
-	if (number == 1) {
-		// raif1
-		raif1_die = PPA_TO_DIE(res[0]);
-	} else if (number == 2) {
-		// raif 2
-		raif2_die = PPA_TO_DIE(res[0]);		
-		raif1_die = PPA_TO_DIE(res[1]);		
-	} else {
-		// NEVER run to here
-	}
+	// ftl log page is closed raif1(if it is enable)
+	get_lastn_good_die_within_range(blk, start_lun, start_ch, end_lun, end_ch, RAIF_MODE+1, dies);
 	
-	current_die = PPA_TO_DIE(ppa);
-	if (current_die == raif1_die)
-		return 1;
-	else if (current_die == raif1_die)
-		return 2;
-	else
-		return 0;
-#else
-	#error "RAIF Mode Invalid"
-	return -1;
-#endif
+	lun = DIE_TO_LUN(dies[RAIF_MODE]);
+	ch = DIE_TO_CH(dies[RAIF_MODE]);
+	__set_page_type(blk, lun, ch, FTL_LOG_PAGE);
 
+	return;
 }
 
 
@@ -257,101 +207,79 @@ void set_page_type(ppa_t ppa, u8 type)
 	__set_page_type(ppa.nand.blk, ppa.nand.lun, ppa.nand.ch, type);
 }
 
-pg_type get_page_type_fast(ppa_t ppa)
+u8 __get_page_type(u16 blk, u8 lun, u8 ch)
 {
-	bmi_t *bmi = GET_BMI(ppa.nand.blk);
+	bmi_t *bmi = GET_BMI(blk);
+	return bmi->pgtype[lun][ch];
+}
 
-	u8 type = bmi->pgtype[ppa.nand.lun][ppa.nand.ch];
-	
-	//bmi->pgtye only identify (normal, badblock, raif1, raif2)
-	//to short pgtype size in bmi, we assign the same type for a CPL
-	//actually, mostly the same CPL is for the same data type
-	//while first page only use 1 cp, ftl log only use PPA_PER_LOG_PAGE
-	//so we need do some check and type convert
+u8 get_page_type(ppa_t ppa)
+{
+	return __get_page_type(ppa.nand.blk, ppa.nand.lun, ppa.nand.ch);
+}
 
-	// in bmi->type it is mark as NORMAL
-	if (is_first_ppa(ppa)) {
-		type = FIRST_PAGE;
+//lookup table and do some simple convert, it is fast
+//to short pgtype size in bmi, we assign the same type for a CPL
+//actually, mostly the same CPL is for the same data type
+//while first page only use 1 cp, ftl log only use PPA_PER_LOG_PAGE
+//so there are 2 case need convert after lookup table 
+//    case 1.normal in first page -> first page
+//	  case 2.ftl log page in front part CPL -> normal
+pg_type lookup_page_type_fast(ppa_t ppa)
+{
+	u8 type = get_page_type(ppa);
+
+	// case1 convert
+	if (type == NORMAL_PAGE) {
+		if (is_first_ppa(ppa)) 
+			type = FIRST_PAGE;
 	}
 
-	// in bmi->type it is mark as NORMAL	
-	if (is_ftl_log_page(ppa)) {
-		type = FTL_LOG_PAGE;
+	// case2 convert
+	if (type == FTL_LOG_PAGE) {
+		u8 cpl = (ppa.all & CPL_MASK);
+		if (cpl >= LOG_PAGE_START_CPL)
+			type = NORMAL_PAGE;
 	}
-
-	// other don't need convert
 
 	return type;
 }
 
-int move_die_fwd(u8 lun, u8 ch, u8 n)
-{
-	// move the die foward to the good die which gap to this die =n
-}
-
-//build a pg to type Map table, each entry is the type of a quad plane
+//build a page to type Map table, each entry is the type of a quad plane
 //so the map table entry num is (CH X LUN X BLK), each entry is u8
 //so the table size is about 94KB, simple to manage, we integrate it in bmi
-//with this map table, in wdp, fw can get page type much fastly.
-void update_bmi_page_type(ppa_t new_bb)
+//with maintain this map table, fw can lookup it and get page type much fastly.
+// TODO: moce this to MCP.c
+sys_build_page_type()
 {
-	// when new bb grow, the r-block data distribution will changed
-	// if new bb is raif/ftl log, we should move fwd die
+	// only in MCP
+	for_each_blk(blk) {
+		for_each_lun(lun) {
+			for_each_ch(ch) {
+				//set page type according bbt-page
+			}
+		}
+	}
+}
 
-	bool r;
-	bmi_t *bmi = GET_BMI(new_bb.nand.blk);
+// when new bb grow, the r-block data distribution will changed
+// if new bb is raif/ftl log, we should move fwd die
+void block_dist_recalibrate(ppa_t new_bb)
+{
+	u16 blk = new_bb.nand.blk;
+
 	set_page_type(new_bb, BADBLK_PAGE);
+
+	raif_die_recalibrate(blk);
+
+	ftl_log_page_die_recalibrate(blk)
 	
-
-	// TODO:  FTL_LOG RAIF1/RAIF2 need adjust
-	r = is_ppa_in_the_same_die(new_bb, bmi->log_page);
-	if (r) {
-		move_die_fwd(u8 lun, u8 ch, 1);
-		bmi->log_page = ;
-	}
-	
-	r = is_ppa_in_the_same_die(new_bb, bmi->raif1);
-	if (r) {
-
-	}
-
-	//is_ftl_log_page(new_bb) {}
-		
+	return;
 }
 
-// this ppa is for host data oe insert sys data or badblock
-// delete, this is too slow, cpu-consume, 
-// because page type not change frequently, very time to re-cal is not worth
-/*pg_type get_page_type(ppa_t ppa)
-{
-	int type;
-	
-	if (is_bad_block(ppa)) {
-		return BADBLK_PAGE;
-	}
-
-	if (is_first_ppa(ppa)) {
-		return FIRST_PAGE;
-	}
-
-	if (is_ftl_log_page(ppa)) {
-		return FTL_LOG_PAGE;
-	}
-
-	type = is_raif_page(ppa);
-	if (type == 0) {
-		return NORMAL_PAGE;
-	} else if (type == 1) {
-		return RAIF1_PAGE;
-	} else if (type == 2) {
-		return RAIF2_PAGE;
-	}
-}
-*/
-
-pg_mode sys_tbl_get_pg_mode(ppa_t ppa)
+/*pg_mode sys_tbl_get_pg_mode(ppa_t ppa)
 {
 	// LP UP XP
-}
+}*/
 
 

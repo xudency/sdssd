@@ -36,9 +36,9 @@ typedef struct blk_manage_info {
 	u8 bb_grown_flag;   	/* BMI_FLAG_PRG_ERR/BMI_FLAG_UECC GC-P0*/
 	u16 pecycle;			/* Program Erase Cycle */
 	u16 bb_cnt;				/* MAX is CH*LUN */
-	ppa_t log_page; 		/* log page Die(CH X LUN) */
-	ppa_t raif1;			/* raif1 die, if not support, 0xff*/
-	ppa_t raif2;			/* raif2 die,if not support, 0xff */
+	//u8 lp_die; 			    /* log page Die(CH X LUN) */
+	//ppa_t raif1;			/* raif1 die, if not support, 0xff*/
+	//ppa_t raif2;			/* raif2 die,if not support, 0xff */
 	u8 pgtype[CFG_NAND_LUN_NUM][CFG_NAND_CH_NUM];  /*192B*/
 	read_retry_para fthr;   /* optimal read retry */
 	rb_node_t rbnode;		/* bmi linked in a RB-Tree */
