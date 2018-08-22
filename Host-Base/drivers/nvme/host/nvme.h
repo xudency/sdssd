@@ -464,28 +464,28 @@ void nvme_core_exit(void);
 
 // represent a ExposeSSD device
 struct nvm_exdev {
-        struct list_head devices;    /* all nvm_exdev linked in nvm_exdev_list */	
-        u32 magic_dw;	
+	struct list_head devices;    /* all nvm_exdev linked in nvm_exdev_list */	
+    u32 magic_dw;	
 	struct miscdevice miscdev;     /* BackEnd Device */
 	char miscname[DISK_NAME_LEN];  /* Miscdev name */
-        int node;
-        char bdiskname[DISK_NAME_LEN];
-        void *private_data;		/* Expose device nvm_exns*/
+    int node;
+    char bdiskname[DISK_NAME_LEN];
+    void *private_data;		/* Expose device nvm_exns*/
 	struct kref kref;
 	struct nvme_ns *bns;    	/* underlying device nvme0n1 */
-        struct nvme_dev  *ndev;
-        struct nvme_ctrl *ctrl;
-        struct nvme_ppa_ops *ops;
-        struct pci_dev   *pdev;
-        struct dma_pool *dmapoll;
-        struct task_struct *writer_thread;   //fullfifo submit request to HW
-        struct task_struct *bios_rewr_thread; // pending wr bios
-        struct timer_list cqe_timer;
-        struct work_struct requeue_ws;	
-        struct work_struct yirq;   // simulation irq
-        u32 *l2ptbl;
-        u32 *l2pl1tbl;
-        struct idr nsid_idr;
+    struct nvme_dev  *ndev;
+    struct nvme_ctrl *ctrl;
+    struct nvme_ppa_ops *ops;
+    struct pci_dev   *pdev;
+    struct dma_pool *dmapoll;
+    struct task_struct *writer_thread;   //fullfifo submit request to HW
+    struct task_struct *bios_rewr_thread; // pending wr bios
+    struct timer_list cqe_timer;
+    struct work_struct requeue_ws;	
+    struct work_struct yirq;   // simulation irq
+    u32 *l2ptbl;
+    u32 *l2pl1tbl;
+    struct idr nsid_idr;
 };
 
 struct nvm_exns {

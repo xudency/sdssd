@@ -69,4 +69,8 @@ int fwd_die_to_prevn(u16 blk, u8 start_lun, u8 start_ch,
 	}
 }
 */
+/*pg_mode sys_tbl_get_pg_mode(ppa_t ppa)
+{
+	// LP UP XP
+}*/
 
