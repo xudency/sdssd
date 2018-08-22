@@ -81,7 +81,7 @@ void schedule(u8 cpu)
 	void *para;
 	taskfn fn;
 
-	context_switch();
+	//context_switch();
 
 	for_each_rdy_task(cpu)
 	{

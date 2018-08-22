@@ -15,52 +15,66 @@ bool validity_check()
 	//config validate check
 }
 
+typedef struct host_nvme_cmd {
+	//header;
+	u16 sqid;
+	struct nvme_command sqe;
+} host_cmd_t;
+
 
 ///////////////////////////////event_handler.c
 // HW notify CPU method
 //    1. HW interrupt ---> FW check Event register what happen ---> FW handle it
 //    2. FW Polling check Event register what happen ---> if yes handle it
 
-
 // Process Host Admin command 
-handle_nvme_admin_command()
+void handle_nvme_admin_command(host_cmd_t *cmd)
 {
+	u8 opcode = cmd->sqe.common.opcode;
 
+	switch (opcode) {
+	
+	}
+
+
+	return;
 }
 
 // Process Host IO Comamnd
-handle_nvme_io_command()
+void handle_nvme_io_command(host_cmd_t *cmd)
 {
+	u8 opcode = cmd->sqe.common.opcode;
 
-}
-
-
-hdc_fetch_command_phif()
-{
+	switch (opcode) {
 	
+	}
+
+
+	return;
 }
+
 
 // when host prepare a SQE and submit it to the SQ, then write SQTail DB
 // Phif fetch it and save in CMD_TABLE, then notify HDC by message hdc_nvme_cmd
-// CPU(HDC) 
-void hdc_nvme_cmd()
-{
-	//process();
-	//phif_cmd_request_to_chunk();
 
-	
+// taskfn demo
+void hdc_host_cmd_fn(void *para)
+{
+	host_cmd_t *cmd = (host_cmd_t *)para;
+
+	if (cmd->sqid == 0) {
+		// admin queue, this is admin cmd
+		handle_nvme_admin_command(cmd);
+	} else {
+		// io command
+		handle_nvme_io_command(cmd);
+	}
+
+	return;
 }
 
 
-/*void listening_loop(void)
-{
-	while (1) 
-	{
-		schedule();
-	}
-}*/
-
-
+// this is FW entrance, Main
 static int __init fw_init(void)
 {
 	printk("FW start run ...\n");
@@ -98,7 +112,8 @@ static int __init fw_init(void)
 
 	// Now FW HW has all ready to handle host request
 	//listening_loop();
-	schedule();
+	while (1)
+		schedule();
 	
 	return 0;
 }
