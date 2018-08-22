@@ -225,7 +225,7 @@ u8 get_page_type(ppa_t ppa)
 //so there are 2 case need convert after lookup table 
 //    case 1.normal in first page -> first page
 //	  case 2.ftl log page in front part CPL -> normal
-pg_type lookup_page_type_fast(ppa_t ppa)
+u8 lookup_page_type_fast(ppa_t ppa)
 {
 	u8 type = get_page_type(ppa);
 
