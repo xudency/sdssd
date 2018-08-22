@@ -28,17 +28,19 @@ typedef enum
 
 typedef struct blk_manage_info {
 	u16 blk;
-	u16 sequence;			/* band sequence */
-	time64_t timestamp;     /* Erase Safe, data retention */
-	u8 cri;					/* code rate index */
 	u8 band;				/* host/recycle/system */
 	u8 state;				/* FREE/OPEN/CLOSED/ERASE */
+
+	u32 sequence;			/* band sequence */
+	time64_t timestamp;     /* Erase Safe, data retention */
+
+	u8 cri;					/* code rate index */
 	u8 bb_grown_flag;   	/* BMI_FLAG_PRG_ERR/BMI_FLAG_UECC GC-P0*/
 	u16 pecycle;			/* Program Erase Cycle */
+
 	u16 bb_cnt;				/* MAX is CH*LUN */
-	//u8 lp_die; 			    /* log page Die(CH X LUN) */
-	//ppa_t raif1;			/* raif1 die, if not support, 0xff*/
-	//ppa_t raif2;			/* raif2 die,if not support, 0xff */
+	u16 rsvd;				
+	
 	u8 pgtype[CFG_NAND_LUN_NUM][CFG_NAND_CH_NUM];  /*192B*/
 	read_retry_para fthr;   /* optimal read retry */
 	rb_node_t rbnode;		/* bmi linked in a RB-Tree */

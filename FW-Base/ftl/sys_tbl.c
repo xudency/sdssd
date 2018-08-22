@@ -71,6 +71,7 @@ void update_first_page(u16 blk, u8 band)
 	u16 *bbt;
     first_page_t *firstpage = GET_FIRST_PAGE(band);
     bmi_t* bmi = GET_BMI(blk);
+	band_info_t bandinfo = *get_band_info(band);
 
 	// beware the first-page stuff is the previos Closed R-Block
 	// we need init it ahead, then to filled with the new open R-Block.
@@ -80,7 +81,7 @@ void update_first_page(u16 blk, u8 band)
 	first_page->blk = blk;
 	first_page->band = band;
 	first_page->cri = bmi->cri;
-	first_page->sequence = ;
+	first_page->sequence = bandinfo->current_seq++;
 	first_page->timestamp = current_timestamp();
 	first_page->pecycle = bmi->pecycle;
 	first_page->bb_cnt = bmi->bb_cnt;
@@ -252,30 +253,38 @@ u8 lookup_page_type_fast(ppa_t ppa)
 // TODO: moce this to MCP.c
 sys_build_page_type()
 {
-	// only in MCP
+	u16 blk;
+	u8 lun, ch, page_type;
+	bool rc;
+
 	for_each_blk(blk) {
 		for_each_lun(lun) {
 			for_each_ch(ch) {
 				//set page type according bbt-page
+				rc = __get_bbt(blk, lun, ch);
+				page_type = rc ? BADBLK_PAGE:NORMAL_PAGE;
+				__set_page_type(blk, lun, ch, page_type);
 			}
 		}
+		
+		block_dist_recalibrate(blk);
 	}
 }
 
 // when new bb grow, the r-block data distribution will changed
 // if new bb is raif/ftl log, we should move fwd die
-void block_dist_recalibrate(ppa_t new_bb)
-{
-	u16 blk = new_bb.nand.blk;
-
-	set_page_type(new_bb, BADBLK_PAGE);
+// this fn should called after bbt page has updated
+void block_dist_recalibrate(u16 blk)
+{	
+	//set_page_type(new_bb, BADBLK_PAGE);   // called together with set_bbt fn
 
 	raif_die_recalibrate(blk);
 
-	ftl_log_page_die_recalibrate(blk)
+	ftl_log_page_die_recalibrate(blk);
 	
 	return;
 }
+
 
 /*pg_mode sys_tbl_get_pg_mode(ppa_t ppa)
 {

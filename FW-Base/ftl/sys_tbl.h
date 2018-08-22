@@ -27,15 +27,15 @@
         for(band = 0; band < CFG_NAND_CH_NUM; band++)
 
 
-typedef enum {
+enum pg_type{
 	NORMAL_PAGE = 0,
 	BADBLK_PAGE,
-	FIRST_PAGE,			
+	FIRST_PAGE,	
 	FTL_LOG_PAGE,
 	RAIF1_PAGE,
 	RAIF2_PAGE,
-	INVALID_PAGE
-} pg_type;
+	INVALID_PAGE    // error, no this type
+};
 
 
 typedef enum {
@@ -56,11 +56,12 @@ typedef struct first_page
 	time64_t timestamp;	   /* Erase Safe, data retention */
 	u16 pecycle;		   /* Program Erase Cycle */
 	u16 bb_cnt;			    /* MAX is CH*PL*LUN */
-
+	
 	/* when latest boot block bbt page lost, merge it to previous bbt, 
 	 * as we only support up to 12 channel, bit[15:12] is no used
 	 */
 	u16 bbt[CFG_NAND_LUN_NUM];
+	//u8 pg_type[CFG_NAND_LUN_NUM][CFG_NAND_CH_NUM];
 	read_retry_para fthr;
 } first_page_t;    // 4KB
 
@@ -88,9 +89,9 @@ typedef struct {
 	u8 type;
 	u16 open_blk;
 	ppa_t current_ppa;
-	u32 current_seq;
+	u32 current_seq;		 // when open a new blk, assign to it the inc
 
-	recov_logs_t last_log_page;    // pfail and pdown, it save the last LOG Page
+	recov_logs_t last_log_page;   // pfail and pdown, it save the last LOG Page
 
 	// fast crash recovery, Scan-Merge LOG Pages Window
 	recov_logs_t base_log_page;
@@ -129,7 +130,7 @@ extern void *raif2_buff;
 static inline void first_page_reinit(u8 band)
 {
 	first_page_t *fp = GET_FIRST_PAGE(band);
-	memset(fp, 0x00, CP_SIZE);
+	memset(fp, 0x00, FIRST_PAGE_SIZE);
 }
 
 static inline log_page_t *wdp_get_log_page(u8 band, u8 half)

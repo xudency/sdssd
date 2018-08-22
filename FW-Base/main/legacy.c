@@ -43,7 +43,7 @@ int fwd_die_to_prevn(u16 blk, u8 start_lun, u8 start_ch,
 // this ppa is for host data oe insert sys data or badblock
 // delete, this is too slow, cpu-consume, 
 // because page type not change frequently, very time to re-cal is not worth
-/*pg_type calc_page_type_slow(ppa_t ppa)
+/*u8 calc_page_type_slow(ppa_t ppa)
 {
 	int type;
 

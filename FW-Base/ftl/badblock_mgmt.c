@@ -1,4 +1,3 @@
-
 /*
  * Copyright (C) 2018-2020 NET-Swift.
  * Initial release: Dengcai Xu <dengcaixu@net-swift.com>
@@ -10,9 +9,10 @@
  *
  * function: 
  * bad block managemt
+ * once a new bb grow, update bbt-page and bmi->page_type directly and set bb_grow_flag
+ * when the rblock picked to be cycle, if bb_grow_flasg setted, recalibrate block distribution
  *
  */
-
 
 // first PL, first LUN band block bitmap
 u16 *get_blk_bbt_base(u16 blk)
@@ -75,49 +75,6 @@ void clear_bbt(ppa_t ppa)
 	__clear_bbt(ppa.nand.blk, ppa.nand.lun, ppa.nand.ch);
 }
 
-
-// last n Good block in a R-Block, it is resv for LOG Page(raif, if enable)
-// last1 if raif2, last2 is raif1, last3 is log page
-// this is in all dies [0 - 191]
-/*bool get_lastn_good_die(u16 blk, u16 n, ppa_t *result)
-{
-    int counter = 0;
-    u16 bitmap;
-    int lun, ch; // MUST use int rather than u8
-    ppa_t ppa = 0; 
-	
-	u16 *b = get_blk_bbt_base(blk);
-
-	for (lun = CFG_NAND_LUN_NUM-1; lun >= 0; lun--) {
-        for(ch = CFG_NAND_CH_NUM-1; ch >= 0; ch--) {
-            bitmap = b[lun];
-            //bitmap = *(b + pl + lun*CFG_NAND_PL_NUM);
-            if (bit_test(ch)) {
-                // bad block  
-                continue;
-            } else {
-                // find a good block
-                ppa.all = 0;
-                ppa.nand.cp = 0;
-                ppa.nand.ch = ch;
-                ppa.nand.lun = lun;
-                ppa.nand.pg = 0;
-                ppa.nand.blk = blk;
-                result[counter++] = ppa;
-                if (counter == n)
-                    break;
-            }
-		}
-	}
-
-    if (counter == n) {
-        // find it, the last n good block's pl lun ch
-        return true;
-    } else {
-        // Don't find due to no enough Good Block(less than n)
-        return false;
-    }
-}*/
 
 /*
  *last n Good block in a R-Block, it is resv for LOG Page(raif, if enable)
