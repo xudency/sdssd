@@ -73,13 +73,13 @@ typedef struct task_ctl_block {
 
 
 typedef struct task_sched_ctl {
-	u32 task_presented[CPU_NUM];
+	//u32 task_presented[CPU_NUM];
 	TCB **task_array[CPU_NUM];
 } task_sched_ctl_t;
 
-static inline set_task_state(TCB *task, u8 val)
+static inline set_task_state(TCB *task, u8 state)
 {
-	task->state = val;
+	task->state = state;
 }
 
 extern task_sched_ctl_t gat_tasks_ctl_ctx;

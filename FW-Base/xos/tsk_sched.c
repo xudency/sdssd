@@ -31,11 +31,13 @@ TCB *this_task(u8 cpu, u8 prio)
 	return gat_tasks_ctl_ctx.task_array[cpu] + prio;
 }
 
-bool task_presented(u8 cpu, u8 prio)
+
+/*bool task_presented(u8 cpu, u8 prio)
 {
 	u32 present = gat_tasks_ctl_ctx.task_presented[cpu];
 	return bit_set(present, prio);
 }
+*/
 
 
 /*void set_task_null(u8 cpu, u8 prio)
@@ -58,25 +60,25 @@ TCB *create_task(taskfn handler, void *para, u8 cpu, u8 prio)
 		print_err("prio :%d is Invalid", prio);
 		return NULL;
 	}
-	
-	this_task(cpu, prio)
 
+	if (cpu >= CPU_NUM) {
+		print_err("cpu :%d is Invalid", cpu);
+		return NULL;
+	}
+    
 	task = this_task(cpu, prio);
 	if (task) {
-		print_wrn("already exist, overwrite write!!");
-		//kfree(task);
-	} else {
-		// task not exist
-		task = kmalloc(sizeof(TCB), GFP_KERNEL)
+		print_err("already exist");
+        return NULL;
 	}
 
+	// task not exist
+	task = kmalloc(sizeof(TCB), GFP_KERNEL)
+
 	task->prio = prio;
-	task->state = TASK_STATE_READY;
+	task->state = TASK_STATE_READY;  //default state
 	task->fn = handler;
 	task->prio = prio;
-
-	//bit
-	
 	
 	return task;
 }
@@ -97,7 +99,6 @@ void yield_task(TCB *task)
 {
 	set_task_state(task, TASK_STATE_SLEEP);
 }
-
 
 // set the task.state = ready, thus the task is visible to scheduler.
 // the current task will not exit, the resume task can be chosen next round
@@ -139,13 +140,21 @@ void pend_task(TCB *task)
 // when bit is clear, select the next bit to schedule
 void lsb_prefer_scheduler(u8 cpu)
 {
-	TCB* task;
-
+	TCB *task;
+    TCB **tasks;
+    
+    tasks = gat_tasks_ctl_ctx.task_array[cpu];
+    
 loop:
-	//context_switch();
-	find_the_first_set_bit(cpu) {
-		run_task(task);
-	}
+
+    // bit0 is highest priority
+    for (i = 0; i < MAX_TASKS_PER_CPU; i++) {
+        task = tasks[i];
+        if (task && task->state == TASK_STATE_READY) {
+            run_task(task);
+            i = 0;
+        }
+    }
 
 	goto loop;
 }
@@ -170,11 +179,11 @@ static sched_obj_t XOS_Scheduler;
 // select a scheduler
 void scheduler_init(char *name, sched_strategy sched_fn)
 {
-	u8 cpu;
+	//u8 cpu;
 	
-	for_each_cpu(cpu) {
-		gat_tasks_ctl_ctx.task_presented[cpu] = 0;
-	}
+	//for_each_cpu(cpu) {
+		//gat_tasks_ctl_ctx.task_presented[cpu] = 0;
+	//}
 
 	gat_tasks_ctl_ctx.task_array[HDC] = gat_hdc_task_array;
 	gat_tasks_ctl_ctx.task_array[ATC] = gat_atc_task_array;
