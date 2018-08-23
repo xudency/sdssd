@@ -1,4 +1,4 @@
-/*
+TASK_STATE_READY/*
  * Copyright (C) 2018-2020 NET-Swift.
  * Initial release: Dengcai Xu <dengcaixu@net-swift.com>
  *
@@ -81,21 +81,35 @@ void pend_task(TCB *task)
 }
 
 // scheduler as a plugin, easy to switch according CFG
-// scheduler pick task from ready list(bit 1 set)
+// scheduler pick task from TASK_STATE_READY
 // the pick policy is FIFO Prio-Base Fair .....
-void bit_scan_scheduler(u8 cpu)
+void lsb_prefer_scheduler(u8 cpu)
 {
 	TCB* task;
 
+loop:
 	//context_switch();
-
-	for_each_rdy_task(cpu)
-	{
+	find_the_first_set_bit(cpu) {
 		run_task(task);
 	}
 
-	// no ready Task now
+	goto loop;
 }
+
+
+void fair_scheduler(u8 cpu)
+{
+	TCB* task;
+
+loop:
+	//context_switch();
+	for_each_rdy_task(cpu) {
+		run_task(task);
+	}
+
+	goto loop;
+}
+
 
 
 static sched_obj_t XOS_Scheduler;
@@ -103,8 +117,11 @@ static sched_obj_t XOS_Scheduler;
 void scheduler_init(void)
 {
 	// select a scheduler
-	XOS_Scheduler->name = "bit scan";
+	XOS_Scheduler->name = "LSB_Prefer";
 	XOS_Scheduler->schedule = bit_scan_scheduler;
+
+	//XOS_Scheduler->name = "fair";
+	//XOS_Scheduler->schedule = fair_scheduler;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
