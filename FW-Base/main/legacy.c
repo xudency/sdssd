@@ -74,3 +74,8 @@ int fwd_die_to_prevn(u16 blk, u8 start_lun, u8 start_ch,
 	// LP UP XP
 }*/
 
+/*static sched_obj_t XOS_Scheduler = {
+	.name = "bit scan",
+	.schedule = bit_scan_scheduler,
+};*/
+

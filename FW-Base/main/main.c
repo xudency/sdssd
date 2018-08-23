@@ -74,6 +74,15 @@ void hdc_host_cmd_fn(void *para)
 }
 
 
+
+int fw_tasks_create(void)
+{
+	
+	create_task(PHIF_NVME_CMD, hdc_host_cmd_fn);
+}
+
+
+
 // this is FW entrance, Main
 static int __init fw_init(void)
 {
@@ -97,9 +106,10 @@ static int __init fw_init(void)
 
 	
 	/////////////////////////////FTL///////////////////////////
-	// CBUFF Address 
+	// CBUFF flat address partition
 	//ftl_sdata_allocated_init();
 
+	//some ctl_ctx init
 	//wpd_init();
 	
 	//rdp_init();
@@ -108,12 +118,11 @@ static int __init fw_init(void)
 
 	//ckpt_init();
 
-	//schedule_init();  // a micro-kernel, only contain task scheduler 
+	os_init();   // a micro-kernel, only contain task scheduler 
 
-	// Now FW HW has all ready to handle host request
-	//listening_loop();
-	while (1)
-		schedule();
+	fw_tasks_create();
+
+	os_start();   //Linux start_kernel
 	
 	return 0;
 }
