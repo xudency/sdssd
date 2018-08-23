@@ -1,6 +1,6 @@
 #ifndef __NANDFLASH_H__
 #define __NANDFLASH_H__
 
-void nandflash_init(void);
+void nand_init(void);
 
 #endif

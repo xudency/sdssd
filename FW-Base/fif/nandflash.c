@@ -1,6 +1,6 @@
 #include "nandflash.h"
 
-void nandflash_init(void)
+void nand_init(void)
 {
 	return;
 }

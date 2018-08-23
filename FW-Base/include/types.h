@@ -5,14 +5,14 @@
 #ifndef __TYPES_H__
 #define __TYPES_H__
 
-#define TRUE							1
-#define FALSE							0
-#define	true							TRUE
-#define	false							FALSE
+#define TRUE					1
+#define FALSE					0
+#define	true					TRUE
+#define	false					FALSE
 
 
 #ifndef NULL
-#define NULL							((void *) 0)
+#define NULL					((void *) 0)
 #endif
 
 

@@ -11,6 +11,17 @@
 #define bit_clear(f, bitnum)  			((f) &= ~(1<<bitnum))
 #define bit_mask(width) 				((1 << (width)) - 1)
 
+//word dword qword
+#define BYTE_BITS					8
+#define WORD_BITS					16
+#define DWORD_BITS					32
+#define QWORD_BITS					64
+
+#define WORD_BYTES					(WORD_BITS/BYTE_BITS)
+#define DWORD_BYTES					(DWORD_BITS/BYTE_BITS)
+#define QWORD_BYTES					(QWORD_BITS/BYTE_BITS)
+
+
 // TODO: ported bitops from linux/bitops.h and arch/arc/bitops.h
 
 

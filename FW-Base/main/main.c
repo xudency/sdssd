@@ -6,6 +6,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 
+#include "tsk_sched.h"
 
 // Check we didin't inadvertently grow the command struct and valid configuration
 // XXX, can it check when complie, thus can save time for power on
@@ -15,12 +16,6 @@ bool validity_check()
 	//config validate check
 }
 
-typedef struct host_nvme_cmd {
-	//header;
-	u16 sqid;
-	struct nvme_command sqe;
-} host_cmd_t;
-
 
 ///////////////////////////////event_handler.c
 // HW notify CPU method
@@ -28,7 +23,7 @@ typedef struct host_nvme_cmd {
 //    2. FW Polling check Event register what happen ---> if yes handle it
 
 // Process Host Admin command 
-void handle_nvme_admin_command(host_cmd_t *cmd)
+void handle_nvme_admin_command(hdc_nvme_cmd *cmd)
 {
 	u8 opcode = cmd->sqe.common.opcode;
 
@@ -41,7 +36,7 @@ void handle_nvme_admin_command(host_cmd_t *cmd)
 }
 
 // Process Host IO Comamnd
-void handle_nvme_io_command(host_cmd_t *cmd)
+void handle_nvme_io_command(hdc_nvme_cmd *cmd)
 {
 	u8 opcode = cmd->sqe.common.opcode;
 
@@ -58,9 +53,9 @@ void handle_nvme_io_command(host_cmd_t *cmd)
 // Phif fetch it and save in CMD_TABLE, then notify HDC by message hdc_nvme_cmd
 
 // taskfn demo
-void hdc_host_cmd_fn(void *para)
+void hdc_host_cmd_task(void *para)
 {
-	host_cmd_t *cmd = (host_cmd_t *)para;
+	hdc_nvme_cmd *cmd = (hdc_nvme_cmd *)para;
 
 	if (cmd->sqid == 0) {
 		// admin queue, this is admin cmd
@@ -77,8 +72,7 @@ void hdc_host_cmd_fn(void *para)
 
 int fw_tasks_create(void)
 {
-	
-	create_task(PHIF_NVME_CMD, hdc_host_cmd_fn);
+	create_task(PHIF_NVME_CMD, hdc_host_cmd_task);
 }
 
 
@@ -95,7 +89,7 @@ static int __init fw_init(void)
 	//sram_init();
 
 	// XXX: is this in FSQ-EM6 micro-code? 
-	//nandflash_init();
+	//nand_init();
 
 	//cpu_init();    //clock interrupt timer AHB
 
@@ -118,6 +112,8 @@ static int __init fw_init(void)
 
 	//ckpt_init();
 
+	
+	/////////////////////////////OS///////////////////////////
 	os_init();   // a micro-kernel, only contain task scheduler 
 
 	fw_tasks_create();

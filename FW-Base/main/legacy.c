@@ -50,6 +50,7 @@ int fwd_die_to_prevn(u16 blk, u8 start_lun, u8 start_ch,
 	if (is_bad_block(ppa)) {
 		return BADBLK_PAGE;
 	}
+	
 
 	if (is_first_ppa(ppa)) {
 		return FIRST_PAGE;
@@ -78,4 +79,5 @@ int fwd_die_to_prevn(u16 blk, u8 start_lun, u8 start_ch,
 	.name = "bit scan",
 	.schedule = bit_scan_scheduler,
 };*/
+
 

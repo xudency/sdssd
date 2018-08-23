@@ -13,7 +13,35 @@ TASK_STATE_READY/*
  */
 
 
-struct list_head g_task_list[CPU_NUM];
+//struct list_head g_task_list[CPU_NUM];
+
+task_sched_ctl_t gat_tasks_ctl_ctx;
+
+
+
+// seperate defined, bucause this will placed in Core-CCM
+static TCB *gat_hdc_task_array[MAX_TASKS_PER_CPU] = {NULL};
+static TCB *gat_atc_task_array[MAX_TASKS_PER_CPU] = {NULL};
+static TCB *gat_stc_task_array[MAX_TASKS_PER_CPU] = {NULL};
+static TCB *gat_fdc_task_array[MAX_TASKS_PER_CPU] = {NULL};
+
+
+TCB *this_task(u8 cpu, u8 prio)
+{
+	return gat_tasks_ctl_ctx.task_array[cpu] + prio;
+}
+
+bool task_presented(u8 cpu, u8 prio)
+{
+	u32 present = gat_tasks_ctl_ctx.task_presented[cpu];
+	return bit_set(present, prio);
+}
+
+
+/*void set_task_null(u8 cpu, u8 prio)
+{
+	*(gat_tasks_ctl_ctx.task_array[cpu] + prio) = NULL;
+}*/
 
 // taskfn demo
 void gc_read_task_fn(void *para)
@@ -21,18 +49,45 @@ void gc_read_task_fn(void *para)
 	return;
 }
 
-TCB *create_task(taskfn handler, void *para, u8 cpu)
+TCB *create_task(taskfn handler, void *para, u8 cpu, u8 prio)
 {
+	TCB *tsk_array;
 	TCB *task;
 
+	if (prio >= MAX_TASKS_PER_CPU) {
+		print_err("prio :%d is Invalid", prio);
+		return NULL;
+	}
+	
+	this_task(cpu, prio)
 
+	task = this_task(cpu, prio);
+	if (task) {
+		print_wrn("already exist, overwrite write!!");
+		//kfree(task);
+	} else {
+		// task not exist
+		task = kmalloc(sizeof(TCB), GFP_KERNEL)
+	}
+
+	task->prio = prio;
+	task->state = TASK_STATE_READY;
+	task->fn = handler;
+	task->prio = prio;
+
+	//bit
+	
+	
 	return task;
 }
 
 
 void delete_task(TCB *task)
 {
+	assert(task != NULL);
 
+	kfree(task);
+	task = NULL;
 }
 
 // set the task.state = SLEEP, thus the task is invisible to scheduler until someone resume it
@@ -80,9 +135,8 @@ void pend_task(TCB *task)
 	//schedule();
 }
 
-// scheduler as a plugin, easy to switch according CFG
-// scheduler pick task from TASK_STATE_READY
-// the pick policy is FIFO Prio-Base Fair .....
+// alway schedule the LSB task to run if the related bit is set
+// when bit is clear, select the next bit to schedule
 void lsb_prefer_scheduler(u8 cpu)
 {
 	TCB* task;
@@ -97,7 +151,7 @@ loop:
 }
 
 
-void fair_scheduler(u8 cpu)
+/*void fair_scheduler(u8 cpu)
 {
 	TCB* task;
 
@@ -108,42 +162,59 @@ loop:
 	}
 
 	goto loop;
-}
-
+}*/
 
 
 static sched_obj_t XOS_Scheduler;
 
-void scheduler_init(void)
+// select a scheduler
+void scheduler_init(char *name, sched_strategy sched_fn)
 {
-	// select a scheduler
-	XOS_Scheduler->name = "LSB_Prefer";
-	XOS_Scheduler->schedule = bit_scan_scheduler;
+	u8 cpu;
+	
+	for_each_cpu(cpu) {
+		gat_tasks_ctl_ctx.task_presented[cpu] = 0;
+	}
 
-	//XOS_Scheduler->name = "fair";
-	//XOS_Scheduler->schedule = fair_scheduler;
+	gat_tasks_ctl_ctx.task_array[HDC] = gat_hdc_task_array;
+	gat_tasks_ctl_ctx.task_array[ATC] = gat_atc_task_array;
+	gat_tasks_ctl_ctx.task_array[STC] = gat_stc_task_array;
+	gat_tasks_ctl_ctx.task_array[FDC] = gat_fdc_task_array;
+
+	XOS_Scheduler->name = name;
+	XOS_Scheduler->schedule = sched_fn;
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////////
 /*
  * os_start is used to start the multitasking process which lets XOS manages the tasks that 
  * you have created. Before you can call os_start(), you MUST have called os_init() to init 
  * and select a scheduler, beside you MUST have call create_task to created at least one task.
  *
- *
- * BEWARE: os_start() is not supposed to return.  If it does, that would be considered a fatal error.
  */
-
 int os_start(void)
 {
+	// run independent in 4 core
+	// TODO: how distrubute to 4 core
 	XOS_Scheduler.schedule(HDC);
+
+	XOS_Scheduler.schedule(ATC);
+	
+	XOS_Scheduler.schedule(STC);
+
+	XOS_Scheduler.schedule(FDC);
+
+	//BEWARE: the schedule will schedule a rdy task to run, if no ready 
+	//or if no fw_event && sw_event, schedule will run a idle task
+	//so its a loop forever, not supposed to return.  
+	//If it does, that would be considered a fatal error.
+	//panic();
 
 	return 0;
 }
 
 void os_init(void)
 {
-	scheduler_init();
+	scheduler_init("lsb-prefre", lsb_prefer_scheduler);
 
 	return;
 }

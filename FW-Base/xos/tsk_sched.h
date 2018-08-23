@@ -8,9 +8,15 @@
 #define STC 				2
 #define FDC 				3
 
+#define MAX_TASKS_PER_CPU   32
+
 #define TASK_STATE_SLEEP    0
 #define TASK_STATE_READY    1
 #define TASK_STATE_RUNNING  2
+
+#define for_each_cpu(cpu) \
+        for(cpu = 0; cpu < CPU_NUM; cpu++)
+
 
 // this task is trigger by HW and Host
 enum hw_task {
@@ -40,34 +46,46 @@ enum fw_task {
 // scheduler type dependon the schedule algorithm
 // we only implement a very simple bit scan scheduler
 // but it is easy to change to use other, just as a plugin
+typedef void (*sched_strategy) (u8 cpu);
+
 typedef struct sched_obj {
 	char name[16];    //so please don't take a too long name	
 	void (*schedule) (u8 cpu);
+	sched_strategy schedfn;
 } sched_obj_t;
 
 typedef void (*taskfn)(void *);
 
 // Task Control Block
 typedef struct task_ctl_block {
-	u8 tid;
+	//u8 tid;
 	u8 state;     //runing ready sleep
-	u8 native_prio;
-	u8 tmp_prio; // temporary changed  
+	u8 prio;	  // the priority is unique, bitmap index, 0-highest  31-lowest 
+	u16 rsvd;     // keep 4B align
 
 	taskfn fn;
 	void *para;
 
-	// XXX: use list or heap ?
-	struct list_node node;
-	struct task_ctl_block *parent;
+	// XXX: use list or heap or array is OK ?
+	//struct list_node node;
+	//struct task_ctl_block *parent;
 } TCB;
 
 
+typedef struct task_sched_ctl {
+	u32 task_presented[CPU_NUM];
+	TCB **task_array[CPU_NUM];
+} task_sched_ctl_t;
 
 static inline set_task_state(TCB *task, u8 val)
 {
 	task->state = val;
 }
+
+extern task_sched_ctl_t gat_tasks_ctl_ctx;
+
+extern int os_start(void);
+extern void os_init(void);
 
 
 #endif

@@ -5,7 +5,8 @@
 #define DEBUG_ENABLE   // when ship out, to get better performance comment this line
  
 
-#define print_err(fmt, arg...)  printk("[%s][%d]"fmt"\n", __FUNCTION__, __LINE__, ##arg)
+#define print_err(fmt, arg...)  printk("*****[%s][%d]"fmt"*****\n", __FUNCTION__, __LINE__, ##arg)
+#define print_wrn(fmt, arg...)  printk("[%s][%d]"fmt" !!!\n", __FUNCTION__, __LINE__, ##arg)
 
 
 #ifdef DEBUG_ENABLE

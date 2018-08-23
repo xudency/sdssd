@@ -158,4 +158,22 @@ struct nvme_command {
 	};
 };
 
+
+struct nvme_completion {
+	/*
+	 * Used by Admin and Fabrics commands to return data:
+	 */
+	union nvme_result {
+		u16 bit16;
+		u32	bit32;
+		u64 bit64;
+	} result;
+
+	u16	sq_head;	/* how much of this queue may be reclaimed */
+	u16	sq_id;		/* submission queue that generated this entry */
+	u16	command_id;	/* of the command which completed */
+	u16	status;		/* did the command fail, and if so, why? */
+};
+
+
 #endif
