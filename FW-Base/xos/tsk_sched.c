@@ -140,23 +140,24 @@ void pend_task(TCB *task)
 // when bit is clear, select the next bit to schedule
 void lsb_prefer_scheduler(u8 cpu)
 {
+	int i;
 	TCB *task;
     TCB **tasks;
     
     tasks = gat_tasks_ctl_ctx.task_array[cpu];
     
-loop:
-
+//loop:
     // bit0 is highest priority
     for (i = 0; i < MAX_TASKS_PER_CPU; i++) {
         task = tasks[i];
         if (task && task->state == TASK_STATE_READY) {
+			//nte = 
+		
             run_task(task);
-            i = 0;
         }
     }
 
-	goto loop;
+	//goto loop;
 }
 
 

@@ -49,15 +49,27 @@ void handle_nvme_io_command(hdc_nvme_cmd *cmd)
 }
 
 
+
+
 // when host prepare a SQE and submit it to the SQ, then write SQTail DB
 // Phif fetch it and save in CMD_TABLE, then notify HDC by message hdc_nvme_cmd
 
 // taskfn demo
 void hdc_host_cmd_task(void *para)
 {
-	hdc_nvme_cmd *cmd = (hdc_nvme_cmd *)para;
+	// HW need a Event Notifier Register: EVENTF
+	// EVENTF
+	u32 event = readl(EVENTF);
+	
+	if (!bit_test(event, 0)) 
+		return;   // no host cmd need process, this task exit 
 
-	if (cmd->sqid == 0) {
+	// HW fetch and fwd the Host CMD to a fix position
+	// queue tail head is managed by HW
+	//hdc_nvme_cmd *cmd = (hdc_nvme_cmd *)para;
+	hdc_nvme_cmd *cmd = (hdc_nvme_cmd *)HOST_CMD_SPM;
+
+	if (cmd->header.sqid == 0) {
 		// admin queue, this is admin cmd
 		handle_nvme_admin_command(cmd);
 	} else {
@@ -65,14 +77,20 @@ void hdc_host_cmd_task(void *para)
 		handle_nvme_io_command(cmd);
 	}
 
+	// clear the bit,thus hw can get the next cmd from CMD Table
+	bit_clear(event, 0);
+
 	return;
 }
 
+/* SPA is a fix memory located in CPU's DCCM */
 
 
 int fw_tasks_create(void)
 {
-	create_task(PHIF_NVME_CMD, hdc_host_cmd_task);
+	create_task(hdc_host_cmd_task, NULL, HDC, 0);
+
+	//create_task(taskfn handler, void * para, HDC, 1);
 }
 
 
