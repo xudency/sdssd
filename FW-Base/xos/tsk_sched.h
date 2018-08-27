@@ -54,7 +54,7 @@ typedef struct sched_obj {
 	sched_strategy schedfn;
 } sched_obj_t;
 
-typedef void (*taskfn)(void *);
+typedef int (*taskfn)(void *);
 
 // Task Control Block
 typedef struct task_ctl_block {

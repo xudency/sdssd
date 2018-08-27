@@ -22,55 +22,49 @@
 
 
 // Process Host IO Comamnd
-void handle_nvme_io_command(hdc_nvme_cmd *cmd)
+int handle_nvme_io_command(hdc_nvme_cmd *cmd)
 {
-	u8 opcode = cmd->sqe.common.opcode;
-	u32 start_lba = cmd->sqe.rw.slba;
-	u32 nlba = cmd->sqe.rw.length;
-
+	int res = 0;
 	
+	/*u8 opcode = cmd->sqe.common.opcode;
+	u32 start_lba = cmd->sqe.rw.slba;
+	u32 nlba = cmd->sqe.rw.length;*/
+
 
 	switch (opcode) {
 	case nvme_io_read:
-		host_read_lba();
+		res = host_read_lba();
 		break;
 	case nvme_io_write:
-		host_write_lba();
+		res = host_write_lba();
 		break;
 	case nvme_io_flush:
 		break;
 	default:
+		res = -EINVAL;
 		print_err("Opcode:0x%x Invalid", opcode);
 		break;
 	}
 
-
-	return;
+	return res;
 }
 
 // when command process completion, this is the hook callback routine
-void process_completion_task(void *para)
+int process_completion_task(void *para)
 {
 	// TODO: process all to Post CQE to Host
 
 	yield_task(HDC, completion_prio);
 
-	return;
+	return 0;
 }
 
 // when host prepare a SQE and submit it to the SQ, then write SQTail DB
 // Phif fetch it and save in CMD_TABLE, then notify HDC by message hdc_nvme_cmd
 
 // taskfn demo
-void hdc_host_cmd_task(void *para)
+int hdc_host_cmd_task(void *para)
 {
-	// HW need a Event Notifier Register: EVENTF
-	// EVENTF
-	//u32 event = readl(EVENTF);
-	
-	//if (!bit_test(event, 0)) 
-		//return;   // no host cmd need process, this task exit 
-
 	// HW fetch and fwd the Host CMD to a fix position
 	// queue tail head is managed by HW
 	//hdc_nvme_cmd *cmd = (hdc_nvme_cmd *)para;
@@ -78,15 +72,11 @@ void hdc_host_cmd_task(void *para)
 
 	if (cmd->header.sqid == 0) {
 		// admin queue, this is admin cmd
-		handle_nvme_admin_command(cmd);
+		return handle_nvme_admin_command(cmd);
 	} else {
 		// io command
-		handle_nvme_io_command(cmd);
+		return handle_nvme_io_command(cmd);
 	}
 
-	// clear the bit,thus hw can get the next cmd from CMD Table
-	//bit_clear(event, 0);
-
-	return;
 }
 

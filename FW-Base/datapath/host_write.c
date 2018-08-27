@@ -92,4 +92,7 @@ bool atc_assign_ppa(u8 band, u32 scpa, u16 nppas, ppa_t *ppalist)
 }
 
 
+int host_write_lba()
+{
 
+}
