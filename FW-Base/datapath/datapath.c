@@ -20,18 +20,6 @@
 //    1. HW interrupt ---> FW check Event register what happen ---> FW handle it
 //    2. FW Polling check Event register what happen ---> if yes handle it
 
-// Process Host Admin command 
-void handle_nvme_admin_command(hdc_nvme_cmd *cmd)
-{
-	u8 opcode = cmd->sqe.common.opcode;
-
-	switch (opcode) {
-	
-	}
-
-
-	return;
-}
 
 // Process Host IO Comamnd
 void handle_nvme_io_command(hdc_nvme_cmd *cmd)
