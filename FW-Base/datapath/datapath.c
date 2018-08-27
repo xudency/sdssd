@@ -26,17 +26,14 @@ int handle_nvme_io_command(hdc_nvme_cmd *cmd)
 {
 	int res = 0;
 	
-	/*u8 opcode = cmd->sqe.common.opcode;
-	u32 start_lba = cmd->sqe.rw.slba;
-	u32 nlba = cmd->sqe.rw.length;*/
-
+	u8 opcode = cmd->sqe.common.opcode;
 
 	switch (opcode) {
 	case nvme_io_read:
 		res = host_read_lba();
 		break;
 	case nvme_io_write:
-		res = host_write_lba();
+		res = host_write_lba(cmd);
 		break;
 	case nvme_io_flush:
 		break;
@@ -57,6 +54,13 @@ int process_completion_task(void *para)
 	yield_task(HDC, completion_prio);
 
 	return 0;
+}
+
+
+void hdc_send_phif_cmd_req()
+{
+	phif_cmd_req req;
+	
 }
 
 // when host prepare a SQE and submit it to the SQ, then write SQTail DB

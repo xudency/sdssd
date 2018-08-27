@@ -92,7 +92,17 @@ bool atc_assign_ppa(u8 band, u32 scpa, u16 nppas, ppa_t *ppalist)
 }
 
 
-int host_write_lba()
+// TODO: rate limiter, add this cmd to a pendimg list
+// do some check, then generate a phif_cmd_req fwd to phif.chunk
+int host_write_lba(hdc_nvme_cmd *cmd)
 {
+	u32 start_lba = cmd->sqe.rw.slba;
+	u32 nlba = cmd->sqe.rw.length;
 
+	// cmd sanity check
+
+	// rate limiter, throttle host write when GC too slowly
+	// s_queue_t stack_t ops
+
+	
 }
