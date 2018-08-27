@@ -57,10 +57,13 @@ int process_completion_task(void *para)
 }
 
 
-void hdc_send_phif_cmd_req()
+void send_phif_cmd_req(phif_cmd_req *req)
 {
-	phif_cmd_req req;
-	
+	//common filed filled
+
+	memcpy(PHIF_CMD_REQ_SPM, req, sizeof(req));	
+
+	writel();   // notify hw to process
 }
 
 // when host prepare a SQE and submit it to the SQ, then write SQTail DB
@@ -72,7 +75,7 @@ int hdc_host_cmd_task(void *para)
 	// HW fetch and fwd the Host CMD to a fix position
 	// queue tail head is managed by HW
 	//hdc_nvme_cmd *cmd = (hdc_nvme_cmd *)para;
-	hdc_nvme_cmd *cmd = (hdc_nvme_cmd *)HOST_CMD_SPM;
+	hdc_nvme_cmd *cmd = (hdc_nvme_cmd *)HDC_NVME_CMD_SPM;
 
 	if (cmd->header.sqid == 0) {
 		// admin queue, this is admin cmd

@@ -99,10 +99,22 @@ int host_write_lba(hdc_nvme_cmd *cmd)
 	u32 start_lba = cmd->sqe.rw.slba;
 	u32 nlba = cmd->sqe.rw.length;
 
+	//list_add(, cmd);
+
+	//cmd = list_head
+
 	// cmd sanity check
 
 	// rate limiter, throttle host write when GC too slowly
 	// s_queue_t stack_t ops
 
-	
+	// opcode depend filed fill outside
+	phif_cmd_req req;
+	memset(&req, 0, sizeof(req));
+	req.cpa = start_lba / 8;     // LBA - > CPA
+	req.cache_en = 1;
+	req.band_rdtype = HBAND;
+	req.cph_size = 1;    //read from config
+
+	send_phif_cmd_req(&req);
 }

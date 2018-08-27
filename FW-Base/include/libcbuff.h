@@ -6,7 +6,8 @@
 
 // TODO:  CBUFF+CCM+CSM address map, zone portion
 
-#define HOST_CMD_SPM		0x90000 
+#define HDC_NVME_CMD_SPM		0x90000 
 
+#define PHIF_CMD_REQ_SPM
 
 #endif
