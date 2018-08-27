@@ -17,85 +17,32 @@ bool validity_check()
 }
 
 
-///////////////////////////////event_handler.c
-// HW notify CPU method
-//    1. HW interrupt ---> FW check Event register what happen ---> FW handle it
-//    2. FW Polling check Event register what happen ---> if yes handle it
-
-// Process Host Admin command 
-void handle_nvme_admin_command(hdc_nvme_cmd *cmd)
+viod handle_hw_event(u8 cpu)
 {
-	u8 opcode = cmd->sqe.common.opcode;
+	int bit;
+	TCB *task;
+    TCB **tasks = gat_tasks_ctl_ctx.task_array[cpu];
+	u32 hw_event = readl(HW_EVENTF);   // read this register, it will clear
 
-	switch (opcode) {
-	
+	for_each_set_bit(bit, &hw_event, REG32_BITS) {
+		task = tasks[bit];
+		if (task && task->state == TASK_STATE_READY) run_task(task);
+	}
+}
+
+viod handle_fw_event(u8 cpu)
+{
+	int bit;
+	TCB *task;
+    TCB **tasks = gat_tasks_ctl_ctx.task_array[cpu];
+	u32 fw_event = readl(FW_EVENTF);   // read this register, it will clear
+
+	for_each_set_bit(bit, &fw_event, REG32_BITS) {
+		task = tasks[bit];
+		if (task && task->state == TASK_STATE_READY) run_task(task);
 	}
 
-
-	return;
 }
-
-// Process Host IO Comamnd
-void handle_nvme_io_command(hdc_nvme_cmd *cmd)
-{
-	u8 opcode = cmd->sqe.common.opcode;
-
-	switch (opcode) {
-	
-	}
-
-
-	return;
-}
-
-// when command process completion, this is the hook callback routine
-void process_completion_task(void *para)
-{
-	return;
-}
-
-// when host prepare a SQE and submit it to the SQ, then write SQTail DB
-// Phif fetch it and save in CMD_TABLE, then notify HDC by message hdc_nvme_cmd
-
-// taskfn demo
-void hdc_host_cmd_task(void *para)
-{
-	// HW need a Event Notifier Register: EVENTF
-	// EVENTF
-	//u32 event = readl(EVENTF);
-	
-	//if (!bit_test(event, 0)) 
-		//return;   // no host cmd need process, this task exit 
-
-	// HW fetch and fwd the Host CMD to a fix position
-	// queue tail head is managed by HW
-	//hdc_nvme_cmd *cmd = (hdc_nvme_cmd *)para;
-	hdc_nvme_cmd *cmd = (hdc_nvme_cmd *)HOST_CMD_SPM;
-
-	if (cmd->header.sqid == 0) {
-		// admin queue, this is admin cmd
-		handle_nvme_admin_command(cmd);
-	} else {
-		// io command
-		handle_nvme_io_command(cmd);
-	}
-
-	// clear the bit,thus hw can get the next cmd from CMD Table
-	//bit_clear(event, 0);
-
-	return;
-}
-
-/* SPA is a fix memory located in CPU's DCCM */
-
-
-int hdc_tasks_create(void)
-{
-	create_task(hdc_host_cmd_task, NULL, HDC, 0, true);
-	
-	create_task(process_completion_task, NULL, HDC, 32, false);
-}
-
 
 
 // this is FW entrance, Main
@@ -137,15 +84,9 @@ static int __init fw_init(void)
 	/////////////////////////////OS///////////////////////////
 	os_init();   // a micro-kernel, only contain task scheduler 
 
-	hdc_tasks_create();
+	os_task_create();
 
-	//atc_tasks_create();
-
-	//stc_tasks_create();
-
-	//fdc_tasks_create();
-
-	os_start();   //Linux start_kernel
+	os_start();   //Linux start_kernel. start the scheduler to pick task to run one by one
 	
 	return 0;
 }

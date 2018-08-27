@@ -31,22 +31,6 @@ TCB *this_task(u8 cpu, u8 prio)
 }
 
 
-/*bool task_presented(u8 cpu, u8 prio)
-{
-	u32 present = gat_tasks_ctl_ctx.task_presented[cpu];
-	return bit_set(present, prio);
-}
-*/
-
-
-/*void set_task_null(u8 cpu, u8 prio)
-{
-	*(gat_tasks_ctl_ctx.task_array[cpu] + prio) = NULL;
-}*/
-
-// taskfn demo
-
-
 TCB *create_task(taskfn handler, void *para, u8 cpu, u8 prio, bool ready)
 {
 	TCB *tsk_array;
@@ -155,72 +139,29 @@ void run_task(u8 cpu, u8 prio)
 	__run_task(task);
 }
 
-
 // alway schedule the LSB task to run if the related bit is set
 // when bit is clear, select the next bit to schedule
 void lsb_prefer_scheduler(u8 cpu)
 {
-	int bit;
-	TCB *task;
-    TCB **tasks;
 	register loop_cnt = 0;
 
 loooop:
-	// event register, a bit represent a event from HW
-	u32 hw_event = readl(HW_EVENTF);
-	// event sw indicator, a bit represent a event from FW internal
-	u32 fw_event = readl(FW_EVENTF);
+	// Any HW Task Priority is higher than all FW Task.
+	handle_hw_event(cpu);
+	
+	handle_fw_event(cpu);
 
-    tasks = gat_tasks_ctl_ctx.task_array[cpu];
-
-	// handle hw event
-	for_each_set_bit(bit, &hw_event, REG32_BITS) {
-		task = tasks[bit];
-		if (task && task->state == TASK_STATE_READY) run_task(task);
-	}
-
-	// handle fw event
-	for_each_set_bit(bit, &fw_event, REG32_BITS) {
-		bit_clear(fw_event, bit);
-		task = tasks[bit];
-		if (task && task->state == TASK_STATE_READY) run_task(task);
-	}
-
-	// XXX: CQE is process in ISR, here add a oppotinuty to process it
-	if ((loop_cnt&0x3f) == 0) {
-		resume_task(HDC, completion_prio);
-	}
+	if (loop_cnt & 0xf)
+		resume_task(cpu, completion_prio);
 
 	goto loooop;
-	//process_completion();
 }
-
-
-/*void fair_scheduler(u8 cpu)
-{
-	TCB* task;
-
-loop:
-	//context_switch();
-	for_each_rdy_task(cpu) {
-		run_task(task);
-	}
-
-	goto loop;
-}*/
-
 
 static sched_obj_t XOS_Scheduler;
 
 // select a scheduler
 void scheduler_init(char *name, sched_strategy sched_fn)
 {
-	//u8 cpu;
-	
-	//for_each_cpu(cpu) {
-		//gat_tasks_ctl_ctx.task_presented[cpu] = 0;
-	//}
-
 	gat_tasks_ctl_ctx.task_array[HDC] = gat_hdc_task_array;
 	gat_tasks_ctl_ctx.task_array[ATC] = gat_atc_task_array;
 	gat_tasks_ctl_ctx.task_array[STC] = gat_stc_task_array;
@@ -264,4 +205,59 @@ void os_init(void)
 	return;
 }
 
+
+// HDC is responsibile for
+//   1. handle NVMe Command(admin/io) from Host
+//   2. for read, in completion, move data from CBUFF to Host
+int hdc_tasks_create(void)
+{
+	create_task(hdc_host_cmd_task, NULL, HDC, 0, true);
+	
+	create_task(process_completion_task, NULL, HDC, 32, false);
+
+	return 0;
+}
+
+// ATC is responsibile for
+//   1. MAP, Address Translate, slot-->PPA
+//   2. CheckPoint sace/restore
+//   3. 
+int atc_tasks_create()
+{
+
+	return 0;
+}
+
+// STC ss responsibile for 
+//   1. recycle
+//   2. recovery
+//   3. Root FS(Primary info)
+int stc_tasks_create()
+{
+
+
+	return 0;
+}
+
+// FDC is responsibile for
+//   1. CBUFF Flush Management
+//   2. Media Error-Handle
+int fdc_tasks_create()
+{
+
+
+	return 0;
+}
+
+
+void os_task_create()
+{
+	hdc_tasks_create();
+	
+	atc_tasks_create();
+	
+	stc_tasks_create();
+	
+	fdc_tasks_create();
+}
 
