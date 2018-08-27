@@ -6,6 +6,8 @@
 // n is 64bit
 #define upper_32_bits(n) ((u32)(((n) >> 16) >> 16))
 #define lower_32_bits(n) ((u32)(n))
+
+
 #define bit_test(f, bitnum)   			(0 != ((f)&(1<<bitnum)))
 #define bit_set(f, bitnum)    			((f) |= (1<<bitnum))
 #define bit_clear(f, bitnum)  			((f) &= ~(1<<bitnum))
@@ -20,6 +22,8 @@
 #define WORD_BYTES					(WORD_BITS/BYTE_BITS)
 #define DWORD_BYTES					(DWORD_BITS/BYTE_BITS)
 #define QWORD_BYTES					(QWORD_BITS/BYTE_BITS)
+
+#define REG32_BITS					32
 
 
 // TODO: ported bitops from linux/bitops.h and arch/arc/bitops.h

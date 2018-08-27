@@ -8,7 +8,7 @@
 #define STC 				2
 #define FDC 				3
 
-#define MAX_TASKS_PER_CPU   32
+#define MAX_TASKS_PER_CPU   64    // 32hw + 32fw
 
 #define TASK_STATE_SLEEP    0
 #define TASK_STATE_READY    1

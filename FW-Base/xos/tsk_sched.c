@@ -1,4 +1,4 @@
-TASK_STATE_READY/*
+/*
  * Copyright (C) 2018-2020 NET-Swift.
  * Initial release: Dengcai Xu <dengcaixu@net-swift.com>
  *
@@ -10,16 +10,15 @@ TASK_STATE_READY/*
  * function: 
  * FW has lots Task, to facilitate manage these Task, a scheduler is needed
  *
+ * each CPU core support up to 64 task, 32 HW task + 32 FW task
+ * the HW task priority is [0:31],  FW task priority is [32:63] 
+ *
  */
 
 
-//struct list_head g_task_list[CPU_NUM];
-
 task_sched_ctl_t gat_tasks_ctl_ctx;
 
-
-
-// seperate defined, bucause this will placed in Core-CCM
+// seperate defined, because this will placed in Core-CCM
 static TCB *gat_hdc_task_array[MAX_TASKS_PER_CPU] = {NULL};
 static TCB *gat_atc_task_array[MAX_TASKS_PER_CPU] = {NULL};
 static TCB *gat_stc_task_array[MAX_TASKS_PER_CPU] = {NULL};
@@ -46,12 +45,9 @@ TCB *this_task(u8 cpu, u8 prio)
 }*/
 
 // taskfn demo
-void gc_read_task_fn(void *para)
-{
-	return;
-}
 
-TCB *create_task(taskfn handler, void *para, u8 cpu, u8 prio)
+
+TCB *create_task(taskfn handler, void *para, u8 cpu, u8 prio, bool ready)
 {
 	TCB *tsk_array;
 	TCB *task;
@@ -76,7 +72,12 @@ TCB *create_task(taskfn handler, void *para, u8 cpu, u8 prio)
 	task = kmalloc(sizeof(TCB), GFP_KERNEL)
 
 	task->prio = prio;
-	task->state = TASK_STATE_READY;  //default state
+
+	if (ready)
+		task->state = TASK_STATE_READY;  //default state
+	else
+		task->state = TASK_STATE_SLEEP;
+	
 	task->fn = handler;
 	task->prio = prio;
 	
@@ -84,7 +85,7 @@ TCB *create_task(taskfn handler, void *para, u8 cpu, u8 prio)
 }
 
 
-void delete_task(TCB *task)
+void __delete_task(TCB *task)
 {
 	assert(task != NULL);
 
@@ -92,30 +93,52 @@ void delete_task(TCB *task)
 	task = NULL;
 }
 
+void delete_task(u8 cpu, u8 prio)
+{
+	TCB *task = this_task(cpu, prio);
+	__delete_task(task);
+}
+
+
 // set the task.state = SLEEP, thus the task is invisible to scheduler until someone resume it
 // if yield self, this task will still run this round
 //unmask the task to scheduler
-void yield_task(TCB *task)
+void __yield_task(TCB *task)
 {
+	assert(task != NULL);
 	set_task_state(task, TASK_STATE_SLEEP);
+}
+
+void yield_task(u8 cpu, u8 prio)
+{
+	TCB *task = this_task(cpu, prio);
+	__yield_task(task);
 }
 
 // set the task.state = ready, thus the task is visible to scheduler.
 // the current task will not exit, the resume task can be chosen next round
 // mask the task o scheduler
-void resume_task(TCB *task)
+void __resume_task(TCB *task)
 {
+	assert(task != NULL);
 	set_task_state(task, TASK_STATE_READY);
 }
 
+void resume_task(u8 cpu, u8 prio)
+{
+	TCB *task = this_task(cpu, prio);
+
+	__resume_task(task);
+}
 
 // schedule the task right now bypass scheduler
 // it is for real-time urgent task which need process right now
-void run_task(TCB *task)
+void __run_task(TCB *task)
 {
 	void *para;
 	taskfn fn;
 
+	assert(task != NULL);
 	assert(task->state == TASK_STATE_READY);
 
 	task->state = TASK_STATE_RUNNING;
@@ -123,41 +146,53 @@ void run_task(TCB *task)
 	fn = task->fn;
 	para = task->para;
 
-	// run it
 	fn(para);
 }
 
-// 1.stop current task(the caller)
-// 2.current not mask
-void pend_task(TCB *task)
+void run_task(u8 cpu, u8 prio)
 {
-	// break current task
-
-	//schedule();
+	TCB *task = this_task(cpu, prio);
+	__run_task(task);
 }
+
 
 // alway schedule the LSB task to run if the related bit is set
 // when bit is clear, select the next bit to schedule
 void lsb_prefer_scheduler(u8 cpu)
 {
-	int i;
+	int bit;
 	TCB *task;
     TCB **tasks;
-    
-    tasks = gat_tasks_ctl_ctx.task_array[cpu];
-    
-//loop:
-    // bit0 is highest priority
-    for (i = 0; i < MAX_TASKS_PER_CPU; i++) {
-        task = tasks[i];
-        if (task && task->state == TASK_STATE_READY) {
-			//nte = 
-		
-            run_task(task);
-        }
-    }
+	register loop_cnt = 0;
 
-	//goto loop;
+loooop:
+	// event register, a bit represent a event from HW
+	u32 hw_event = readl(HW_EVENTF);
+	// event sw indicator, a bit represent a event from FW internal
+	u32 fw_event = readl(FW_EVENTF);
+
+    tasks = gat_tasks_ctl_ctx.task_array[cpu];
+
+	// handle hw event
+	for_each_set_bit(bit, &hw_event, REG32_BITS) {
+		task = tasks[bit];
+		if (task && task->state == TASK_STATE_READY) run_task(task);
+	}
+
+	// handle fw event
+	for_each_set_bit(bit, &fw_event, REG32_BITS) {
+		bit_clear(fw_event, bit);
+		task = tasks[bit];
+		if (task && task->state == TASK_STATE_READY) run_task(task);
+	}
+
+	// XXX: CQE is process in ISR, here add a oppotinuty to process it
+	if ((loop_cnt&0x3f) == 0) {
+		resume_task(HDC, completion_prio);
+	}
+
+	goto loooop;
+	//process_completion();
 }
 
 

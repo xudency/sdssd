@@ -48,8 +48,11 @@ void handle_nvme_io_command(hdc_nvme_cmd *cmd)
 	return;
 }
 
-
-
+// when command process completion, this is the hook callback routine
+void process_completion_task(void *para)
+{
+	return;
+}
 
 // when host prepare a SQE and submit it to the SQ, then write SQTail DB
 // Phif fetch it and save in CMD_TABLE, then notify HDC by message hdc_nvme_cmd
@@ -59,10 +62,10 @@ void hdc_host_cmd_task(void *para)
 {
 	// HW need a Event Notifier Register: EVENTF
 	// EVENTF
-	u32 event = readl(EVENTF);
+	//u32 event = readl(EVENTF);
 	
-	if (!bit_test(event, 0)) 
-		return;   // no host cmd need process, this task exit 
+	//if (!bit_test(event, 0)) 
+		//return;   // no host cmd need process, this task exit 
 
 	// HW fetch and fwd the Host CMD to a fix position
 	// queue tail head is managed by HW
@@ -78,7 +81,7 @@ void hdc_host_cmd_task(void *para)
 	}
 
 	// clear the bit,thus hw can get the next cmd from CMD Table
-	bit_clear(event, 0);
+	//bit_clear(event, 0);
 
 	return;
 }
@@ -86,11 +89,11 @@ void hdc_host_cmd_task(void *para)
 /* SPA is a fix memory located in CPU's DCCM */
 
 
-int fw_tasks_create(void)
+int hdc_tasks_create(void)
 {
-	create_task(hdc_host_cmd_task, NULL, HDC, 0);
-
-	//create_task(taskfn handler, void * para, HDC, 1);
+	create_task(hdc_host_cmd_task, NULL, HDC, 0, true);
+	
+	create_task(process_completion_task, NULL, HDC, 32, false);
 }
 
 
@@ -134,7 +137,13 @@ static int __init fw_init(void)
 	/////////////////////////////OS///////////////////////////
 	os_init();   // a micro-kernel, only contain task scheduler 
 
-	fw_tasks_create();
+	hdc_tasks_create();
+
+	//atc_tasks_create();
+
+	//stc_tasks_create();
+
+	//fdc_tasks_create();
 
 	os_start();   //Linux start_kernel
 	
