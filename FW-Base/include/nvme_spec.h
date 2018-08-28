@@ -83,8 +83,8 @@ struct nvme_common_command {
 	u16			command_id;
 	u32			nsid;
 	u32			cdw2[2];
-	u64			metadata;
-	union nvme_data_ptr	dptr;
+	u64			mptr;		   //meta pointer
+	union nvme_data_ptr	dptr;  //data pointer
 	u32			cdw10[6];
 };
 
@@ -94,7 +94,7 @@ struct nvme_rw_command {
 	u16			command_id;
 	u32			nsid;
 	u64			rsvd2;
-	u64			metadata;
+	u64			mptr;
 	union nvme_data_ptr	dptr;
 	u64			slba;
 	u16			length;

@@ -2,9 +2,6 @@
 #ifndef __SYS_TBL_H__
 #define __SYS_TBL_H__
 
-// sys band + host band + wl band(cold data)
-#define BAND_NUM 				3
-
 // each band has 2 log_page in memory, because, if we only has 1 for a band, 
 // when it is flushing, the next r-page can't until log_page flushed completely.
 // so with another, when the first is flushing, the next r-page can update in the second log_page.
@@ -26,6 +23,13 @@
 #define for_each_band(band) \
         for(band = 0; band < CFG_NAND_CH_NUM; band++)
 
+enum band_type{
+	SYSBAND = 0,
+	HOSTBAND,		// host, hot-warm
+	WLBAND,			// host, cold
+	// new band add here
+	BAND_NUM,
+};
 
 enum pg_type{
 	NORMAL_PAGE = 0,
@@ -37,11 +41,10 @@ enum pg_type{
 	INVALID_PAGE    // error, no this type
 };
 
-
-typedef enum {
-	LP,
-	UP,
-	XP
+enum pg_mode {
+	SINGLE_LP,
+	SHARED_UP,
+	SHARED_XP
 } pg_mode;
 
 
@@ -154,8 +157,5 @@ static inline band_info_t *get_band_info(u8 band)
 {
 	return &(g_primary_page->page.bandinfo[band]);
 }
-
-
-static inline 
 
 #endif

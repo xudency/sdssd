@@ -91,7 +91,6 @@ bool atc_assign_ppa(u8 band, u32 scpa, u16 nppas, ppa_t *ppalist)
 	return 0;
 }
 
-
 // TODO: rate limiter, add this cmd to a pendimg list
 // do some check, then generate a phif_cmd_req fwd to phif.chunk
 int host_write_lba(hdc_nvme_cmd *cmd)
@@ -111,10 +110,36 @@ int host_write_lba(hdc_nvme_cmd *cmd)
 	// opcode depend filed fill outside
 	phif_cmd_req req;
 	memset(&req, 0, sizeof(req));
+
+	//QW0
+	req.header.cnt = 2;
+	req.header.dstfifo = ;
+	req.header.dst = PHIF_ID;
+	req.header.prio = ;
+	req.header.msgid = PHIF_CMD_REQ;
+	req.header.tag = cmd->header.tag;
+	req.header.ext_tag = 0;
+	req.header.src = HDC_ID;
+	req.header.vfa = 0;
+	req.header.port = ;
+	req.header.vf = 0;
+	req.header.sqid = cmd->header.sqid;
+	req.header.hxts_mode = ;
+	
+
+	//QW1	
 	req.cpa = start_lba / 8;     // LBA - > CPA
+	req.hmeta_size = cfg;
+	req.cph_size = cfg;    //read from config
+	req.lb_size = cfg;
+	req.crc_en = 1;
+	req.dps = mode;
+	req.flbas = mode;
 	req.cache_en = 1;
-	req.band_rdtype = HBAND;
-	req.cph_size = 1;    //read from config
+	req.band_rdtype = HOSTBAND;
+
+	//QW2
+	req.elba = ;
 
 	send_phif_cmd_req(&req);
 }
