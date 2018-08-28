@@ -61,9 +61,11 @@ void send_phif_cmd_req(phif_cmd_req *req)
 {
 	//common filed filled
 
-	memcpy(PHIF_CMD_REQ_SPM, req, sizeof(req));	
-
-	writel();   // notify hw to process
+	if (port_is_available()) {
+		memcpy(PHIF_CMD_REQ_SPM, req, sizeof(req)); 
+	} else {
+		/*break, CPU schedule other task*/		
+	}
 }
 
 // when host prepare a SQE and submit it to the SQ, then write SQTail DB

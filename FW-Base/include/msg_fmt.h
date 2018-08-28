@@ -3,6 +3,51 @@
 #ifndef _MESSAGE_FORMAT_H_
 #define _MESSAGE_FORMAT_H_
 
+enum module_src_id {
+	SRC_ID_HDC = 0,
+	SRC_ID_ATC,
+	SRC_ID_STC,
+	SRC_ID_FDC,
+	SRC_ID_HOST,
+	SRC_ID_JTAG,
+};
+
+enum module_dst_id {
+	DST_ID_HDC = 0,
+	DST_ID_ATC,
+	DST_ID_STC,
+	DST_ID_FDC,
+	DST_ID_CPU_PLL,
+	DST_ID_CPU_CTL,
+	DST_ID_FUSE,
+	DST_ID_SHA,
+	DST_ID_SPIFI,
+	DST_ID_CRYPTO,
+	DST_ID_CPU_TSOR,
+	DST_ID_NURDI,
+	DST_ID_PHIF = 32,
+	DST_ID_HXTS,
+	DST_ID_HDMA,
+	DST_ID_ROC,
+	DST_ID_RSCPOOL,
+	DST_ID_HMFR,
+	DST_ID_OOB_UART,
+	DST_ID_OOB_I2C,
+	DST_ID_OOB_SMB,
+	DST_ID_HP_CTL,
+	DST_ID_SYS_CTL,
+	DST_ID_HR_TSOR,
+	DST_ID_CPMU,
+	DST_ID_LED,
+	DST_ID_HP_GPIO,
+	DST_ID_DBG_UART,
+	DST_ID_DBGI2C,
+	DST_ID_DPIO,
+	DST_ID_TST_CTRL,
+	DST_ID_FIF = 64,
+	DST_ID_FWMGR
+};
+
 // qw0 is various depend on message type
 struct msg_qw0 {
 	u64 cnt			 :4;

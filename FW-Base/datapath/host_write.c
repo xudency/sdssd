@@ -141,5 +141,14 @@ int host_write_lba(hdc_nvme_cmd *cmd)
 	//QW2
 	req.elba = ;
 
+	// ask hw to export these define in .hdl or .rdl
+
 	send_phif_cmd_req(&req);
 }
+
+/*
+LBA2CPA(u32 lba, u32 nsid)
+{
+
+}
+*/
