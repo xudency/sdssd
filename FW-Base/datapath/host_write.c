@@ -97,6 +97,7 @@ int host_write_lba(hdc_nvme_cmd *cmd)
 {
 	u32 start_lba = cmd->sqe.rw.slba;
 	u32 nlba = cmd->sqe.rw.length;
+	u32 nsid = cmd->sqe.rw.nsid;
 
 	//list_add(, cmd);
 
@@ -113,33 +114,32 @@ int host_write_lba(hdc_nvme_cmd *cmd)
 
 	//QW0
 	req.header.cnt = 2;
-	req.header.dstfifo = ;
-	req.header.dst = PHIF_ID;
-	req.header.prio = ;
-	req.header.msgid = PHIF_CMD_REQ;
+	req.header.dstfifo = ;   // dst subdst
+	req.header.dst = MSG_NID_PHIF;
+	req.header.prio = 0;
+	req.header.msgid = MSGID_PHIF_CMD_REQ;
 	req.header.tag = cmd->header.tag;
 	req.header.ext_tag = 0;
-	req.header.src = HDC_ID;
+	req.header.src = MSG_NID_HDC;
 	req.header.vfa = 0;
-	req.header.port = ;
+	req.header.port = 0;
 	req.header.vf = 0;
 	req.header.sqid = cmd->header.sqid;
-	req.header.hxts_mode = ;
+	req.header.hxts_mode = 0;   // KEY
 	
-
 	//QW1	
-	req.cpa = start_lba / 8;     // LBA - > CPA
+	req.cpa = start_lba / 1;     // LBA - > CPA
 	req.hmeta_size = cfg;
 	req.cph_size = cfg;    //read from config
 	req.lb_size = cfg;
 	req.crc_en = 1;
 	req.dps = mode;
 	req.flbas = mode;
-	req.cache_en = 1;
-	req.band_rdtype = HOSTBAND;
+	req.cache_en = 1;	// Host data write back mode
+	req.band_rdtype = HOSTBAND;  // FQMGR, 9 queue/die
 
 	//QW2
-	req.elba = ;
+	req.elba = (nsid<<32) | start_lba;
 
 	// ask hw to export these define in .hdl or .rdl
 

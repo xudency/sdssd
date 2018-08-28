@@ -23,11 +23,10 @@
 #define for_each_band(band) \
         for(band = 0; band < CFG_NAND_CH_NUM; band++)
 
-enum band_type{
-	SYSBAND = 0,
+enum band_type {
+	SYSBAND = 0,    // MAP sys in 1 band
 	HOSTBAND,		// host, hot-warm
-	WLBAND,			// host, cold
-	// new band add here
+	WLBAND,			// host, cold	
 	BAND_NUM,
 };
 

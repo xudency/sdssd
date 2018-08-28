@@ -54,6 +54,64 @@ enum lightnvm_opcode {
 	lightnvm_io_erase   		= 0x92,
 };
 
+enum {
+	NVME_RW_LR					= 1 << 15,
+	NVME_RW_FUA					= 1 << 14,
+	NVME_RW_DSM_FREQ_UNSPEC		= 0,
+	NVME_RW_DSM_FREQ_TYPICAL	= 1,
+	NVME_RW_DSM_FREQ_RARE		= 2,
+	NVME_RW_DSM_FREQ_READS		= 3,
+	NVME_RW_DSM_FREQ_WRITES		= 4,
+	NVME_RW_DSM_FREQ_RW			= 5,
+	NVME_RW_DSM_FREQ_ONCE		= 6,
+	NVME_RW_DSM_FREQ_PREFETCH	= 7,
+	NVME_RW_DSM_FREQ_TEMP		= 8,
+	NVME_RW_DSM_LATENCY_NONE	= 0 << 4,
+	NVME_RW_DSM_LATENCY_IDLE	= 1 << 4,
+	NVME_RW_DSM_LATENCY_NORM	= 2 << 4,
+	NVME_RW_DSM_LATENCY_LOW		= 3 << 4,
+	NVME_RW_DSM_SEQ_REQ			= 1 << 6,
+	NVME_RW_DSM_COMPRESSED		= 1 << 7,
+	NVME_RW_PRINFO_PRCHK_REF	= 1 << 10,
+	NVME_RW_PRINFO_PRCHK_APP	= 1 << 11,
+	NVME_RW_PRINFO_PRCHK_GUARD	= 1 << 12,
+	NVME_RW_PRINFO_PRACT		= 1 << 13,
+	NVME_RW_DTYPE_STREAMS		= 1 << 4,
+};
+
+typedef union
+{
+    u32  dw12;
+	
+    struct
+    {
+        u32 nlb		:16;	// number of data units, 0 based value, actually this is 16 bits
+        u32 rsvd1 	:4;
+		u32 dtype 	:4;
+        u32 rsvd2 	:2;
+		u32 prinfo	:4;
+		u32 fua		:1;		// fua enable
+        u32 lr		:1;     // limit retry, controller should apply limited retry efforts.
+    } bits;
+} ctrl_dw12_t;
+
+
+typedef union
+{
+	u32 dw13;
+
+	struct
+	{
+		u32 dsm_frequency 		:4;
+		u32 dsm_latency			:2;
+		u32 dsm_seq_req 		:1;
+		u32 dsm_incompressible 	:1;
+		u32 rsvd				:8;
+		u32 dspec;				:16; // Directive Specific
+	} bits;
+} dsm_dw13_t;
+
+
 struct nvme_sgl_desc {
 	u64	addr;
 	u32	length;
