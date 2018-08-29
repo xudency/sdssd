@@ -94,24 +94,30 @@ bool atc_assign_ppa(u8 band, u32 scpa, u16 nppas, ppa_t *ppalist)
 // HDC do some check, then generate a phif_cmd_req fwd to phif.chunk
 int host_write_lba(hdc_nvme_cmd *cmd)
 {
-	u8 fua, access_lat, access_freq;
+	u8 fua, access_lat, access_freq, flbas, lbaf_type;
+	u16 lba_size;	// in byte
 	dsm_dw13_t dsmgmt;
 	ctrl_dw12h_t control;
 	u32 start_lba = cmd->sqe.rw.slba;
 	u32 nlba = cmd->sqe.rw.length;
 	u32 nsid = cmd->sqe.rw.nsid;
+	struct nvme_lbaf *lbaf;
 	dsmgmt.dw13 = cmd->sqe.rw.dsmgmt;
 	control.ctrl = cmd->sqe.rw.control;
+
+	// TODO: namespace CBUFF oe SRAM, assign Address for it
+	struct nvme_id_ns *ns_info = get_namespace(nsid);
 
 	//list_add(, cmd);
 
 	//cmd = list_head
 
-	// cmd sanity check
+	//cmd sanity check
 
 	// TODO: rate limiter, add this cmd to a pendimg list
-
 	// rate limiter, throttle host write when GC too slowly
+
+	// TODO: new cmd push to a queue, get the head to process, it's a fifo
 	// s_queue_t stack_t ops
 
 	// opcode depend filed fill outside
@@ -120,17 +126,17 @@ int host_write_lba(hdc_nvme_cmd *cmd)
 
 	//QW0
 	req.header.cnt = 2;		// phif_cmd_req, the length is fixed on 3 QW
-	req.header.dstfifo = MSG_NID_PHIF;   // dst subdst
+	req.header.dstfifo = MSG_NID_PHIF;
 	req.header.dst = MSG_NID_PHIF;
 	req.header.prio = 0;
 	req.header.msgid = MSGID_PHIF_CMD_REQ;
 
 	// for host cmd, we support max 256 outstanding commands, tag 8 bit is enough
-	// EXTAG no used, must keep it as 0,   tag = seq.cmdid
-	//
-	req.header.tag = cmd->header.tag;	//write:0-63     64-256:read
+	// EXTAG no used, must keep it as 0, tag copy from hdc_nvme_cmd which is assign by PHIF
+	// write:0-63     64-256:read
+	req.header.tag = cmd->header.tag;
 	req.header.ext_tag = PHIF_EXTAG;
-	req.header.src = MSG_NID_HDC;   // common
+	req.header.src = MSG_NID_HDC;
 	req.header.vfa = cmd->header.vfa;
 	req.header.port = cmd->header.port;
 	req.header.vf = cmd->header.vf;
@@ -142,18 +148,31 @@ int host_write_lba(hdc_nvme_cmd *cmd)
 	//QW1	
 	req.cpa = start_lba / 1;     // LBA - > CPA
 
-	// check namespace data struct, this is generate by namespace format admin command
-	// and will retrive to host by identify admin command
-	ns_info = get_namespace(nsid);
-	req.hmeta_size = ns_info.xx;
-	req.cph_size = ns_info.yy;    //read from config
-	req.lb_size = ns_info.zz;
+	flbas = ns_info->flbas;
+	lbaf_type = flbas & NVME_NS_FLBAS_LBA_MASK;
+	lbaf = &ns_info->lbaf[lbaf_type];
 
+	req.hmeta_size = lbaf->ms / 8;
+	req.cph_size = lbaf->cphs;
+
+	lba_size = 1 << lbaf->ds;
+	if (lba_size == 512) {
+		req.lb_size = 0;
+	} else if (lba_size == 4096) {
+		req.lb_size = 1;
+	} else if (lba_size == 16384) {
+		req.lb_size = 2;
+	} else {
+		return -EINVAL;
+	}
+	
 	req.crc_en = 1;
 
-	// namespace config info 1.E2E enable/diable  2. PI type ...
-	req.dps = mode;  //sqe.prinfo
-	req.flbas = mode;
+	// PI in last8/first8 / type 0(disable)  1  2  3  
+	req.dps = ns_info->dps;
+
+	// DIX or DIF / format LBA size, which 1 of the 16	
+	req.flbas = flbas;
 
 	// FUA is too bypass Cache
 	fua = control.bits.fua;

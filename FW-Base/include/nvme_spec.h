@@ -348,11 +348,14 @@ enum {
 };
 
 struct nvme_lbaf {
-	u16			ms;
-	u8			ds;
-	u8			rp;
+	u16			ms;     	// metadata sizze in byte
+	u8			ds;     	// LBA size 2^n
+	u8			rp   :2;    // relative performance
+	u8			cphs :2;    //CPH size  1:16B / 2:32B / 3:48B
+	u8			rsvd :4;
 };
 
+// 4KB
 struct nvme_id_ns {
 	u64			nsze;
 	u64			ncap;
@@ -598,5 +601,11 @@ typedef union
 	} bits;
 } dsm_dw13_t;
 
+
+typedef struct {
+	u16 guard;   //PRCHK bit2
+	u16 apptag;  //PRCHK bit1
+	u32 reftag;  //PRCHK bit0
+} pi_fmt;
 
 #endif
