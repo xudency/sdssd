@@ -81,19 +81,18 @@ enum {
 
 typedef union
 {
-    u32  dw12;
+    u16  ctrl;
 	
     struct
     {
-        u32 nlb		:16;	// number of data units, 0 based value, actually this is 16 bits
-        u32 rsvd1 	:4;
-		u32 dtype 	:4;
-        u32 rsvd2 	:2;
-		u32 prinfo	:4;
-		u32 fua		:1;		// fua enable
-        u32 lr		:1;     // limit retry, controller should apply limited retry efforts.
+        u16 rsvd1 	:4;
+		u16 dtype 	:4;
+        u16 rsvd2 	:2;
+		u16 prinfo	:4;
+		u16 fua		:1;		// fua enable
+        u16 lr		:1;     // limit retry, controller should apply limited retry efforts.
     } bits;
-} ctrl_dw12_t;
+} ctrl_dw12h_t;
 
 
 typedef union
@@ -107,7 +106,7 @@ typedef union
 		u32 dsm_seq_req 		:1;
 		u32 dsm_incompressible 	:1;
 		u32 rsvd				:8;
-		u32 dspec;				:16; // Directive Specific
+		u32 dspec				:16; // Directive Specific
 	} bits;
 } dsm_dw13_t;
 

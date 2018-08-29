@@ -95,9 +95,14 @@ bool atc_assign_ppa(u8 band, u32 scpa, u16 nppas, ppa_t *ppalist)
 // do some check, then generate a phif_cmd_req fwd to phif.chunk
 int host_write_lba(hdc_nvme_cmd *cmd)
 {
+	u8 fua, access_lat, access_freq;
+	dsm_dw13_t dsmgmt;
+	ctrl_dw12h_t control;
 	u32 start_lba = cmd->sqe.rw.slba;
 	u32 nlba = cmd->sqe.rw.length;
 	u32 nsid = cmd->sqe.rw.nsid;
+	dsmgmt.dw13 = cmd->sqe.rw.dsmgmt;
+	control.ctrl = cmd->sqe.rw.control;
 
 	//list_add(, cmd);
 
@@ -135,7 +140,12 @@ int host_write_lba(hdc_nvme_cmd *cmd)
 	req.crc_en = 1;
 	req.dps = mode;
 	req.flbas = mode;
-	req.cache_en = 1;	// Host data write back mode
+
+	// FUA is too bypass Cache
+	fua = control.bits.fua;
+	req.cache_en = !fua;
+
+	// TODO:: frequency, latency place to HOSTBAND or WLBAND
 	req.band_rdtype = HOSTBAND;  // FQMGR, 9 queue/die
 
 	//QW2
