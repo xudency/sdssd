@@ -92,6 +92,7 @@ bool atc_assign_ppa(u8 band, u32 scpa, u16 nppas, ppa_t *ppalist)
 }
 
 // HDC do some check, then generate a phif_cmd_req fwd to phif.chunk
+// TODO: statemachine
 int host_write_lba(hdc_nvme_cmd *cmd)
 {
 	u8 fua, access_lat, access_freq, flbas, lbaf_type;
@@ -105,7 +106,7 @@ int host_write_lba(hdc_nvme_cmd *cmd)
 	dsmgmt.dw13 = cmd->sqe.rw.dsmgmt;
 	control.ctrl = cmd->sqe.rw.control;
 
-	// TODO: namespace CBUFF oe SRAM, assign Address for it
+	// TODO: namespace CBUFF or SRAM, assign Address for it
 	struct nvme_id_ns *ns_info = get_namespace(nsid);
 
 	//list_add(, cmd);
@@ -142,8 +143,11 @@ int host_write_lba(hdc_nvme_cmd *cmd)
 	req.header.vf = cmd->header.vf;
 	req.header.sqid = cmd->header.sqid;
 
-	// LBA Range, e.g. LBA[0 99] key1,  LBA[100 199] key2 ....., refer TCG Spec
-	req.header.hxts_mode = 0; 
+	// TODO: Reservation check, if this is reservation conflict
+	
+	
+	// TODO: TCG support, LBA Range, e.g. LBA[0 99] key1,  LBA[100 199] key2 .....
+	req.header.hxts_mode = enableed | key; 
 	
 	//QW1	
 	req.cpa = start_lba / 1;     // LBA - > CPA
@@ -171,7 +175,7 @@ int host_write_lba(hdc_nvme_cmd *cmd)
 	// PI in last8/first8 / type 0(disable)  1  2  3  
 	req.dps = ns_info->dps;
 
-	// DIX or DIF / format LBA size, which 1 of the 16	
+	// DIX or DIF / format LBA size use which (1 of the 16)	
 	req.flbas = flbas;
 
 	// FUA is too bypass Cache
