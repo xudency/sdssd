@@ -57,14 +57,16 @@ int process_completion_task(void *para)
 }
 
 
-void send_phif_cmd_req(phif_cmd_req *req)
+int send_phif_cmd_req(phif_cmd_req *req)
 {
 	//common filed filled
 
 	if (port_is_available()) {
 		memcpy(PHIF_CMD_REQ_SPM, req, sizeof(req)); 
+		return 0;
 	} else {
-		/*break, CPU schedule other task*/		
+		/*break, CPU schedule other task*/
+		return PHIF_PORT_BUSY;
 	}
 }
 

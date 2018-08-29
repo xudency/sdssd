@@ -130,28 +130,36 @@ int host_write_lba(hdc_nvme_cmd *cmd)
 	//
 	req.header.tag = cmd->header.tag;	//write:0-63     64-256:read
 	req.header.ext_tag = PHIF_EXTAG;
-
-	req.header.src = MSG_NID_HDC;
-	req.header.vfa = 0;
-	req.header.port = 0;
-	req.header.vf = 0;
+	req.header.src = MSG_NID_HDC;   // common
+	req.header.vfa = cmd->header.vfa;
+	req.header.port = cmd->header.port;
+	req.header.vf = cmd->header.vf;
 	req.header.sqid = cmd->header.sqid;
-	req.header.hxts_mode = 0;   // KEY
+
+	// LBA Range, e.g. LBA[0 99] key1,  LBA[100 199] key2 ....., refer TCG Spec
+	req.header.hxts_mode = 0; 
 	
 	//QW1	
 	req.cpa = start_lba / 1;     // LBA - > CPA
-	req.hmeta_size = ns_cfg;
-	req.cph_size = ns_cfg;    //read from config
-	req.lb_size = ns_cfg;
+
+	// check namespace data struct, this is generate by namespace format admin command
+	// and will retrive to host by identify admin command
+	ns_info = get_namespace(nsid);
+	req.hmeta_size = ns_info.xx;
+	req.cph_size = ns_info.yy;    //read from config
+	req.lb_size = ns_info.zz;
+
 	req.crc_en = 1;
-	req.dps = mode;
+
+	// namespace config info 1.E2E enable/diable  2. PI type ...
+	req.dps = mode;  //sqe.prinfo
 	req.flbas = mode;
 
 	// FUA is too bypass Cache
 	fua = control.bits.fua;
 	req.cache_en = !fua;
 
-	// TODO:: frequency, latency place to HOSTBAND or WLBAND
+	// TODO:: according frequency, latency, stream to place host data to  HOSTBAND or WLBAND
 	req.band_rdtype = HOSTBAND;  // FQMGR, 9 queue/die
 
 	//QW2
@@ -159,7 +167,7 @@ int host_write_lba(hdc_nvme_cmd *cmd)
 
 	// ask hw to export these define in .hdl or .rdl
 
-	send_phif_cmd_req(&req);
+	return send_phif_cmd_req(&req);
 }
 
 /*

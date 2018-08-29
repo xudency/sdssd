@@ -79,36 +79,369 @@ enum {
 	NVME_RW_DTYPE_STREAMS		= 1 << 4,
 };
 
-typedef union
-{
-    u16  ctrl;
-	
-    struct
-    {
-        u16 rsvd1 	:4;
-		u16 dtype 	:4;
-        u16 rsvd2 	:2;
-		u16 prinfo	:4;
-		u16 fua		:1;		// fua enable, write through, read not search cache
-        u16 lr		:1;     // limit retry, controller should apply limited retry efforts.
-    } bits;
-} ctrl_dw12h_t;
+
+/* NQN names in commands fields specified one size */
+#define NVMF_NQN_FIELD_LEN	256
+
+/* However the max length of a qualified name is another size */
+#define NVMF_NQN_SIZE		223
+
+#define NVMF_TRSVCID_SIZE	32
+#define NVMF_TRADDR_SIZE	256
+#define NVMF_TSAS_SIZE		256
+
+#define NVME_DISC_SUBSYS_NAME	"nqn.2014-08.org.nvmexpress.discovery"
+
+#define NVME_RDMA_IP_PORT	4420
+
+#define NVME_NSID_ALL		0xffffffff
+
+enum nvme_subsys_type {
+	NVME_NQN_DISC	= 1,		/* Discovery type target subsystem */
+	NVME_NQN_NVME	= 2,		/* NVME type target subsystem */
+};
+
+/* Address Family codes for Discovery Log Page entry ADRFAM field */
+enum {
+	NVMF_ADDR_FAMILY_PCI	= 0,	/* PCIe */
+	NVMF_ADDR_FAMILY_IP4	= 1,	/* IP4 */
+	NVMF_ADDR_FAMILY_IP6	= 2,	/* IP6 */
+	NVMF_ADDR_FAMILY_IB	= 3,	/* InfiniBand */
+	NVMF_ADDR_FAMILY_FC	= 4,	/* Fibre Channel */
+};
+
+/* Transport Type codes for Discovery Log Page entry TRTYPE field */
+enum {
+	NVMF_TRTYPE_RDMA	= 1,	/* RDMA */
+	NVMF_TRTYPE_FC		= 2,	/* Fibre Channel */
+	NVMF_TRTYPE_LOOP	= 254,	/* Reserved for host usage */
+	NVMF_TRTYPE_MAX,
+};
+
+/* Transport Requirements codes for Discovery Log Page entry TREQ field */
+enum {
+	NVMF_TREQ_NOT_SPECIFIED	= 0,	/* Not specified */
+	NVMF_TREQ_REQUIRED	= 1,	/* Required */
+	NVMF_TREQ_NOT_REQUIRED	= 2,	/* Not Required */
+};
+
+/* RDMA QP Service Type codes for Discovery Log Page entry TSAS
+ * RDMA_QPTYPE field
+ */
+enum {
+	NVMF_RDMA_QPTYPE_CONNECTED	= 1, /* Reliable Connected */
+	NVMF_RDMA_QPTYPE_DATAGRAM	= 2, /* Reliable Datagram */
+};
+
+/* RDMA QP Service Type codes for Discovery Log Page entry TSAS
+ * RDMA_QPTYPE field
+ */
+enum {
+	NVMF_RDMA_PRTYPE_NOT_SPECIFIED	= 1, /* No Provider Specified */
+	NVMF_RDMA_PRTYPE_IB		= 2, /* InfiniBand */
+	NVMF_RDMA_PRTYPE_ROCE		= 3, /* InfiniBand RoCE */
+	NVMF_RDMA_PRTYPE_ROCEV2		= 4, /* InfiniBand RoCEV2 */
+	NVMF_RDMA_PRTYPE_IWARP		= 5, /* IWARP */
+};
+
+/* RDMA Connection Management Service Type codes for Discovery Log Page
+ * entry TSAS RDMA_CMS field
+ */
+enum {
+	NVMF_RDMA_CMS_RDMA_CM	= 1, /* Sockets based endpoint addressing */
+};
+
+#define NVME_AQ_DEPTH		32
+#define NVME_NR_AEN_COMMANDS	1
+#define NVME_AQ_BLK_MQ_DEPTH	(NVME_AQ_DEPTH - NVME_NR_AEN_COMMANDS)
+
+/*
+ * Subtract one to leave an empty queue entry for 'Full Queue' condition. See
+ * NVM-Express 1.2 specification, section 4.1.2.
+ */
+#define NVME_AQ_MQ_TAG_DEPTH	(NVME_AQ_BLK_MQ_DEPTH - 1)
+
+enum {
+	NVME_REG_CAP	= 0x0000,	/* Controller Capabilities */
+	NVME_REG_VS		= 0x0008,	/* Version */
+	NVME_REG_INTMS	= 0x000c,	/* Interrupt Mask Set */
+	NVME_REG_INTMC	= 0x0010,	/* Interrupt Mask Clear */
+	NVME_REG_CC		= 0x0014,	/* Controller Configuration */
+	NVME_REG_CSTS	= 0x001c,	/* Controller Status */
+	NVME_REG_NSSR	= 0x0020,	/* NVM Subsystem Reset */
+	NVME_REG_AQA	= 0x0024,	/* Admin Queue Attributes */
+	NVME_REG_ASQ	= 0x0028,	/* Admin SQ Base Address */
+	NVME_REG_ACQ	= 0x0030,	/* Admin CQ Base Address */
+	NVME_REG_CMBLOC = 0x0038,	/* Controller Memory Buffer Location */
+	NVME_REG_CMBSZ	= 0x003c,	/* Controller Memory Buffer Size */
+	NVME_REG_DBS	= 0x1000,	/* SQ 0 Tail Doorbell */
+};
+
+#define NVME_CAP_MQES(cap)		((cap) & 0xffff)
+#define NVME_CAP_TIMEOUT(cap)	(((cap) >> 24) & 0xff)
+#define NVME_CAP_STRIDE(cap)	(((cap) >> 32) & 0xf)
+#define NVME_CAP_NSSRC(cap)		(((cap) >> 36) & 0x1)
+#define NVME_CAP_MPSMIN(cap)	(((cap) >> 48) & 0xf)
+#define NVME_CAP_MPSMAX(cap)	(((cap) >> 52) & 0xf)
+
+#define NVME_CMB_BIR(cmbloc)	((cmbloc) & 0x7)
+#define NVME_CMB_OFST(cmbloc)	(((cmbloc) >> 12) & 0xfffff)
+
+enum {
+	NVME_CMBSZ_SQS		= 1 << 0,
+	NVME_CMBSZ_CQS		= 1 << 1,
+	NVME_CMBSZ_LISTS	= 1 << 2,
+	NVME_CMBSZ_RDS		= 1 << 3,
+	NVME_CMBSZ_WDS		= 1 << 4,
+
+	NVME_CMBSZ_SZ_SHIFT	= 12,
+	NVME_CMBSZ_SZ_MASK	= 0xfffff,
+
+	NVME_CMBSZ_SZU_SHIFT	= 8,
+	NVME_CMBSZ_SZU_MASK	= 0xf,
+};
+
+/*
+ * Submission and Completion Queue Entry Sizes for the NVM command set.
+ * (In bytes and specified as a power of two (2^n)).
+ */
+#define NVME_NVM_IOSQES		6
+#define NVME_NVM_IOCQES		4
+
+enum {
+	NVME_CC_ENABLE		= 1 << 0,
+	NVME_CC_CSS_NVM		= 0 << 4,
+	NVME_CC_EN_SHIFT	= 0,
+	NVME_CC_CSS_SHIFT	= 4,
+	NVME_CC_MPS_SHIFT	= 7,
+	NVME_CC_AMS_SHIFT	= 11,
+	NVME_CC_SHN_SHIFT	= 14,
+	NVME_CC_IOSQES_SHIFT	= 16,
+	NVME_CC_IOCQES_SHIFT	= 20,
+	NVME_CC_AMS_RR		= 0 << NVME_CC_AMS_SHIFT,
+	NVME_CC_AMS_WRRU	= 1 << NVME_CC_AMS_SHIFT,
+	NVME_CC_AMS_VS		= 7 << NVME_CC_AMS_SHIFT,
+	NVME_CC_SHN_NONE	= 0 << NVME_CC_SHN_SHIFT,
+	NVME_CC_SHN_NORMAL	= 1 << NVME_CC_SHN_SHIFT,
+	NVME_CC_SHN_ABRUPT	= 2 << NVME_CC_SHN_SHIFT,
+	NVME_CC_SHN_MASK	= 3 << NVME_CC_SHN_SHIFT,
+	NVME_CC_IOSQES		= NVME_NVM_IOSQES << NVME_CC_IOSQES_SHIFT,
+	NVME_CC_IOCQES		= NVME_NVM_IOCQES << NVME_CC_IOCQES_SHIFT,
+	NVME_CSTS_RDY		= 1 << 0,
+	NVME_CSTS_CFS		= 1 << 1,
+	NVME_CSTS_NSSRO		= 1 << 4,
+	NVME_CSTS_PP		= 1 << 5,
+	NVME_CSTS_SHST_NORMAL	= 0 << 2,
+	NVME_CSTS_SHST_OCCUR	= 1 << 2,
+	NVME_CSTS_SHST_CMPLT	= 2 << 2,
+	NVME_CSTS_SHST_MASK	= 3 << 2,
+};
+
+struct nvme_id_power_state {
+	u16			max_power;	/* centiwatts */
+	u8			rsvd2;
+	u8			flags;
+	u32			entry_lat;	/* microseconds */
+	u32			exit_lat;	/* microseconds */
+	u8			read_tput;
+	u8			read_lat;
+	u8			write_tput;
+	u8			write_lat;
+	u16			idle_power;
+	u8			idle_scale;
+	u8			rsvd19;
+	u16			active_power;
+	u8			active_work_scale;
+	u8			rsvd23[9];
+};
+
+enum {
+	NVME_PS_FLAGS_MAX_POWER_SCALE	= 1 << 0,
+	NVME_PS_FLAGS_NON_OP_STATE	= 1 << 1,
+};
 
 
-typedef union
-{
-	u32 dw13;
+struct nvme_id_ctrl {
+	u16			vid;
+	u16			ssvid;
+	char		sn[20];
+	char		mn[40];
+	char		fr[8];
+	u8			rab;
+	u8			ieee[3];
+	u8			cmic;
+	u8			mdts;
+	u16			cntlid;
+	u32			ver;
+	u32			rtd3r;
+	u32			rtd3e;
+	u32			oaes;
+	u32			ctratt;
+	u8			rsvd100[156];
+	u16			oacs;
+	u8			acl;
+	u8			aerl;
+	u8			frmw;
+	u8			lpa;
+	u8			elpe;
+	u8			npss;
+	u8			avscc;
+	u8			apsta;
+	u16			wctemp;
+	u16			cctemp;
+	u16			mtfa;
+	u32			hmpre;
+	u32			hmmin;
+	u8			tnvmcap[16];
+	u8			unvmcap[16];
+	u32			rpmbs;
+	u16			edstt;
+	u8			dsto;
+	u8			fwug;
+	u16			kas;
+	u16			hctma;
+	u16			mntmt;
+	u16			mxtmt;
+	u32			sanicap;
+	u32			hmminds;
+	u16			hmmaxd;
+	u8			rsvd338[174];
+	u8			sqes;
+	u8			cqes;
+	u16			maxcmd;
+	u32			nn;
+	u16			oncs;
+	u16			fuses;
+	u8			fna;
+	u8			vwc;
+	u16			awun;
+	u16			awupf;
+	u8			nvscc;
+	u8			rsvd531;
+	u16			acwu;
+	u8			rsvd534[2];
+	u32			sgls;
+	u8			rsvd540[228];
+	char		subnqn[256];
+	u8			rsvd1024[768];
+	u32			ioccsz;
+	u32			iorcsz;
+	u16			icdoff;
+	u8			ctrattr;
+	u8			msdbd;
+	u8			rsvd1804[244];
+	struct nvme_id_power_state	psd[32];
+	u8			vs[1024];
+};
 
-	struct
-	{
-		u32 dsm_frequency 		:4;
-		u32 dsm_latency			:2;
-		u32 dsm_seq_req 		:1;
-		u32 dsm_incompressible 	:1;
-		u32 rsvd				:8;
-		u32 dspec				:16; // Directive Specific
-	} bits;
-} dsm_dw13_t;
+enum {
+	NVME_CTRL_ONCS_COMPARE			= 1 << 0,
+	NVME_CTRL_ONCS_WRITE_UNCORRECTABLE	= 1 << 1,
+	NVME_CTRL_ONCS_DSM				= 1 << 2,
+	NVME_CTRL_ONCS_WRITE_ZEROES		= 1 << 3,
+	NVME_CTRL_ONCS_TIMESTAMP		= 1 << 6,
+	NVME_CTRL_VWC_PRESENT			= 1 << 0,
+	NVME_CTRL_OACS_SEC_SUPP         = 1 << 0,
+	NVME_CTRL_OACS_DIRECTIVES		= 1 << 5,
+	NVME_CTRL_OACS_DBBUF_SUPP		= 1 << 8,
+	NVME_CTRL_LPA_CMD_EFFECTS_LOG	= 1 << 1,
+};
+
+struct nvme_lbaf {
+	u16			ms;
+	u8			ds;
+	u8			rp;
+};
+
+struct nvme_id_ns {
+	u64			nsze;
+	u64			ncap;
+	u64			nuse;
+	u8			nsfeat;
+	u8			nlbaf;
+	u8			flbas;
+	u8			mc;
+	u8			dpc;
+	u8			dps;
+	u8			nmic;
+	u8			rescap;
+	u8			fpi;
+	u8			rsvd33;
+	u16			nawun;
+	u16			nawupf;
+	u16			nacwu;
+	u16			nabsn;
+	u16			nabo;
+	u16			nabspf;
+	u16			noiob;
+	u8			nvmcap[16];
+	u8			rsvd64[40];
+	u8			nguid[16];
+	u8			eui64[8];
+	struct nvme_lbaf	lbaf[16];
+	u8			rsvd192[192];
+	u8			vs[3712];
+};
+
+enum {
+	NVME_ID_CNS_NS			= 0x00,
+	NVME_ID_CNS_CTRL		= 0x01,
+	NVME_ID_CNS_NS_ACTIVE_LIST	= 0x02,
+	NVME_ID_CNS_NS_DESC_LIST	= 0x03,
+	NVME_ID_CNS_NS_PRESENT_LIST	= 0x10,
+	NVME_ID_CNS_NS_PRESENT		= 0x11,
+	NVME_ID_CNS_CTRL_NS_LIST	= 0x12,
+	NVME_ID_CNS_CTRL_LIST		= 0x13,
+};
+
+enum {
+	NVME_DIR_IDENTIFY		= 0x00,
+	NVME_DIR_STREAMS		= 0x01,
+	NVME_DIR_SND_ID_OP_ENABLE	= 0x01,
+	NVME_DIR_SND_ST_OP_REL_ID	= 0x01,
+	NVME_DIR_SND_ST_OP_REL_RSC	= 0x02,
+	NVME_DIR_RCV_ID_OP_PARAM	= 0x01,
+	NVME_DIR_RCV_ST_OP_PARAM	= 0x01,
+	NVME_DIR_RCV_ST_OP_STATUS	= 0x02,
+	NVME_DIR_RCV_ST_OP_RESOURCE	= 0x03,
+	NVME_DIR_ENDIR			= 0x01,
+};
+
+enum {
+	NVME_NS_FEAT_THIN	= 1 << 0,
+	NVME_NS_FLBAS_LBA_MASK	= 0xf,
+	NVME_NS_FLBAS_META_EXT	= 0x10,
+	NVME_LBAF_RP_BEST	= 0,
+	NVME_LBAF_RP_BETTER	= 1,
+	NVME_LBAF_RP_GOOD	= 2,
+	NVME_LBAF_RP_DEGRADED	= 3,
+	NVME_NS_DPC_PI_LAST	= 1 << 4,
+	NVME_NS_DPC_PI_FIRST	= 1 << 3,
+	NVME_NS_DPC_PI_TYPE3	= 1 << 2,
+	NVME_NS_DPC_PI_TYPE2	= 1 << 1,
+	NVME_NS_DPC_PI_TYPE1	= 1 << 0,
+	NVME_NS_DPS_PI_FIRST	= 1 << 3,
+	NVME_NS_DPS_PI_MASK	= 0x7,
+	NVME_NS_DPS_PI_TYPE1	= 1,
+	NVME_NS_DPS_PI_TYPE2	= 2,
+	NVME_NS_DPS_PI_TYPE3	= 3,
+};
+
+struct nvme_ns_id_desc {
+	u8 nidt;
+	u8 nidl;
+	u16 reserved;
+};
+
+#define NVME_NIDT_EUI64_LEN	8
+#define NVME_NIDT_NGUID_LEN	16
+#define NVME_NIDT_UUID_LEN	16
+
+enum {
+	NVME_NIDT_EUI64		= 0x01,
+	NVME_NIDT_NGUID		= 0x02,
+	NVME_NIDT_UUID		= 0x03,
+};
 
 
 struct nvme_sgl_desc {
@@ -231,6 +564,39 @@ struct nvme_completion {
 	u16	command_id;	/* of the command which completed */
 	u16	status;		/* did the command fail, and if so, why? */
 };
+
+// self define, not from kernel nvme.h
+typedef union
+{
+    u16  ctrl;
+	
+    struct
+    {
+        u16 rsvd1 	:4;
+		u16 dtype 	:4;
+        u16 rsvd2 	:2;
+		u16 prchk	:3;
+		u16 pract	:1;
+		u16 fua		:1;		// fua enable, write through, read not search cache
+        u16 lr		:1;     // limit retry, controller should apply limited retry efforts.
+    } bits;
+} ctrl_dw12h_t;
+
+
+typedef union
+{
+	u32 dw13;
+
+	struct
+	{
+		u32 dsm_frequency 		:4;
+		u32 dsm_latency			:2;
+		u32 dsm_seq_req 		:1;
+		u32 dsm_incompressible 	:1;
+		u32 rsvd				:8;
+		u32 dspec				:16; // Directive Specific
+	} bits;
+} dsm_dw13_t;
 
 
 #endif

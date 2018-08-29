@@ -80,6 +80,6 @@ int host_read_lba(hdc_nvme_cmd *cmd)
 
 	// ask hw to export these define in .hdl or .rdl
 
-	send_phif_cmd_req(&req);
+	return send_phif_cmd_req(&req);
 }
 
