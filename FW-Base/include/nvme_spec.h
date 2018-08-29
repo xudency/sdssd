@@ -89,7 +89,7 @@ typedef union
 		u16 dtype 	:4;
         u16 rsvd2 	:2;
 		u16 prinfo	:4;
-		u16 fua		:1;		// fua enable
+		u16 fua		:1;		// fua enable, write through, read not search cache
         u16 lr		:1;     // limit retry, controller should apply limited retry efforts.
     } bits;
 } ctrl_dw12h_t;
