@@ -41,7 +41,7 @@ int handle_nvme_io_command(hdc_nvme_cmd *cmd)
 		res = host_read_lba(cmd);
 		break;
 	case nvme_io_write:
-		res = host_write_lba(cmd);
+		res = handle_nvme_write(cmd);
 		break;
 	case nvme_io_flush:
 		break;

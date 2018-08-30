@@ -58,6 +58,7 @@ static inline struct qnode *dequeue(struct Queue *queue)
 		return NULL;
 	
 	struct qnode *node = queue->front;
+	node->next = NULL;
 	
 	if(queue->front == queue->rear)
 		queue->rear = NULL;

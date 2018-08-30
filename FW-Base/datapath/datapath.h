@@ -9,9 +9,16 @@
 #define HOST_NVME_CMD_ENTRY_CNT  256
 
 
+typedef enum {
+	WRITE_FLOW_STATE_INITIAL,    // enqueue, has no process
+	WRITE_FLOW_STATE_yy,
+} WRITE_FLOW_STATE;
+
+
+
 typedef struct {
 	struct qnode *next;
-	u8 cmd_tag;
+	u8 cmd_tag;				//0-255
 	u8 state;
 	u16 sqid;
 	struct nvme_command sqe;

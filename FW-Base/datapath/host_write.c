@@ -91,23 +91,135 @@ bool atc_assign_ppa(u8 band, u32 scpa, u16 nppas, ppa_t *ppalist)
 	return 0;
 }
 
+/* each host command need saved, because SPM is read clear*/
+host_nvme_cmd_entry *get_host_cmd_entry_from_free_q(void)
+{
+	struct qnode *node = dequeue(&host_nvme_cmd_free_q);
 
-// TODO: statemachine
-cqsts host_write_lba(hdc_nvme_cmd *cmd)
+	if (node) {
+		return (host_nvme_cmd_entry *)container_of(node, host_nvme_cmd_entry, next);
+	} else {
+		return NULL;
+	}
+}
+
+void saved_to_host_cmd_entry(host_nvme_cmd_entry *entry, hdc_nvme_cmd *cmd)
+{
+	entry->cmd_tag = cmd->header.tag;
+	entry->sqid = cmd->header.sqid;
+	entry->state = ;
+	entry->sqe = cmd->sqe;
+}
+
+// statemachine
+cqsts host_write_lba(void)
+{
+	host_nvme_cmd_entry *host_cmd_entry;
+	
+	switch (host_cmd_entry->state) 
+	{
+
+
+		u8 fua, access_lat, access_freq, flbas, lbaf_type;
+		u16 lba_size;	// in byte
+		dsm_dw13_t dsmgmt;
+		ctrl_dw12h_t control;
+		u64 start_lba = cmd->sqe.rw.slba;
+		u16 nlb = cmd->sqe.rw.length;
+		u32 nsid = cmd->sqe.rw.nsid;
+		struct nvme_lbaf *lbaf;
+		dsmgmt.dw13 = cmd->sqe.rw.dsmgmt;
+		control.ctrl = cmd->sqe.rw.control;
+		struct nvme_id_ns *ns_info;
+		host_nvme_cmd_entry *host_cmd_entry;
+
+		// TODO: rate limiter, add this cmd to a pendimg list
+		// rate limiter, throttle host write when GC too slowly
+		phif_cmd_req req;
+		memset(&req, 0, sizeof(req));
+
+		//QW0
+		req.header.cnt = 2;		// phif_cmd_req, the length is fixed on 3 QW
+		req.header.dstfifo = MSG_NID_PHIF;
+		req.header.dst = MSG_NID_PHIF;
+		req.header.prio = 0;
+		req.header.msgid = MSGID_PHIF_CMD_REQ;
+
+		// for host cmd, we support max 256 outstanding commands, tag 8 bit is enough
+		// EXTAG no used, must keep it as 0, tag copy from hdc_nvme_cmd which is assign by PHIF
+		// write:0-63     64-256:read
+		req.header.tag = cmd->header.tag;
+		req.header.ext_tag = PHIF_EXTAG;
+		req.header.src = MSG_NID_HDC;
+		req.header.vfa = cmd->header.vfa;
+		req.header.port = cmd->header.port;
+		req.header.vf = cmd->header.vf;
+		req.header.sqid = cmd->header.sqid;
+
+		// TODO: Reservation check, if this is reservation conflict
+		
+		
+		// TODO: TCG support, LBA Range, e.g. LBA[0 99] key1,  LBA[100 199] key2 .....
+		req.header.hxts_mode = enabled | key; 
+
+		
+		ns_info = get_identify_ns(nsid);
+		//QW1	
+		req.cpa = start_lba / 1;     // LBA - > CPA
+
+		flbas = ns_info->flbas;
+		lbaf_type = flbas & NVME_NS_FLBAS_LBA_MASK;
+		lbaf = &ns_info->lbaf[lbaf_type];
+
+		req.hmeta_size = lbaf->ms / 8;
+		req.cph_size = lbaf->cphs;
+
+		lba_size = 1 << lbaf->ds;
+		if (lba_size == 512) {
+			req.lb_size = 0;
+		} else if (lba_size == 4096) {
+			req.lb_size = 1;
+		} else if (lba_size == 16384) {
+			req.lb_size = 2;
+		} else {
+			print_err("LBA Size:%d not support", lba_size);
+			status.bits.sct = NVME_SCT_GENERIC;
+			status.bits.sc = NVME_SC_INVALID_FORMAT;
+			return status;
+		}
+		
+		req.crc_en = 1;
+
+		// PI in last8/first8 / type 0(disable)  1  2  3  
+		req.dps = ns_info->dps;
+
+		// DIX or DIF / format LBA size use which (1 of the 16)	
+		req.flbas = flbas;
+
+		// FUA is too bypass Cache
+		fua = control.bits.fua;
+		req.cache_en = !fua;
+
+		// TODO:: according frequency, latency, stream to place host data to  HOSTBAND or WLBAND
+		req.band_rdtype = HOSTBAND;  // FQMGR, 9 queue/die
+
+		//QW2
+		req.elba = (nsid<<32) | start_lba;
+
+		// ask hw to export these define in .hdl or .rdl
+
+		return send_phif_cmd_req(&req);
+
+	}
+}
+
+cqsts handle_nvme_write(hdc_nvme_cmd *cmd)
 {
 	cqsts status = {0};	// status, default no error
-
-	u8 fua, access_lat, access_freq, flbas, lbaf_type;
-	u16 lba_size;	// in byte
-	dsm_dw13_t dsmgmt;
-	ctrl_dw12h_t control;
 	u64 start_lba = cmd->sqe.rw.slba;
 	u16 nlb = cmd->sqe.rw.length;
 	u32 nsid = cmd->sqe.rw.nsid;
-	struct nvme_lbaf *lbaf;
-	dsmgmt.dw13 = cmd->sqe.rw.dsmgmt;
-	control.ctrl = cmd->sqe.rw.control;
-	struct nvme_id_ns *ns_info;
+	host_nvme_cmd_entry *host_cmd_entry;
 
 	if ((start_lba + nlb) > MAX_LBA) {
 		print_err("the write LBA Range[%lld--%lld] exceed max_lba:%d", start_lba, start_lba+nlb, MAX_LBA);
@@ -122,102 +234,22 @@ cqsts host_write_lba(hdc_nvme_cmd *cmd)
 		status.bits.sc = NVME_SC_INVALID_NS;
 		return status;	
 	}
-	
 
-	//list_add(, cmd);
-
-	//cmd = list_head
-
-	//cmd sanity check
-
-	// TODO: rate limiter, add this cmd to a pendimg list
-	// rate limiter, throttle host write when GC too slowly
-
-	// TODO: new cmd push to a queue, get the head to process, it's a fifo
-	// s_queue_t stack_t ops
-
-	// opcode depend filed fill outside
-	//host_nvme_cmd_free_q;
-	dequeue(host_nvme_cmd_free_q);
-
-
-
-
-	
-	
-	phif_cmd_req req;
-	memset(&req, 0, sizeof(req));
-
-	//QW0
-	req.header.cnt = 2;		// phif_cmd_req, the length is fixed on 3 QW
-	req.header.dstfifo = MSG_NID_PHIF;
-	req.header.dst = MSG_NID_PHIF;
-	req.header.prio = 0;
-	req.header.msgid = MSGID_PHIF_CMD_REQ;
-
-	// for host cmd, we support max 256 outstanding commands, tag 8 bit is enough
-	// EXTAG no used, must keep it as 0, tag copy from hdc_nvme_cmd which is assign by PHIF
-	// write:0-63     64-256:read
-	req.header.tag = cmd->header.tag;
-	req.header.ext_tag = PHIF_EXTAG;
-	req.header.src = MSG_NID_HDC;
-	req.header.vfa = cmd->header.vfa;
-	req.header.port = cmd->header.port;
-	req.header.vf = cmd->header.vf;
-	req.header.sqid = cmd->header.sqid;
-
-	// TODO: Reservation check, if this is reservation conflict
-	
-	
-	// TODO: TCG support, LBA Range, e.g. LBA[0 99] key1,  LBA[100 199] key2 .....
-	req.header.hxts_mode = enabled | key; 
-
-	
-	ns_info = get_identify_ns(nsid);
-	//QW1	
-	req.cpa = start_lba / 1;     // LBA - > CPA
-
-	flbas = ns_info->flbas;
-	lbaf_type = flbas & NVME_NS_FLBAS_LBA_MASK;
-	lbaf = &ns_info->lbaf[lbaf_type];
-
-	req.hmeta_size = lbaf->ms / 8;
-	req.cph_size = lbaf->cphs;
-
-	lba_size = 1 << lbaf->ds;
-	if (lba_size == 512) {
-		req.lb_size = 0;
-	} else if (lba_size == 4096) {
-		req.lb_size = 1;
-	} else if (lba_size == 16384) {
-		req.lb_size = 2;
+	host_cmd_entry = get_host_cmd_entry_from_free_q();
+	if (host_cmd_entry == NULL) {
+		// it should never, else we should enlarge the gat array
+		//goto retry;
 	} else {
-		print_err("LBA Size:%d not support", lba_size);
-		status.bits.sct = NVME_SCT_GENERIC;
-		status.bits.sc = NVME_SC_INVALID_FORMAT;
-		return status;
+		// fill it from hdc_nvme_cmd
+		saved_to_host_cmd_entry(host_cmd_entry, cmd);
+		host_cmd_entry->state = WRITE_FLOW_STATE_INITIAL;
+		enqueue(&host_nvmd_cmd_pend_q, host_cmd_entry->next);
 	}
 	
-	req.crc_en = 1;
+	//host_cmd_entry = dequeue(&host_nvmd_cmd_pend_q);
 
-	// PI in last8/first8 / type 0(disable)  1  2  3  
-	req.dps = ns_info->dps;
+	
 
-	// DIX or DIF / format LBA size use which (1 of the 16)	
-	req.flbas = flbas;
-
-	// FUA is too bypass Cache
-	fua = control.bits.fua;
-	req.cache_en = !fua;
-
-	// TODO:: according frequency, latency, stream to place host data to  HOSTBAND or WLBAND
-	req.band_rdtype = HOSTBAND;  // FQMGR, 9 queue/die
-
-	//QW2
-	req.elba = (nsid<<32) | start_lba;
-
-	// ask hw to export these define in .hdl or .rdl
-
-	return send_phif_cmd_req(&req);
+	host_write_lba();
 }
 
