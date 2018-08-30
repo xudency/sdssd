@@ -15,8 +15,13 @@
 #include "nvme_spec.h"
 #include "msg_fmt.h"
 
-
 host_nvme_cmd_entry    gat_host_nvme_cmd_array[HOST_NVME_CMD_ENTRY_CNT]       = {{{0}}};
+
+struct Queue host_nvme_cmd_free_q;
+struct Queue host_nvmd_cmd_pend_q;
+
+//struct Queue host_nvme_wr_pend_q;
+//struct Queue host_nvme_rd_pend_q;
 
 
 // HW notify CPU method

@@ -123,7 +123,6 @@ cqsts host_write_lba(hdc_nvme_cmd *cmd)
 		return status;	
 	}
 	
-	ns_info = get_identify_ns(nsid);
 
 	//list_add(, cmd);
 
@@ -138,6 +137,14 @@ cqsts host_write_lba(hdc_nvme_cmd *cmd)
 	// s_queue_t stack_t ops
 
 	// opcode depend filed fill outside
+	//host_nvme_cmd_free_q;
+	dequeue(host_nvme_cmd_free_q);
+
+
+
+
+	
+	
 	phif_cmd_req req;
 	memset(&req, 0, sizeof(req));
 
@@ -164,7 +171,9 @@ cqsts host_write_lba(hdc_nvme_cmd *cmd)
 	
 	// TODO: TCG support, LBA Range, e.g. LBA[0 99] key1,  LBA[100 199] key2 .....
 	req.header.hxts_mode = enabled | key; 
+
 	
+	ns_info = get_identify_ns(nsid);
 	//QW1	
 	req.cpa = start_lba / 1;     // LBA - > CPA
 

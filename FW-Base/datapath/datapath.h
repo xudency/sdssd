@@ -10,11 +10,14 @@
 
 
 typedef struct {
-	s_node_t *next;
+	struct qnode *next;
 	u8 cmd_tag;
 	u8 state;
 	u16 sqid;
 	struct nvme_command sqe;
 } host_nvme_cmd_entry;
+
+
+
 
 #endif
