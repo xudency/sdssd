@@ -16,6 +16,9 @@
 #include "msg_fmt.h"
 
 
+host_nvme_cmd_entry    gat_host_nvme_cmd_array[HOST_NVME_CMD_ENTRY_CNT]       = {{{0}}};
+
+
 // HW notify CPU method
 //    1. HW interrupt ---> FW check Event register what happen ---> FW handle it
 //    2. FW Polling check Event register what happen ---> if yes handle it
@@ -30,7 +33,7 @@ int handle_nvme_io_command(hdc_nvme_cmd *cmd)
 
 	switch (opcode) {
 	case nvme_io_read:
-		res = host_read_lba();
+		res = host_read_lba(cmd);
 		break;
 	case nvme_io_write:
 		res = host_write_lba(cmd);

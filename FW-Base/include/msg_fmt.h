@@ -111,6 +111,13 @@ enum msg_id {
 
 };
 
+enum extag_id {
+	PHIF_EXTAG = 0,
+
+}
+
+
+
 /*
 `define REG_SRC_HDC        8'h0
 
@@ -309,7 +316,7 @@ struct msg_qw0 {
 
 
 // hdc_nvmd_cmd message from PHIF, when a new host command arrival
-typedef struct host_nvme_cmd {
+typedef struct {
 	struct msg_qw0 header;    // QW0
 	struct nvme_command sqe; 	// QW1--QW8 is original SQE
 } hdc_nvme_cmd;

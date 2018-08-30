@@ -91,23 +91,39 @@ bool atc_assign_ppa(u8 band, u32 scpa, u16 nppas, ppa_t *ppalist)
 	return 0;
 }
 
-// HDC do some check, then generate a phif_cmd_req fwd to phif.chunk
+
 // TODO: statemachine
-int host_write_lba(hdc_nvme_cmd *cmd)
+cqsts host_write_lba(hdc_nvme_cmd *cmd)
 {
+	cqsts status = {0};	// status, default no error
+
 	u8 fua, access_lat, access_freq, flbas, lbaf_type;
 	u16 lba_size;	// in byte
 	dsm_dw13_t dsmgmt;
 	ctrl_dw12h_t control;
-	u32 start_lba = cmd->sqe.rw.slba;
-	u32 nlba = cmd->sqe.rw.length;
+	u64 start_lba = cmd->sqe.rw.slba;
+	u16 nlb = cmd->sqe.rw.length;
 	u32 nsid = cmd->sqe.rw.nsid;
 	struct nvme_lbaf *lbaf;
 	dsmgmt.dw13 = cmd->sqe.rw.dsmgmt;
 	control.ctrl = cmd->sqe.rw.control;
+	struct nvme_id_ns *ns_info;
 
-	// TODO: namespace CBUFF or SRAM, assign Address for it
-	struct nvme_id_ns *ns_info = get_namespace(nsid);
+	if ((start_lba + nlb) > MAX_LBA) {
+		print_err("the write LBA Range[%lld--%lld] exceed max_lba:%d", start_lba, start_lba+nlb, MAX_LBA);
+		status.bits.sct = NVME_SCT_GENERIC;
+		status.bits.sc = NVME_SC_LBA_RANGE;
+		return status;	
+	}
+
+	if (nsid > MAX_NSID) {
+		print_err("NSID:%d is Invalid", nsid);
+		status.bits.sct = NVME_SCT_GENERIC;
+		status.bits.sc = NVME_SC_INVALID_NS;
+		return status;	
+	}
+	
+	ns_info = get_identify_ns(nsid);
 
 	//list_add(, cmd);
 
@@ -147,7 +163,7 @@ int host_write_lba(hdc_nvme_cmd *cmd)
 	
 	
 	// TODO: TCG support, LBA Range, e.g. LBA[0 99] key1,  LBA[100 199] key2 .....
-	req.header.hxts_mode = enableed | key; 
+	req.header.hxts_mode = enabled | key; 
 	
 	//QW1	
 	req.cpa = start_lba / 1;     // LBA - > CPA
@@ -167,7 +183,10 @@ int host_write_lba(hdc_nvme_cmd *cmd)
 	} else if (lba_size == 16384) {
 		req.lb_size = 2;
 	} else {
-		return -EINVAL;
+		print_err("LBA Size:%d not support", lba_size);
+		status.bits.sct = NVME_SCT_GENERIC;
+		status.bits.sc = NVME_SC_INVALID_FORMAT;
+		return status;
 	}
 	
 	req.crc_en = 1;
@@ -193,9 +212,3 @@ int host_write_lba(hdc_nvme_cmd *cmd)
 	return send_phif_cmd_req(&req);
 }
 
-/*
-LBA2CPA(u32 lba, u32 nsid)
-{
-
-}
-*/

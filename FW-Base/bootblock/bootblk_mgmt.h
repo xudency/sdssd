@@ -139,7 +139,6 @@ typedef struct {
 } boot_blk_ctl_ctx;
 
 
-
 static inline boot_blk_primary_page *get_primary_page(void)
 {
 	return g_primary_page;
