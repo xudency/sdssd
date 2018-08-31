@@ -225,10 +225,10 @@ void setup_phif_cmd_cpl(phif_cmd_cpl *cpl, host_nvme_cmd_entry *host_cmd_entry)
 	//QW 1 2
 	//cpl->cqe = host_cmd_entry->cqe;
 
-	cpl->cqe.result = XXX;
-	cpl->cqe.sq_id = host_cmd_entry->sqid;
-	cpl->cqe.sq_head = YYYY;
-	cpl->cqe.command_id = host_cmd_entry->sqe.common.command_id;
+	cpl->cqe.result = 0; // this is command specified
+	//cpl->cqe.sq_id = host_cmd_entry->sqid;
+	//cpl->cqe.sq_head = YYYY;
+	//cpl->cqe.command_id = host_cmd_entry->sqe.common.command_id;
 	cpl->cqe.status = (host_cmd_entry->sta_sc<<1) | (host_cmd_entry->sta_sct<<9);
 	// phase is filled by HW
 }

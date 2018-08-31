@@ -92,14 +92,16 @@ bool atc_assign_ppa(u8 band, u32 scpa, u16 nppas, ppa_t *ppalist)
 }
 
 // statemachine
+// TODO: optimized when message send fail due to part busy, not re-constructured phif_cmd_req/cpl
+// TODO: enqueue it in another queue host_nvme_cmd_wait_port_q, so next schedule, we only need send it directly.
 void host_write_lba(host_nvme_cmd_entry *host_cmd_entry)
 {	
 	switch (host_cmd_entry->state) 
 	{
-		case WRITE_FLOW_STATE_INITIAL:
-			get_from_pend();
+		//case WRITE_FLOW_STATE_INITIAL:
+			//get_from_pend();
 	
-		case WRITE_FLOW_STATE_ENQUEUE:
+		case WRITE_FLOW_STATE_QUEUED:
 			phif_cmd_req req;
 			setup_phif_cmd_req(&req, host_cmd_entry);
 			host_cmd_entry->state = WRITE_FLOW_STATE_PHIF_REQ_READY;
@@ -108,7 +110,7 @@ void host_write_lba(host_nvme_cmd_entry *host_cmd_entry)
 			if (send_phif_cmd_req(&req)) {
 				// message port not available
 				enqueue_front(host_nvmd_cmd_pend_q, host_cmd_entry->next);
-				host_cmd_entry->state = WRITE_FLOW_STATE_ENQUEUE;	
+				host_cmd_entry->state = WRITE_FLOW_STATE_QUEUED;	
 				break;
 			} else {
 				host_cmd_entry->state = WRITE_FLOW_STATE_PHIF_REQ_SENDOUT;	
@@ -123,16 +125,31 @@ void host_write_lba(host_nvme_cmd_entry *host_cmd_entry)
 		case WRITE_FLOW_STATE_HAS_PHIF_RSP:
 			phif_cmd_cpl cpl;
 			setup_phif_cmd_cpl(&cpl, host_cmd_entry);
-			send_phif_cmd_cpl(cpl);			
-			host_cmd_entry->state = WRITE_FLOW_STATE_PHIF_CPL_SENDOUT;
+			host_cmd_entry->state = WRITE_FLOW_STATE_PHIF_CPL_READY;
+
+		case WRITE_FLOW_STATE_PHIF_CPL_READY
+			if (send_phif_cmd_cpl(cpl)) {
+				// message Port BUSY
+				enqueue_front(host_nvmd_cmd_pend_q, host_cmd_entry->next);
+				host_cmd_entry->state = WRITE_FLOW_STATE_HAS_PHIF_RSP;				
+				break;
+			} else {
+				host_cmd_entry->state = WRITE_FLOW_STATE_PHIF_CPL_SENDOUT;
+			}
 			
 		case WRITE_FLOW_STATE_PHIF_CPL_SENDOUT:
 			// this host cmd is complete,tag will be released
 			host_cmd_entry->state = WRITE_FLOW_STATE_COMPLETE;
 			
 		case WRITE_FLOW_STATE_COMPLETE:
-			return;			
-			
+			// get next pending
+			host_cmd_entry = dequeue(&host_nvmd_cmd_pend_q);
+			if (host_cmd_entry) {
+				host_write_lba(host_cmd_entry);
+			} else {
+				// there is no pending cmd need process
+				return;
+			}			
 	}
 
 	return;
@@ -164,22 +181,17 @@ cqsts handle_host_write(hdc_nvme_cmd *cmd)
 	host_cmd_entry = __get_host_cmd_entry(cmd->header.tag);
 	if (host_cmd_entry == NULL) {
 		// it should never, else we should enlarge the gat array
-		//goto retry;
 	} else {
 		// fill it from hdc_nvme_cmd
 		saved_to_host_cmd_entry(host_cmd_entry, cmd);
 		enqueue(&host_nvmd_cmd_pend_q, host_cmd_entry->next);		
-		host_cmd_entry->state = WRITE_FLOW_STATE_ENQUEUE;
+		host_cmd_entry->state = WRITE_FLOW_STATE_QUEUED;
 	}
 	
-	/*if (current_host_cmd_entry == NULL) {
-		current_host_cmd_entry = dequeue(&host_nvmd_cmd_pend_q);
-		host_cmd_entry = current_host_cmd_entry
-	} else {
-		// continue process the previous one
-	}*/
-	
 	host_cmd_entry = dequeue(&host_nvmd_cmd_pend_q);
+
+	assert(host_cmd_entry);
+	
 	host_write_lba(host_cmd_entry);
 }
 
