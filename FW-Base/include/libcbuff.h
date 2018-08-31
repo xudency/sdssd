@@ -10,4 +10,8 @@
 
 #define PHIF_CMD_REQ_SPM
 
+#define PHIF_CMD_RSP_SPM
+
+#define PHIF_CMD_CPL_SPM
+
 #endif

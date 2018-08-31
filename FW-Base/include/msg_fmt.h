@@ -114,7 +114,7 @@ enum msg_id {
 enum extag_id {
 	PHIF_EXTAG = 0,
 
-}
+};
 
 
 
@@ -322,13 +322,34 @@ typedef struct {
 } hdc_nvme_cmd;
 
 
-typedef struct phif_cmd_complete {
+typedef struct {
 	struct msg_qw0 header;
 	struct nvme_completion cqe;
 } phif_cmd_cpl;
 
 
-typedef struct phif_cmd_request {
+typedef struct {
+	u64 cnt			 :4;
+	u64 dstfifo		 :4;
+	u64 dst			 :5;
+	u64 prio		 :1;
+	u64 rsvd0		 :1;
+	u64 ckl		 	 :1;   //chunk last
+	u64 msgid		 :8;
+	u64 tag			 :8;
+	u64 ext_tag		 :4;
+	u64 src			 :5;
+	u64 rsvd1		 :1;
+	u64 vfa			 :1;
+	u64 port		 :1;
+	u64 vf			 :4;
+	u64 rsvd2		 :4;
+	u64 sta_sc	 	 :8;
+	u64 sta_sct		 :4;
+
+} phif_cmd_rsp;
+
+typedef struct {
 	struct msg_qw0 header;
 
 	// QW1

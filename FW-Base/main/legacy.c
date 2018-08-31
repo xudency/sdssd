@@ -80,4 +80,15 @@ int fwd_die_to_prevn(u16 blk, u8 start_lun, u8 start_ch,
 	.schedule = bit_scan_scheduler,
 };*/
 
+/* each host command need saved, because SPM is read clear*/
+/*host_nvme_cmd_entry *get_host_cmd_entry_from_free_q(void)
+{
+	struct qnode *node = dequeue(&host_nvme_cmd_free_q);
+
+	if (node) {
+		return (host_nvme_cmd_entry *)container_of(node, host_nvme_cmd_entry, next);
+	} else {
+		return NULL;
+	}
+}*/
 

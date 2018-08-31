@@ -91,144 +91,54 @@ bool atc_assign_ppa(u8 band, u32 scpa, u16 nppas, ppa_t *ppalist)
 	return 0;
 }
 
-/* each host command need saved, because SPM is read clear*/
-host_nvme_cmd_entry *get_host_cmd_entry_from_free_q(void)
-{
-	struct qnode *node = dequeue(&host_nvme_cmd_free_q);
-
-	if (node) {
-		return (host_nvme_cmd_entry *)container_of(node, host_nvme_cmd_entry, next);
-	} else {
-		return NULL;
-	}
-}
-
-void saved_to_host_cmd_entry(host_nvme_cmd_entry *entry, hdc_nvme_cmd *cmd)
-{
-	entry->cmd_tag = cmd->header.tag;
-	entry->state = WRITE_FLOW_STATE_INITIAL;
-	entry->sqid = cmd->header.sqid;
-
-	entry->vfa = cmd->header.vfa;
-	entry->port = cmd->header.port;
-	entry->vf = cmd->header.vf;
-
-	entry->sqe = cmd->sqe;
-}
-
-
-setup_phif_cmd_req(phif_cmd_req *req, host_nvme_cmd_entry *host_cmd_entry)
-{
-	u8 flbas, lbaf_type;
-	u16 lba_size;	// in byte
-	ctrl_dw12h_t control;
-	u64 start_lba = host_cmd_entry->sqe.rw.slba;
-	u32 nsid = host_cmd_entry->sqe.rw.nsid;
-	struct nvme_lbaf *lbaf;
-	control.ctrl = host_cmd_entry->sqe.rw.control;
-	struct nvme_id_ns *ns_info;
-	host_nvme_cmd_entry *host_cmd_entry;
-
-	// TODO: rate limiter, add this cmd to a pendimg list
-	// rate limiter, throttle host write when GC too slowly
-
-	//QW0
-	req->header.cnt = 2; 	// phif_cmd_req, the length is fixed on 3 QW
-	req->header.dstfifo = MSG_NID_PHIF;
-	req->header.dst = MSG_NID_PHIF;
-	req->header.prio = 0;
-	req->header.msgid = MSGID_PHIF_CMD_REQ;
-
-	// for host cmd, we support max 256 outstanding commands, tag 8 bit is enough
-	// EXTAG no used, must keep it as 0, tag copy from hdc_nvme_cmd which is assign by PHIF
-	req->header.tag = host_cmd_entry->cmd_tag;
-	req->header.ext_tag = PHIF_EXTAG;
-	req->header.src = MSG_NID_HDC;
-	req->header.vfa = host_cmd_entry->vfa;
-	req->header.port = host_cmd_entry->port;
-	req->header.vf = host_cmd_entry->vf;
-	req->header.sqid = host_cmd_entry->sqid;
-
-	// TODO: Reservation check, if this is reservation conflict
-	
-	
-	// TODO: TCG support, LBA Range, e.g. LBA[0 99] key1,  LBA[100 199] key2 .....
-	req->header.hxts_mode = enabled | key; 
-
-	
-	ns_info = get_identify_ns(nsid);
-	//QW1	
-	req->cpa = start_lba / 1;	 // LBA - > CPA
-
-	flbas = ns_info->flbas;
-	lbaf_type = flbas & NVME_NS_FLBAS_LBA_MASK;
-	lbaf = &ns_info->lbaf[lbaf_type];
-
-	req->hmeta_size = lbaf->ms / 8;
-	req->cph_size = lbaf->cphs;
-
-	lba_size = 1 << lbaf->ds;
-	if (lba_size == 512) {
-		req->lb_size = 0;
-	} else if (lba_size == 4096) {
-		req->lb_size = 1;
-	} else if (lba_size == 16384) {
-		req->lb_size = 2;
-	} else {
-		print_err("LBA Size:%d not support", lba_size);
-		//status.bits.sct = NVME_SCT_GENERIC;
-		//status.bits.sc = NVME_SC_INVALID_FORMAT;
-		//return status;
-	}
-	
-	req->crc_en = 1;
-
-	// PI in last8/first8 / type 0(disable)  1	2  3  
-	req->dps = ns_info->dps;
-
-	// DIX or DIF / format LBA size use which (1 of the 16) 
-	req->flbas = flbas;
-
-	req->cache_en = !control.bits.fua;
-
-	// TODO:: according frequency, latency, stream to place host data to  HOSTBAND or WLBAND
-	req->band_rdtype = HOSTBAND;  // FQMGR, 9 queue/die
-
-	//QW2
-	req->elba = (nsid<<32) | start_lba;
-
-	// ask hw to export these define in .hdl or .rdl
-}
-
 // statemachine
-void host_write_lba(void)
-{
-	host_nvme_cmd_entry *host_cmd_entry = current_host_cmd_entry;
-	
+void host_write_lba(host_nvme_cmd_entry *host_cmd_entry)
+{	
 	switch (host_cmd_entry->state) 
 	{
 		case WRITE_FLOW_STATE_INITIAL:
+			get_from_pend();
+	
+		case WRITE_FLOW_STATE_ENQUEUE:
 			phif_cmd_req req;
-			setup_phif_cmd_req(req, host_cmd_entry);
+			setup_phif_cmd_req(&req, host_cmd_entry);
 			host_cmd_entry->state = WRITE_FLOW_STATE_PHIF_REQ_READY;
 
 		case WRITE_FLOW_STATE_PHIF_REQ_READY:
 			if (send_phif_cmd_req(&req)) {
+				// message port not available
 				enqueue_front(host_nvmd_cmd_pend_q, host_cmd_entry->next);
+				host_cmd_entry->state = WRITE_FLOW_STATE_ENQUEUE;	
 				break;
 			} else {
-				host_cmd_entry->state = WRITE_FLOW_STATE_PHIF_REQ_SENDOUT;				
+				host_cmd_entry->state = WRITE_FLOW_STATE_PHIF_REQ_SENDOUT;	
 			}
 			
 		case WRITE_FLOW_STATE_PHIF_REQ_SENDOUT:
-			// wait phif_cmd_rsp
-
+			host_cmd_entry->state = WRITE_FLOW_STATE_WAIT_PHIF_RSP;
+			
+		case WRITE_FLOW_STATE_WAIT_PHIF_RSP:
+			break;
+			
+		case WRITE_FLOW_STATE_HAS_PHIF_RSP:
+			phif_cmd_cpl cpl;
+			setup_phif_cmd_cpl(&cpl, host_cmd_entry);
+			send_phif_cmd_cpl(cpl);			
+			host_cmd_entry->state = WRITE_FLOW_STATE_PHIF_CPL_SENDOUT;
+			
+		case WRITE_FLOW_STATE_PHIF_CPL_SENDOUT:
+			// this host cmd is complete,tag will be released
+			host_cmd_entry->state = WRITE_FLOW_STATE_COMPLETE;
+			
+		case WRITE_FLOW_STATE_COMPLETE:
+			return;			
+			
 	}
 
 	return;
 }
 
-cqsts handle_nvme_write(hdc_nvme_cmd *cmd)
+cqsts handle_host_write(hdc_nvme_cmd *cmd)
 {
 	cqsts status = {0};	// status, default no error
 	u64 start_lba = cmd->sqe.rw.slba;
@@ -250,22 +160,26 @@ cqsts handle_nvme_write(hdc_nvme_cmd *cmd)
 		return status;	
 	}
 
-	host_cmd_entry = get_host_cmd_entry_from_free_q();
+	// tag is assigned by PHIF, it can guarantee, this host_cmd_entry is free
+	host_cmd_entry = __get_host_cmd_entry(cmd->header.tag);
 	if (host_cmd_entry == NULL) {
 		// it should never, else we should enlarge the gat array
 		//goto retry;
 	} else {
 		// fill it from hdc_nvme_cmd
 		saved_to_host_cmd_entry(host_cmd_entry, cmd);
-		enqueue(&host_nvmd_cmd_pend_q, host_cmd_entry->next);
+		enqueue(&host_nvmd_cmd_pend_q, host_cmd_entry->next);		
+		host_cmd_entry->state = WRITE_FLOW_STATE_ENQUEUE;
 	}
 	
-	if (current_host_cmd_entry == NULL) {
+	/*if (current_host_cmd_entry == NULL) {
 		current_host_cmd_entry = dequeue(&host_nvmd_cmd_pend_q);
+		host_cmd_entry = current_host_cmd_entry
 	} else {
 		// continue process the previous one
-	}
+	}*/
 	
-	host_write_lba();
+	host_cmd_entry = dequeue(&host_nvmd_cmd_pend_q);
+	host_write_lba(host_cmd_entry);
 }
 

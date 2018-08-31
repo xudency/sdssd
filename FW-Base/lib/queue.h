@@ -1,9 +1,10 @@
+/*
+ * queue is a ADT, add node in rear, get node from front
+ */
+
 #ifndef __LIB_QUEUE_H__
 #define __LIB_QUEUE_H__
 
-
-//#define 	FEATURE_QUEUE_CHECKS
-// Single Link List
 struct qnode {
 	struct qnode *next;
 };
