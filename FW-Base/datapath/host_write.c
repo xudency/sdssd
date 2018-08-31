@@ -163,6 +163,7 @@ cqsts handle_host_write(hdc_nvme_cmd *cmd)
 	u32 nsid = cmd->sqe.rw.nsid;
 	host_nvme_cmd_entry *host_cmd_entry;
 
+	// para check
 	if ((start_lba + nlb) > MAX_LBA) {
 		print_err("the write LBA Range[%lld--%lld] exceed max_lba:%d", start_lba, start_lba+nlb, MAX_LBA);
 		status.bits.sct = NVME_SCT_GENERIC;
@@ -177,7 +178,8 @@ cqsts handle_host_write(hdc_nvme_cmd *cmd)
 		return status;	
 	}
 
-	// tag is assigned by PHIF, it can guarantee, this host_cmd_entry is free
+	// tag is assigned by PHIF, it can guarantee this tag is free,
+	// so the host_cmd_entry is free
 	host_cmd_entry = __get_host_cmd_entry(cmd->header.tag);
 	if (host_cmd_entry == NULL) {
 		// it should never, else we should enlarge the gat array

@@ -1,5 +1,16 @@
 /*
- * queue is a ADT, add node in rear, get node from front
+ * Copyright (C) 2018-2020 NET-Swift.
+ * Initial release: Dengcai Xu <dengcaixu@net-swift.com>
+ *
+ * ALL RIGHTS RESERVED. These coded instructions and program statements are
+ * copyrighted works and confidential proprietary information of NET-Swift Corp.
+ * They may not be modified, copied, reproduced, distributed, or disclosed to
+ * third parties in any manner, medium, or form, in whole or in part.
+ *
+ * function: 
+ * libqueue implement,add node in rear, get node from front default
+ * also you can add new node in front by enqueue_front
+ *
  */
 
 #ifndef __LIB_QUEUE_H__
@@ -69,8 +80,7 @@ static inline struct qnode *dequeue(struct Queue *queue)
 	return node;
 }
 
-// when the node dequeue, but we need to re-enqueue....
-// this is not suggest to used
+// it may used when a node dequeue, but we want to re-enqueue it
 static inline void enqueue_front(struct Queue *queue, struct qnode *node)
 {
 	node->next = queue->front;

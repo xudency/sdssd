@@ -77,15 +77,16 @@ host_nvme_cmd_entry *__get_host_cmd_entry(u8 tag)
 
 host_nvme_cmd_entry *get_host_cmd_entry(u8 tag)
 {
-		host_nvme_cmd_entry *entry = __get_host_cmd_entry(tag);
+	host_nvme_cmd_entry *entry = __get_host_cmd_entry(tag);
 
-		if (entry->state == WRITE_FLOW_STATE_INITIAL) {
-			return entry;
-		} else {
-			print_err("tagid duplicated!!!");
-			panic();
-			return NULL;
-		}
+	if (entry->state == WRITE_FLOW_STATE_INITIAL) {
+		return entry;
+	} else {
+		print_err("tagid duplicated!!! this tag cmd state:%d", entry->state);
+		// if it occur, it is a HE BUG
+		//panic();
+		return NULL;
+	}
 }
 
 
@@ -101,17 +102,17 @@ void saved_to_host_cmd_entry(host_nvme_cmd_entry *entry, hdc_nvme_cmd *cmd)
 	entry->sqe = cmd->sqe;
 }
 
-
 void host_cmd_phif_response(void)
 {
 	phif_cmd_rsp *rsp = (phif_cmd_rsp *)PHIF_CMD_RSP_SPM;
 
 	host_nvme_cmd_entry *host_cmd_entry = __get_host_cmd_entry(rsp->tag);
 
+	host_cmd_entry->sta_sct = rsp->sta_sct;
+	host_cmd_entry->sta_sc = rsp->sta_sc;
+
 	switch (host_cmd_entry->sqe.common.opcode) {
 	case nvme_io_write:
-		host_cmd_entry->sta_sct = rsp->sta_sct;
-		host_cmd_entry->sta_sc = rsp->sta_sc;
 		host_cmd_entry.state = WRITE_FLOW_STATE_HAS_PHIF_RSP;
 		host_write_lba(host_cmd_entry);
 		break;
