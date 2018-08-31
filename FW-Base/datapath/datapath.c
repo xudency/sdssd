@@ -20,6 +20,9 @@ host_nvme_cmd_entry    gat_host_nvme_cmd_array[HOST_NVME_CMD_ENTRY_CNT]       = 
 struct Queue host_nvme_cmd_free_q;
 struct Queue host_nvmd_cmd_pend_q;
 
+// in process
+host_nvme_cmd_entry *current_host_cmd_entry = NULL;
+
 //struct Queue host_nvme_wr_pend_q;
 //struct Queue host_nvme_rd_pend_q;
 
@@ -74,7 +77,7 @@ int send_phif_cmd_req(phif_cmd_req *req)
 		return 0;
 	} else {
 		/*break, CPU schedule other task*/
-		return PHIF_PORT_BUSY;
+		return 1;
 	}
 }
 

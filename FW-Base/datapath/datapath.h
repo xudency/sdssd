@@ -10,8 +10,9 @@
 
 
 typedef enum {
-	WRITE_FLOW_STATE_INITIAL,    // enqueue, has no process
-	WRITE_FLOW_STATE_yy,
+	WRITE_FLOW_STATE_INITIAL,    		// enqueue, has no process
+	WRITE_FLOW_STATE_PHIF_REQ_READY,
+	WRITE_FLOW_STATE_PHIF_REQ_SENDOUT,
 } WRITE_FLOW_STATE;
 
 
@@ -20,7 +21,11 @@ typedef struct {
 	struct qnode *next;
 	u8 cmd_tag;				//0-255
 	u8 state;
-	u16 sqid;
+	u8 sqid;
+	u8 vfa		:1;
+	u8 port		:1;
+	u8 vf		:4;
+	u8 rsvd		:2;
 	struct nvme_command sqe;
 } host_nvme_cmd_entry;
 
