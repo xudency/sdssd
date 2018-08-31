@@ -91,10 +91,17 @@ bool atc_assign_ppa(u8 band, u32 scpa, u16 nppas, ppa_t *ppalist)
 	return 0;
 }
 
-// statemachine
+
+void wpb_init(u8 band)
+{
+	base_ppa = atc_assign_ppa(u8 band, u32 scpa, u16 nppas, ppa_t * ppalist);
+	wpb->fpa = base_ppa;
+}
+
+
 // TODO: optimized when message send fail due to part busy, not re-constructured phif_cmd_req/cpl
 // TODO: enqueue it in another queue host_nvme_cmd_wait_port_q, so next schedule, we only need send it directly.
-void host_write_lba(host_nvme_cmd_entry *host_cmd_entry)
+void hdc_host_write_statemachine(host_nvme_cmd_entry *host_cmd_entry)
 {	
 	switch (host_cmd_entry->state) 
 	{
@@ -145,7 +152,7 @@ void host_write_lba(host_nvme_cmd_entry *host_cmd_entry)
 			// get next pending
 			host_cmd_entry = dequeue(&host_nvmd_cmd_pend_q);
 			if (host_cmd_entry) {
-				host_write_lba(host_cmd_entry);
+				hdc_host_write_statemachine(host_cmd_entry);
 			} else {
 				// there is no pending cmd need process
 				return;
@@ -155,7 +162,7 @@ void host_write_lba(host_nvme_cmd_entry *host_cmd_entry)
 	return;
 }
 
-cqsts handle_host_write(hdc_nvme_cmd *cmd)
+cqsts host_write_ingress(hdc_nvme_cmd *cmd)
 {
 	cqsts status = {0};	// status, default no error
 	u64 start_lba = cmd->sqe.rw.slba;
@@ -179,7 +186,7 @@ cqsts handle_host_write(hdc_nvme_cmd *cmd)
 	}
 
 	// tag is assigned by PHIF, it can guarantee this tag is free,
-	// so the host_cmd_entry is free
+	// we use the tag as array index, so this host_cmd_entry is free,we 
 	host_cmd_entry = __get_host_cmd_entry(cmd->header.tag);
 	if (host_cmd_entry == NULL) {
 		// it should never, else we should enlarge the gat array
@@ -194,6 +201,15 @@ cqsts handle_host_write(hdc_nvme_cmd *cmd)
 
 	assert(host_cmd_entry);
 	
-	host_write_lba(host_cmd_entry);
+	hdc_host_write_statemachine(host_cmd_entry);
+
+	return 0;
+}
+
+
+// FRWMGR ---> ATC, data has write to NAND, ATC update MAP
+atc_write_response()
+{
+
 }
 

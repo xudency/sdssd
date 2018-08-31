@@ -1,7 +1,7 @@
 
 
 
-int host_read_lba(hdc_nvme_cmd *cmd)
+int host_read_ingress(hdc_nvme_cmd *cmd)
 {
 	u8 access_lat;
 	//u8 fua;

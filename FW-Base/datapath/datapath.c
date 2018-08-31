@@ -114,7 +114,7 @@ void host_cmd_phif_response(void)
 	switch (host_cmd_entry->sqe.common.opcode) {
 	case nvme_io_write:
 		host_cmd_entry.state = WRITE_FLOW_STATE_HAS_PHIF_RSP;
-		host_write_lba(host_cmd_entry);
+		hdc_host_write_statemachine(host_cmd_entry);
 		break;
 	case nvme_io_read:
 		/////////
@@ -160,7 +160,6 @@ void setup_phif_cmd_req(phif_cmd_req *req, host_nvme_cmd_entry *host_cmd_entry)
 	
 	// TODO: TCG support, LBA Range, e.g. LBA[0 99] key1,  LBA[100 199] key2 .....
 	req->header.hxts_mode = enabled | key; 
-
 	
 	ns_info = get_identify_ns(nsid);
 	//QW1	
@@ -244,10 +243,10 @@ int handle_nvme_io_command(hdc_nvme_cmd *cmd)
 
 	switch (opcode) {
 	case nvme_io_read:
-		res = host_read_lba(cmd);
+		res = host_read_ingress(cmd);
 		break;
 	case nvme_io_write:
-		res = handle_host_write(cmd);
+		res = host_write_ingress(cmd);
 		break;
 	case nvme_io_flush:
 		break;
