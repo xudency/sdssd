@@ -309,9 +309,11 @@ struct msg_qw0 {
 	u64 vfa			 :1;
 	u64 port		 :1;
 	u64 vf			 :4;
-	u64 sqid		 :8;  // cmd depend
-	u64 hxts_mode	 :6;  // cmd depend
-	u64 rsvd3		 :2;  // cmd depend
+
+	// cmd specific
+	u64 sqid		 :8;
+	u64 hxts_mode	 :6;
+	u64 rsvd3		 :2;
 };
 
 
@@ -343,10 +345,10 @@ typedef struct {
 	u64 vfa			 :1;
 	u64 port		 :1;
 	u64 vf			 :4;
+	
 	u64 rsvd2		 :4;
 	u64 sta_sc	 	 :8;
 	u64 sta_sct		 :4;
-
 } phif_cmd_rsp;
 
 typedef struct {
@@ -398,7 +400,6 @@ struct rwdma_ctrl {
 	u64 rsvd  			:2;
 };
 
-
 typedef struct {
 	struct msg_qw0 header;
 	struct rwdma_ctrl control;
@@ -408,13 +409,45 @@ typedef struct {
 	u64 hmeta_addr;
 	u64 elba			:35;
 	u64 rsvd_5			:29;
-	//u64
-	//pi_fmt
+} phif_wdma_req_mandatory;
+
+typedef struct {
+	// QW_PI
+	u32 eilbrt;
+	u16 elbat;
+	u16 elbatm;
+
+	// QW_ADDR
 	u64 cbuff_addr		:36;
 	u64 rsvd_addr		:28;
-	u64 wdata;
-} phif_wdma_req;
 
+	// QW_DATA
+	u64 wdata;		// mode2, data in message
+} phif_wdma_req_optional;
 
+typedef struct {
+	phif_wdma_req_mandatory mandatory;
+	phif_wdma_req_optional optional;
+} phif_wdma_req_whole;
+
+typedef struct {
+	u64 cnt			 :4;
+	u64 dstfifo		 :4;
+	u64 dst			 :5;
+	u64 prio		 :1;
+	u64 rsvd0		 :1;
+	u64 ckl		 	 :1;   //chunk last
+	u64 msgid		 :8;
+	u64 tag			 :8;
+	u64 ext_tag		 :4;
+	u64 src			 :5;
+	u64 rsvd1		 :1;
+	u64 vfa			 :1;
+	u64 port		 :1;
+	u64 vf			 :4;
+	
+	u64 rsvd2		 :14;
+	u64 staus		 :2;
+} phif_wdma_rsp;
 
 #endif

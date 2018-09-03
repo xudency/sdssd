@@ -450,6 +450,7 @@ enum {
 
 /*
  * Descriptor subtype - lower 4 bits of nvme_(keyed_)sgl_desc identifier
+ * only used in NVMe Over Fabric
  *
  * @NVME_SGL_FMT_ADDRESS:     absolute address of the data block
  * @NVME_SGL_FMT_OFFSET:      relative offset of the in-capsule data block
@@ -480,6 +481,7 @@ enum {
  */
 enum {
 	NVME_SGL_FMT_DATA_DESC		= 0x00,
+	NVME_SGL_FMT_BIT_BUCKET		= 0x01,
 	NVME_SGL_FMT_SEG_DESC		= 0x02,
 	NVME_SGL_FMT_LAST_SEG_DESC	= 0x03,
 	NVME_KEY_SGL_FMT_DATA_DESC	= 0x04,
@@ -488,7 +490,7 @@ enum {
 
 
 struct nvme_sgl_desc {
-	u64	addr;
+	u64	addr;		// when type=bit_bucket, this is rsvd
 	u32	length;
 	u8	rsvd[3];
 	u8	type;        // type(4bit) | subtype(4bit)

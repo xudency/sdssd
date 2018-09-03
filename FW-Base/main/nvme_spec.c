@@ -13,10 +13,15 @@
  */
 
 
+// NVMe Over PCIe
+//     admin command only support PRP mode
+//     IO command SGL/PRP is optional 
+
+// NVMe Over Fabrics, admin and io all only support SGL
 
 nvme_sgl_parse(struct nvme_sgl_desc sgl)
 {
-
+	
 }
 
 
