@@ -14,4 +14,6 @@
 
 #define PHIF_CMD_CPL_SPM
 
+#define PHIF_WDMA_REQ_SPM
+
 #endif

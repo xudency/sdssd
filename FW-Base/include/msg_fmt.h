@@ -307,7 +307,7 @@ struct msg_qw0 {
 	u64 src			 :5;
 	u64 rsvd1		 :1;
 	u64 vfa			 :1;
-	u64 port		 :1;
+	u64 port		 :1;	// port of PHIF
 	u64 vf			 :4;
 
 	// cmd specific
@@ -411,6 +411,8 @@ typedef struct {
 	u64 rsvd_5			:29;
 } phif_wdma_req_mandatory;
 
+#define PHIF_WDMA_REQ_M_LEN   (sizeof(phif_wdma_req_mandatory))
+
 typedef struct {
 	// QW_PI
 	u32 eilbrt;
@@ -422,13 +424,20 @@ typedef struct {
 	u64 rsvd_addr		:28;
 
 	// QW_DATA
-	u64 wdata;		// mode2, data in message
+	u64 wdata[pld_qwn];		// mode2, data in message
 } phif_wdma_req_optional;
+
+enum {
+	WDMA_QW_PI		= (1<<0),
+	WDMA_QW_ADDR	= (1<<1),
+	WDMA_QW_DATA	= (1<<2),
+};
 
 typedef struct {
 	phif_wdma_req_mandatory mandatory;
 	phif_wdma_req_optional optional;
 } phif_wdma_req_whole;
+
 
 typedef struct {
 	u64 cnt			 :4;

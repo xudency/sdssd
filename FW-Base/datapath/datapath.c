@@ -46,8 +46,6 @@ int process_completion_task(void *para)
 
 int send_phif_cmd_req(phif_cmd_req *msg)
 {
-	//common filed filled
-
 	if (port_is_available()) {
 		memcpy(PHIF_CMD_REQ_SPM, msg, sizeof(phif_cmd_req)); 
 		return 0;
@@ -59,10 +57,40 @@ int send_phif_cmd_req(phif_cmd_req *msg)
 
 int send_phif_cmd_cpl(phif_cmd_cpl *msg)
 {
-	//common filed filled
-
 	if (port_is_available()) {
 		memcpy(PHIF_CMD_CPL_SPM, msg, sizeof(phif_cmd_req)); 
+		return 0;
+	} else {
+		/*break, CPU schedule other task*/
+		return 1;
+	}
+}
+
+// valid: bit0:QW_PI   bit1:QW_ADDR  bit2:QW_DATA
+int send_phif_wdma_req(phif_wdma_req_mandatory *m, phif_wdma_req_optional *o, u8 valid)
+{
+	if (port_is_available()) {
+		void *ptr = (void *)PHIF_WDMA_REQ_SPM;
+		memcpy(ptr, m, PHIF_WDMA_REQ_M_LEN));
+		ptr += PHIF_WDMA_REQ_M_LEN;
+
+		if (valid & WDMA_QW_PI) {
+			memcpy(ptr, o, QWORD_BYTES);
+			ptr += QWORD_BYTES;
+			o += QWORD_BYTES;
+		}
+
+		
+		if (valid & WDMA_QW_ADDR) {
+			memcpy(ptr, o, QWORD_BYTES);
+			ptr += QWORD_BYTES;
+			o += QWORD_BYTES;
+		}
+
+		if (valid & WDMA_QW_DATA) {
+			memcpy(ptr, o, QWORD_BYTES*m->control.pld_qwn);
+		}
+
 		return 0;
 	} else {
 		/*break, CPU schedule other task*/
