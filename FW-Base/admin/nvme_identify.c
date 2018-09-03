@@ -36,3 +36,22 @@ void identify_namespace_init(u32 nsid)
 
 	// TODO:
 }
+
+// return a 4KB data buffer that describes info about the NVM subsystem
+cqsts handle_admin_identify(hdc_nvme_cmd *cmd)
+{
+	u8 cns = cmd->sqe.identify.cns;	
+
+	switch (cns) {
+	case NVME_ID_CNS_NS:
+		struct nvme_id_ns *nsinfo = get_identify_ns(cmd->sqe.identify.nsid);
+		// copy it to host, the host address is indicated in dptr
+		send_phif_wdma_req
+		wait_for_phif_wdma_rsp
+		
+		break;
+
+	case NVME_ID_CNS_CTRL:
+	}
+}
+

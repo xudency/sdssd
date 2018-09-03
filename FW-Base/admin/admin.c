@@ -1,4 +1,11 @@
 
+// WDMA:  Host Memory to CBUFF
+// RDMA:  CBUFF to Host Memory
+
+/*cbuff_to_host()
+{
+
+}*/
 
 
 // Process Host Admin command 
@@ -8,7 +15,7 @@ void handle_nvme_admin_command(hdc_nvme_cmd *cmd)
 
 	switch (opcode) {
 	case nvme_admin_identify:
-		xxxxx;
+		handle_admin_identify(cmd);
 		break;
 	case nvme_admin_set_features:
 		xxxxx;
