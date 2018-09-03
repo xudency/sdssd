@@ -8,11 +8,6 @@
 }*/
 
 
-nvme_sgl_parse(struct nvme_sgl_desc sgl)
-{
-
-}
-
 
 // Process Host Admin command 
 cqsts handle_nvme_admin_command(hdc_nvme_cmd *cmd)
