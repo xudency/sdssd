@@ -448,12 +448,50 @@ enum {
 	NVME_NIDT_UUID		= 0x03,
 };
 
+/*
+ * Descriptor subtype - lower 4 bits of nvme_(keyed_)sgl_desc identifier
+ *
+ * @NVME_SGL_FMT_ADDRESS:     absolute address of the data block
+ * @NVME_SGL_FMT_OFFSET:      relative offset of the in-capsule data block
+ * @NVME_SGL_FMT_TRANSPORT_A: transport defined format, value 0xA
+ * @NVME_SGL_FMT_INVALIDATE:  RDMA transport specific remote invalidation
+ *                            request subtype
+ */
+enum {
+	NVME_SGL_FMT_ADDRESS		= 0x00,
+	NVME_SGL_FMT_OFFSET		= 0x01,
+	NVME_SGL_FMT_TRANSPORT_A	= 0x0A,
+	NVME_SGL_FMT_INVALIDATE		= 0x0f,
+};
+
+/*
+ * Descriptor type - upper 4 bits of nvme_(keyed_)sgl_desc identifier
+ *
+ * For struct nvme_sgl_desc:
+ *   @NVME_SGL_FMT_DATA_DESC:		data block descriptor
+ *   @NVME_SGL_FMT_SEG_DESC:		sgl segment descriptor
+ *   @NVME_SGL_FMT_LAST_SEG_DESC:	last sgl segment descriptor
+ *
+ * For struct nvme_keyed_sgl_desc:
+ *   @NVME_KEY_SGL_FMT_DATA_DESC:	keyed data block descriptor
+ *
+ * Transport-specific SGL types:
+ *   @NVME_TRANSPORT_SGL_DATA_DESC:	Transport SGL data dlock descriptor
+ */
+enum {
+	NVME_SGL_FMT_DATA_DESC		= 0x00,
+	NVME_SGL_FMT_SEG_DESC		= 0x02,
+	NVME_SGL_FMT_LAST_SEG_DESC	= 0x03,
+	NVME_KEY_SGL_FMT_DATA_DESC	= 0x04,
+	NVME_TRANSPORT_SGL_DATA_DESC	= 0x05,
+};
+
 
 struct nvme_sgl_desc {
 	u64	addr;
 	u32	length;
 	u8	rsvd[3];
-	u8	type;
+	u8	type;        // type(4bit) | subtype(4bit)
 };
 
 struct nvme_keyed_sgl_desc {
@@ -471,6 +509,30 @@ union nvme_data_ptr {
 	struct nvme_sgl_desc	sgl;
 	struct nvme_keyed_sgl_desc ksgl;
 } ;
+
+/*
+ * Lowest two bits of our flags field (FUSE field in the spec):
+ *
+ * @NVME_CMD_FUSE_FIRST:   Fused Operation, first command
+ * @NVME_CMD_FUSE_SECOND:  Fused Operation, second command
+ *
+ * Highest two bits in our flags field (PSDT field in the spec):
+ *
+ * @NVME_CMD_PSDT_SGL_METABUF:	Use SGLS for this transfer,
+ *	If used, MPTR contains addr of single physical buffer (byte aligned).
+ * @NVME_CMD_PSDT_SGL_METASEG:	Use SGLS for this transfer,
+ *	If used, MPTR contains an address of an SGL segment containing
+ *	exactly 1 SGL descriptor (qword aligned).
+ */
+enum {
+	NVME_CMD_FUSE_FIRST	= (1 << 0),
+	NVME_CMD_FUSE_SECOND	= (1 << 1),
+
+	NVME_CMD_SGL_METABUF	= (1 << 6),
+	NVME_CMD_SGL_METASEG	= (1 << 7),
+	NVME_CMD_SGL_ALL	= NVME_CMD_SGL_METABUF | NVME_CMD_SGL_METASEG,
+};
+
 
 struct nvme_common_command {
 	u8			opcode;
