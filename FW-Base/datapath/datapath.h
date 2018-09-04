@@ -41,14 +41,14 @@ typedef struct {
 	//host_cmd_callback  // when response, call this function
 } host_nvme_cmd_entry;
 
-typedef int (*complete_fn)(void *);
+typedef int (*fw_cmd_callback)(void *);
 
 // WDMA RDMA ... etc.
 typedef struct {
 	u8 host_tag;     // this fw cmd is split from which host nvme cmd
 	u8 rsvd;	
 	u16 itn_tag;     // a host cmd will split to multi fw internal command
-	complete_fn fn;  // DEC(host_cmd_entry[host_tag].ckc), if == 0 send phif_cmd_cpl
+	fw_cmd_callback fn;  // DEC(host_cmd_entry[host_tag].ckc), if == 0 send phif_cmd_cpl
 } fw_internal_cmd_entry;
 
 

@@ -69,6 +69,7 @@ cqsts handle_admin_identify(hdc_nvme_cmd *cmd)
 		break;
 
 	case NVME_ID_CNS_CTRL:
+		
 	}
 
 	return;
