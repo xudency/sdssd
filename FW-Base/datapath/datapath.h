@@ -6,8 +6,8 @@
 //#define HOST_WR_CMD_MAX
 //#define HOST_RD_CMD_MAX
 
-#define HOST_NVME_CMD_ENTRY_CNT  256
-
+#define HOST_NVME_CMD_ENTRY_CNT    256
+#define FW_INTERNAL_CMD_ENTRY_CNT  256
 //#define 
 
 typedef enum {
@@ -22,8 +22,6 @@ typedef enum {
 	WRITE_FLOW_STATE_COMPLETE,
 } WRITE_FLOW_STATE;
 
-
-
 typedef struct {
 	struct qnode next;
 	u8 cmd_tag;				// 0-255
@@ -37,12 +35,21 @@ typedef struct {
 	//struct nvme_completion cqe;
 	u32 sta_sc		:8;
 	u32 sta_sct		:4;
-	u32 rsvd2		:20;
+	u32 ckc			:8;   // chunk count
+	u32 rsvd2		:12;
 
 	//host_cmd_callback  // when response, call this function
 } host_nvme_cmd_entry;
 
+typedef int (*complete_fn)(void *);
 
+// WDMA RDMA ... etc.
+typedef struct {
+	u8 host_tag;     // this fw cmd is split from which host nvme cmd
+	u8 rsvd;	
+	u16 itn_tag;     // a host cmd will split to multi fw internal command
+	complete_fn fn;  // DEC(host_cmd_entry[host_tag].ckc), if == 0 send phif_cmd_cpl
+} fw_internal_cmd_entry;
 
 
 #endif

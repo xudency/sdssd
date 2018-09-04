@@ -40,8 +40,11 @@ void identify_namespace_init(u32 nsid)
 // return a 4KB data buffer that describes info about the NVM subsystem
 cqsts handle_admin_identify(hdc_nvme_cmd *cmd)
 {
+	host_nvme_cmd_entry *host_cmd_entry = __get_host_cmd_entry(cmd->header.tag);
 	u8 cns = cmd->sqe.identify.cns;	
 	struct nvme_identify *idn = &cmd->sqe.identify;
+
+	saved_to_host_cmd_entry(host_cmd_entry, cmd);
 
 	switch (cns) {
 	case NVME_ID_CNS_NS:
@@ -54,9 +57,11 @@ cqsts handle_admin_identify(hdc_nvme_cmd *cmd)
 		// Concer case handle 1.cmdtag alloc fail  2.wdma_req_spm busy
 		if (!prp1_offset) {
 			// PRP1 is 4K align
+			host_cmd_entry->ckc = 1;
 			wdma_read_fwdata_to_host(prp1, cbuff, SZ_4K);
 		} else {
 			// PRP1 not 4K align, PRP2 is used
+			host_cmd_entry->ckc = 2;
 			wdma_read_fwdata_to_host(prp1, cbuff, length);
 			wdma_read_fwdata_to_host(prp2, cbuff+length, prp1_offset);
 		}
@@ -75,11 +80,15 @@ void phif_wdma_response_to_hdc(void)
 	phif_wdma_rsp *rsp = (phif_wdma_rsp *)PHIF_WDMA_RSP_SPM;
 
 	// release this HDC cmd_tag allocated before
-	u8 cmd_tag = rsp->tag;
+	u16 itnl_tag = rsp->tag;
 
-	hdc_free_cmdtag(cmd_tag);
+	fw_internal_cmd_entry *fw_cmd_entry = __get_fw_cmd_entry(itnl_tag);
+	host_nvme_cmd_entry *host_cmd_entry = __get_host_cmd_entry(fw_cmd_entry->host_tag);
+	
+	if (--host_cmd_entry->ckc) {
+		// prp1 part and prp2 part all response, structured a phif_cmd_cpl to PHIF
+	}
 
-	// prp1 part and prp2 part all response, structured a phif_cmd_cpl to PHIF
-	tag->hookfn();
+	hdc_free_cmdtag(itnl_tag);
 }
 

@@ -15,11 +15,15 @@
 #include "nvme_spec.h"
 #include "msg_fmt.h"
 
+// host command
 host_nvme_cmd_entry    gat_host_nvme_cmd_array[HOST_NVME_CMD_ENTRY_CNT]       = {{{0}}};
-
 
 //struct Queue host_nvme_cmd_free_q;
 struct Queue host_nvmd_cmd_pend_q;
+
+// fw internal command
+fw_internal_cmd_entry    gat_fw_internal_cmd_array[FW_INTERNAL_CMD_ENTRY_CNT]       = {{{0}}};
+
 
 // in process
 //host_nvme_cmd_entry *current_host_cmd_entry = NULL;
@@ -106,7 +110,7 @@ int wdma_read_fwdata_to_host(u64 host_addr, u64 cbuff_addr, u16 length)
 	phif_wdma_req_mandatory m;
 
 	// TODO: tag allocated?  bitmap, find_first_zero_bit, u32 support 32 command is enough
-	u8 tag = hdc_alloc_cmdtag();
+	u16 tag = hdc_alloc_cmdtag();
 	
 	msg_header_filled(&m.header, 6, MSG_NID_PHIF, MSG_NID_PHIF, MSGID_PHIF_WDMA_REQ, 
 					  tag, HDC_EXT_TAG, MSG_NID_HDC, 0);
@@ -124,6 +128,11 @@ int wdma_read_fwdata_to_host(u64 host_addr, u64 cbuff_addr, u16 length)
 	return send_phif_wdma_req(&m, &o, valid);
 }
 
+
+host_nvme_cmd_entry *__get_fw_cmd_entry(u8 itnl_tag)
+{
+	return &gat_fw_internal_cmd_array[itnl_tag];
+}
 
 host_nvme_cmd_entry *__get_host_cmd_entry(u8 tag)
 {
