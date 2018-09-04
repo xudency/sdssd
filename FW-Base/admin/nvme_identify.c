@@ -37,41 +37,30 @@ void identify_namespace_init(u32 nsid)
 }
 
 
-append
-
-
-
 // return a 4KB data buffer that describes info about the NVM subsystem
 cqsts handle_admin_identify(hdc_nvme_cmd *cmd)
 {
 	u8 cns = cmd->sqe.identify.cns;	
+	struct nvme_identify *idn = &cmd->sqe.identify;
 
 	switch (cns) {
 	case NVME_ID_CNS_NS:
+		u64 cbuff = (u64)get_identify_ns(idn->nsid);
+		u64 prp1 = idn->dptr.prp1;
+		u64 prp2 = idn->dptr.prp2;
+		u64 prp1_offset = page_offset(prp1);
+		u16 length = SZ_4K - prp1_offset;
 
-		u32 nsid = cmd->sqe.identify.nsid;	
+		// Concer case handle 1.cmdtag alloc fail  2.wdma_req_spm busy
+		if (!prp1_offset) {
+			// PRP1 is 4K align
+			wdma_read_fwdata_to_host(prp1, cbuff, SZ_4K);
+		} else {
+			// PRP1 not 4K align, PRP2 is used
+			wdma_read_fwdata_to_host(prp1, cbuff, length);
+			wdma_read_fwdata_to_host(prp2, cbuff+length, prp1_offset);
+		}
 
-		struct nvme_id_ns *nsinfo = get_identify_ns(nsid);
-		// copy it to host, the host address is indicated in dptr
-		phif_wdma_req_mandatory m;
-
-		// TODO: tag allocated?
-		msg_header_filled(&m.header, 6, MSG_NID_PHIF, MSG_NID_PHIF, MSGID_PHIF_WDMA_REQ, 
-						u8 tag, u8 ext_tag, MSG_NID_HDC, 0);
-
-		m.control.blen = SZ_4K;			// length
-		m.control.pld_qwn = 1;
-
-		// TODO: if prp1 is not 4K align, prp2 will used
-		m.hdata_addr = cmd->sqe.identify.dptr.prp1;    // host data address
-
-		//QW_ADDR
-		phif_wdma_req_optional o;
-		o.cbuff_addr = &gat_identify_namespaces[nsid];   // cbuff address
-
-		u8 valid = WDMA_QW_ADDR;
-		send_phif_wdma_req(&m, &o, valid);
-		
 		break;
 
 	case NVME_ID_CNS_CTRL:
@@ -80,10 +69,17 @@ cqsts handle_admin_identify(hdc_nvme_cmd *cmd)
 	return;
 }
 
-
-// fwdata means FW define specific data, include sysdata and manage data
-// host read, data in sram is exclusived
-wdma_fwdata_cbuff_to_host()
+// move cbuff data to host complete
+void phif_wdma_response_to_hdc(void)
 {
+	phif_wdma_rsp *rsp = (phif_wdma_rsp *)PHIF_WDMA_RSP_SPM;
 
+	// release this HDC cmd_tag allocated before
+	u8 cmd_tag = rsp->tag;
+
+	hdc_free_cmdtag(cmd_tag);
+
+	// prp1 part and prp2 part all response, structured a phif_cmd_cpl to PHIF
+	tag->hookfn();
 }
+

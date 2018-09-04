@@ -99,6 +99,10 @@
 
 //#define forever for(;;)
 
+// offset in 4KB
+#define page_offset(v) ((u64)(v) & (SZ_4K - 1))
+
+
 static void printfmt_ppa(const char * title, ppa_t addr)
 {
 

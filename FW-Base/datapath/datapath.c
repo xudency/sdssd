@@ -43,7 +43,6 @@ int process_completion_task(void *para)
 	return 0;
 }
 
-
 int send_phif_cmd_req(phif_cmd_req *msg)
 {
 	if (port_is_available()) {
@@ -97,6 +96,34 @@ int send_phif_wdma_req(phif_wdma_req_mandatory *m, phif_wdma_req_optional *o, u8
 		return 1;
 	}
 }
+
+
+// fwdata means FW define specific data, include sysdata and manage data
+// host read, data in sram is exclusived
+// both cbuff and host address is continuously
+int wdma_read_fwdata_to_host(u64 host_addr, u64 cbuff_addr, u16 length)
+{
+	phif_wdma_req_mandatory m;
+
+	// TODO: tag allocated?  bitmap, find_first_zero_bit, u32 support 32 command is enough
+	u8 tag = hdc_alloc_cmdtag();
+	
+	msg_header_filled(&m.header, 6, MSG_NID_PHIF, MSG_NID_PHIF, MSGID_PHIF_WDMA_REQ, 
+					  tag, HDC_EXT_TAG, MSG_NID_HDC, 0);
+
+	m.control.blen = length;	// length
+	m.control.pld_qwn = 1;		// only one QW_ADDR, because cbuff must continuous
+
+	m.hdata_addr = host_addr;	//host address
+
+	phif_wdma_req_optional o;
+	o.cbuff_addr = cbuff_addr;   // cbuff address
+
+	u8 valid = WDMA_QW_ADDR;
+
+	return send_phif_wdma_req(&m, &o, valid);
+}
+
 
 host_nvme_cmd_entry *__get_host_cmd_entry(u8 tag)
 {

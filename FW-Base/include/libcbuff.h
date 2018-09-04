@@ -16,4 +16,7 @@
 
 #define PHIF_WDMA_REQ_SPM
 
+#define PHIF_WDMA_RSP_SPM
+
+
 #endif

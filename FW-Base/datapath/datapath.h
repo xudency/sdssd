@@ -38,6 +38,8 @@ typedef struct {
 	u32 sta_sc		:8;
 	u32 sta_sct		:4;
 	u32 rsvd2		:20;
+
+	//host_cmd_callback  // when response, call this function
 } host_nvme_cmd_entry;
 
 

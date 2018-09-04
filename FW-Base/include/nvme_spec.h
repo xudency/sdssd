@@ -763,9 +763,9 @@ typedef union
 
 	struct
 	{
-		u32 dsm_frequency 		:4;
-		u32 dsm_latency			:2;
-		u32 dsm_seq_req 		:1;
+		u32 dsm_frequency 		:4;  // write band
+		u32 dsm_latency			:2;  // read read1/2/3
+		u32 dsm_seq_req 		:1;  
 		u32 dsm_incompressible 	:1;
 		u32 rsvd				:8;
 		u32 dspec				:16; // Directive Specific
@@ -774,8 +774,8 @@ typedef union
 
 
 typedef struct {
-	u16 guard;   //PRCHK bit2
-	u16 apptag;  //PRCHK bit1
+	u16 guard;   //PRCHK bit2    CRC-16 computed over the LB data
+	u16 apptag;  //PRCHK bit1	 
 	u32 reftag;  //PRCHK bit0
 } pi_fmt;
 
