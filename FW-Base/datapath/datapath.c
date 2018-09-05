@@ -140,8 +140,8 @@ int wdma_read_fwdata_to_host(u64 host_addr, u64 cbuff_addr, u16 length)
 
 	req->mandatory.control.blen = length;	// length
 	req->mandatory.control.pld_qwn = 1;		// only one QW_ADDR, because cbuff must continuous
-	req->mandatory.hdata_addr = host_addr;	//host address
-	req->optional.cbuff_addr = cbuff_addr;   // cbuff address
+	req->mandatory.hdata_addr = host_addr;	// host address
+	req->optional.cbuff_addr = cbuff_addr;  // cbuff address
 
 	u8 valid = WDMA_QW_ADDR;
 
@@ -309,10 +309,10 @@ void dp_setup_phif_cmd_req(phif_cmd_req *req, host_nvme_cmd_entry *host_cmd_entr
 			print_err("access latency Invalid");
 			return - EINVAL;
 		}
-
-	
-	} else (opcode == nvme_io_write) {		
+	} else if (opcode == nvme_io_write) {		
 		req->band_rdtype = HOSTBAND;
+	} else {
+		//...
 	}
 
 
@@ -437,7 +437,6 @@ void hdc_host_cmd_task(void *para)
 	// host nvme cmd has fwd to HW process, it may 1.wait response  2.wait SPM available
 	if (!res)
 		return;
-	
 	
 	// res, this NVMe Command is Invalid, post CQE to host immediately
 	phif_cmd_cpl *cpl = __get_host_cmd_cpl_entry(tag)
