@@ -385,32 +385,27 @@ host_nvme_cmd_entry *get_next_host_cmd_entry(void)
 }
 
 // Process Host IO Comamnd
-void handle_nvme_io_command(hdc_nvme_cmd *cmd)
+int handle_nvme_io_command(host_nvme_cmd_entry *host_cmd_entry)
 {
-	u8 opcode = cmd->sqe.common.opcode;
-	u64 start_lba = cmd->sqe.rw.slba;
-	u16 nlb = cmd->sqe.rw.length;
-	u32 nsid = cmd->sqe.rw.nsid;
-	u8 tag = cmd->header.tag;
+	u8 opcode = host_cmd_entry->sqe.common.opcode;
+	u64 start_lba = host_cmd_entry->sqe.rw.slba;
+	u16 nlb = host_cmd_entry->sqe.rw.length;
+	u32 nsid = host_cmd_entry->sqe.rw.nsid;
+	u8 tag = host_cmd_entry->cmd_tag;
 	
-	// tag is assigned by PHIF, it can guarantee this tag is free,
-	host_nvme_cmd_entry *host_cmd_entry = __get_host_cmd_entry(tag);
-
-	save_in_host_cmd_entry(host_cmd_entry, cmd);
-
 	// para check
 	if ((start_lba + nlb) > MAX_LBA) {
 		print_err("the write LBA Range[%lld--%lld] exceed max_lba:%d", start_lba, start_lba+nlb, MAX_LBA);
 		host_cmd_entry->sta_sct = NVME_SCT_GENERIC;
 		host_cmd_entry->sta_sc = NVME_SC_LBA_RANGE;
-		goto cmd_quit;	
+		return -1;	
 	}
 
 	if (nsid > MAX_NSID) {
 		print_err("NSID:%d is Invalid", nsid);
 		host_cmd_entry->sta_sct = NVME_SCT_GENERIC;
 		host_cmd_entry->sta_sc = NVME_SC_INVALID_NS;
-		goto cmd_quit;	
+		return -1;	
 	}
 
 	enqueue(&host_nvme_cmd_pend_q, host_cmd_entry->next);
@@ -440,13 +435,38 @@ void handle_nvme_io_command(hdc_nvme_cmd *cmd)
 		print_err("Opcode:0x%x Invalid", opcode);
 		host_cmd_entry->sta_sct = NVME_SCT_GENERIC;
 		host_cmd_entry->sta_sc = NVME_SC_INVALID_OPCODE;
-		goto cmd_quit;
+		return -1;
 	}
 
-	return;    // host command in-pocess 1.wait phif_cmd_rsp,  2.wait SPM available
+	return 0;    // host command in-pocess 1.wait phif_cmd_rsp,  2.wait SPM available
+}
 
-cmd_quit:
-	// this NVMe Command is Invalid, post CQE to host immediately
+
+// when host prepare a SQE and submit it to the SQ, then write SQTail DB
+// Phif fetch it and save in CMD_TABLE, then notify HDC by message hdc_nvme_cmd
+void hdc_host_cmd_task(void *para)
+{
+	int res = 0;
+	hdc_nvme_cmd *cmd = (hdc_nvme_cmd *)HDC_NVME_CMD_SPM; //(hdc_nvme_cmd *)para
+	u8 tag = cmd->header.tag;
+	
+	// tag is assigned by PHIF, it can guarantee this tag is free,
+	host_nvme_cmd_entry *host_cmd_entry = __get_host_cmd_entry(tag);
+
+	save_in_host_cmd_entry(host_cmd_entry, cmd);
+
+	if (cmd->header.sqid == 0) {
+		res = handle_nvme_admin_command(host_cmd_entry);
+	} else {
+		res = handle_nvme_io_command(host_cmd_entry);
+	}
+
+	// host nvme cmd has fwd to HW process, it may 1.wait response  2.wait SPM available
+	if (!res)
+		return;
+	
+	
+	// res, this NVMe Command is Invalid, post CQE to host immediately
 	phif_cmd_cpl *cpl = __get_host_cmd_cpl_entry(tag)
 	setup_phif_cmd_cpl(cpl, host_cmd_entry);
 	if (send_phif_cmd_cpl(cpl)) {
@@ -454,25 +474,6 @@ cmd_quit:
 	}
 
 	return;
-}
 
-// when host prepare a SQE and submit it to the SQ, then write SQTail DB
-// Phif fetch it and save in CMD_TABLE, then notify HDC by message hdc_nvme_cmd
-
-// taskfn demo
-void hdc_host_cmd_task(void *para)
-{
-	//hdc_nvme_cmd *cmd = (hdc_nvme_cmd *)para;
-	hdc_nvme_cmd *cmd = (hdc_nvme_cmd *)HDC_NVME_CMD_SPM;
-
-	if (cmd->header.sqid == 0) {
-		// admin queue, this is admin cmd
-		handle_nvme_admin_command(cmd);
-	} else {
-		// io command
-		handle_nvme_io_command(cmd);
-	}
-
-	return;
 }
 

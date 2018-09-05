@@ -9,28 +9,23 @@
 
 
 // Process Host Admin command 
-void handle_nvme_admin_command(hdc_nvme_cmd *cmd)
+int handle_nvme_admin_command(host_nvme_cmd_entry *host_cmd_entry)
 {
-	//cqsts status = {0};
-	u8 opcode = cmd->sqe.common.opcode;
-	u8 flags = cmd->sqe.common.flags;
-	u8 tag = cmd->header.tag;
-	
-	// tag is assigned by PHIF, it can guarantee this tag is free,
-	host_nvme_cmd_entry *host_cmd_entry = __get_host_cmd_entry(tag);
-
-	save_in_host_cmd_entry(host_cmd_entry, cmd);
+	u8 opcode = host_cmd_entry->sqe.common.opcode;
+	u8 flags = host_cmd_entry->sqe.common.flags;
 
 	// Admin command PSDT = 0, it only support PRP
 	if (flags & NVME_CMD_SGL_ALL) {
 		print_err("SGLs shall not be used for Admin commands in NVMe Over PCIe implement");
 		host_cmd_entry->sta_sc  = NVME_SC_INVALID_FIELD;
-		goto cmd_quit;
+		return -1;
 	}
+
+	//enqueue(&host_nvme_cmd_pend_q, host_cmd_entry->next);
 
 	switch (opcode) {
 	case nvme_admin_identify:
-		handle_admin_identify(cmd);
+		handle_admin_identify(host_cmd_entry);
 		break;
 	case nvme_admin_set_features:
 		xxxxx;
@@ -41,16 +36,7 @@ void handle_nvme_admin_command(hdc_nvme_cmd *cmd)
 	
 	}
 	
-	return;
-	
-	// this NVMe Command is Invalid, post CQE to host immediately
-	phif_cmd_cpl *cpl = __get_host_cmd_cpl_entry(tag)
-	setup_phif_cmd_cpl(cpl, host_cmd_entry);
-	if (send_phif_cmd_cpl(cpl)) {
-		enqueue_front(host_nvme_cpl_pend_q, host_cmd_entry->next);
-	}
-
-cmd_quit:
-	
+	return 0;
+		
 }
 
