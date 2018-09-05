@@ -17,7 +17,7 @@
 ++++++++++++++++++++++++++++++++    
 **Controller**    
       FW+Logic    
-    (FTL, l2p, gc, error-handle)        
+    (FTL, Checkpoint, gc, WL, error-handle)        
 ++++++++++++++++++++++++++++++++  
 **NandFlash**     
 
@@ -35,7 +35,7 @@
       make_request_fn    
       bio->request    
       fullfill ppa cmd    
-    (l2p gc error-handle)    
+    (FTL Checkpoint gc WL error-handle)    
 ++++++++++++++++++++++++++++++++    
 **Official NVMe Driver**    
       NVMe (dma_map irq hwqueue)      
