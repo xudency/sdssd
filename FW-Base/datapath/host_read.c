@@ -75,48 +75,4 @@ void read_datapath_hdc(host_nvme_cmd_entry *host_cmd_entry)
 	return;
 }
 
-/*
-cqsts host_read_ingress(hdc_nvme_cmd *cmd)
-{
-	cqsts status = {0};	// status, default no error
-	u64 start_lba = cmd->sqe.rw.slba;
-	u16 nlb = cmd->sqe.rw.length;
-	u32 nsid = cmd->sqe.rw.nsid;
-	host_nvme_cmd_entry *host_cmd_entry;
-
-	// para check
-	if ((start_lba + nlb) > MAX_LBA) {
-		print_err("the write LBA Range[%lld--%lld] exceed max_lba:%d", start_lba, start_lba+nlb, MAX_LBA);
-		status.bits.sct = NVME_SCT_GENERIC;
-		status.bits.sc = NVME_SC_LBA_RANGE;
-		return status;	
-	}
-
-	if (nsid > MAX_NSID) {
-		print_err("NSID:%d is Invalid", nsid);
-		status.bits.sct = NVME_SCT_GENERIC;
-		status.bits.sc = NVME_SC_INVALID_NS;
-		return status;	
-	}
-
-	// tag is assigned by PHIF, it can guarantee this tag is free,
-	// we use the tag as array index, so this host_cmd_entry is free,we 
-	host_cmd_entry = __get_host_cmd_entry(cmd->header.tag);
-	if (host_cmd_entry == NULL) {
-		// it should never, else we should enlarge the gat array
-	} else {
-		// fill it from hdc_nvme_cmd
-		save_in_host_cmd_entry(host_cmd_entry, cmd);
-		enqueue(&host_nvme_cmd_pend_q, host_cmd_entry->next);		
-		host_cmd_entry->state = READ_FLOW_STATE_QUEUED;
-	}
-	
-	host_cmd_entry = dequeue(&host_nvme_cmd_pend_q);
-
-	assert(host_cmd_entry);
-	
-	read_datapath_hdc(host_cmd_entry);
-
-	return 0;
-}*/
 

@@ -8,6 +8,8 @@
 
 #define HOST_NVME_CMD_ENTRY_CNT    256
 #define FW_INTERNAL_CMD_ENTRY_CNT  256
+
+#define FW_WDMA_REQ_CNT		64
 //#define 
 
 typedef enum {
@@ -81,5 +83,10 @@ phif_cmd_cpl *__get_host_cmd_cpl_entry(u8 tag)
 	return &gat_host_cmd_cpl_array[tag];
 }
 
+
+phif_cmd_cpl *__get_fw_wdma_req_entry(u8 tag)
+{
+	return &gat_fw_wdma_req_array[tag];
+}
 
 #endif

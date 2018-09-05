@@ -92,3 +92,17 @@ int fwd_die_to_prevn(u16 blk, u8 start_lun, u8 start_ch,
 	}
 }*/
 
+/*host_nvme_cmd_entry *get_host_cmd_entry(u8 tag)
+{
+	host_nvme_cmd_entry *entry = __get_host_cmd_entry(tag);
+
+	if (entry->state == WRITE_FLOW_STATE_INITIAL) {
+		return entry;
+	} else {
+		print_err("tagid duplicated!!! this tag cmd state:%d", entry->state);
+		// if it occur, it should be a HW BUG
+		//panic();
+		return NULL;
+	}
+}*/
+

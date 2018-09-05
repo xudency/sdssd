@@ -424,19 +424,21 @@ typedef struct {
 	u64 rsvd_addr		:28;
 
 	// QW_DATA
-	u64 wdata[pld_qwn];		// mode2, data in message
+	u64 wdata[2];		// mode2, data in message
 } phif_wdma_req_optional;
 
 enum {
 	WDMA_QW_PI		= (1<<0),
 	WDMA_QW_ADDR	= (1<<1),
-	WDMA_QW_DATA	= (1<<2),
+	WDMA_QW_DATA0	= (1<<2),
+	WDMA_QW_DATA1	= (1<<3),
 };
+
 
 typedef struct {
 	phif_wdma_req_mandatory mandatory;
 	phif_wdma_req_optional optional;
-} phif_wdma_req_whole;
+} phif_wdma_req;
 
 
 typedef struct {

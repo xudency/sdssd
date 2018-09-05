@@ -33,8 +33,9 @@ int handle_nvme_admin_command(host_nvme_cmd_entry *host_cmd_entry)
 	case nvme_admin_get_features:
 		xxxxx;
 		break;
-	
 	}
+
+	//get_next_host_cmd_entry();
 	
 	return 0;
 		

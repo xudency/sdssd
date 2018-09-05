@@ -22,20 +22,22 @@
 
 // host coming nvme command
 host_nvme_cmd_entry    gat_host_nvme_cmd_array[HOST_NVME_CMD_ENTRY_CNT]       = {{{0}}};
-
-// pending due to SPM not available
 struct Queue host_nvme_cmd_pend_q;
+
 
 // fw internal command
 fw_internal_cmd_entry    gat_fw_internal_cmd_array[FW_INTERNAL_CMD_ENTRY_CNT]       = {{{0}}};
-
-// pending due to SPM not available
 struct Queue fw_itnl_cmd_pend_q;
+
 
 // phif_cmd_cpl NOT define in stack, to prevenrt re-constructed in statemachine
 phif_cmd_cpl	gat_host_cmd_cpl_array[HOST_NVME_CMD_ENTRY_CNT];
-
 struct Queue host_nvme_cpl_pend_q;
+
+
+phif_wdma_req gat_fw_wdma_req_array[FW_WDMA_REQ_CNT];
+struct Queue fw_wdma_req_pend_q;
+
 
 // when command process completion, this is the hook callback routine
 int process_completion_task(void *para)
@@ -77,7 +79,7 @@ int send_phif_cmd_req(phif_cmd_req *msg)
 int send_phif_cmd_cpl(phif_cmd_cpl *msg)
 {
 	if (port_is_available()) {
-		memcpy(PHIF_CMD_CPL_SPM, msg, sizeof(phif_cmd_req)); 
+		memcpy(PHIF_CMD_CPL_SPM, msg, sizeof(phif_cmd_cpl)); 
 		return 0;
 	} else {
 		/*break, CPU schedule other task*/
@@ -86,28 +88,34 @@ int send_phif_cmd_cpl(phif_cmd_cpl *msg)
 }
 
 // valid: bit0:QW_PI   bit1:QW_ADDR  bit2:QW_DATA
-int send_phif_wdma_req(phif_wdma_req_mandatory *m, phif_wdma_req_optional *o, u8 valid)
+int send_phif_wdma_req(phif_wdma_req *req, u8 valid)
 {
 	if (port_is_available()) {
 		void *ptr = (void *)PHIF_WDMA_REQ_SPM;
-		memcpy(ptr, m, PHIF_WDMA_REQ_M_LEN));
+		memcpy(ptr, req, PHIF_WDMA_REQ_M_LEN));
 		ptr += PHIF_WDMA_REQ_M_LEN;
+		req +=PHIF_WDMA_REQ_M_LEN;
 
 		if (valid & WDMA_QW_PI) {
-			memcpy(ptr, o, QWORD_BYTES);
+			memcpy(ptr, req, QWORD_BYTES);
 			ptr += QWORD_BYTES;
-			o += QWORD_BYTES;
+			req += QWORD_BYTES;
 		}
-
 		
 		if (valid & WDMA_QW_ADDR) {
-			memcpy(ptr, o, QWORD_BYTES);
+			memcpy(ptr, req, QWORD_BYTES);
 			ptr += QWORD_BYTES;
-			o += QWORD_BYTES;
+			req += QWORD_BYTES;
 		}
 
-		if (valid & WDMA_QW_DATA) {
-			memcpy(ptr, o, QWORD_BYTES*m->control.pld_qwn);
+		if (valid & WDMA_QW_DATA0) {
+			memcpy(ptr, req, QWORD_BYTES);
+			ptr += QWORD_BYTES;
+			req += QWORD_BYTES;
+		}
+
+		if (valid & WDMA_QW_DATA1) {
+			memcpy(ptr, req, QWORD_BYTES);
 		}
 
 		return 0;
@@ -117,45 +125,31 @@ int send_phif_wdma_req(phif_wdma_req_mandatory *m, phif_wdma_req_optional *o, u8
 	}
 }
 
-
 // move data from Cbuff to Host memory via PHIF WDMA
 // beware: both cbuff and host address is continuously
 int wdma_read_fwdata_to_host(u64 host_addr, u64 cbuff_addr, u16 length)
 {
-	phif_wdma_req_mandatory m;
-
 	// TODO: tag allocated?  bitmap, find_first_zero_bit, u32 support 32 command is enough
-	u16 tag = hdc_alloc_cmdtag();
+	u8 tag = alloc_wdma_req_tag();
 
-	msg_header_filled(&m.header, 6, MSG_NID_PHIF, MSG_NID_PHIF, MSGID_PHIF_WDMA_REQ, 
+	phif_wdma_req *req = __get_fw_wdma_req_entry(tag);
+	struct msg_qw0 *header = &req->mandatory.header;
+
+	msg_header_filled(header, 6, MSG_NID_PHIF, MSG_NID_PHIF, MSGID_PHIF_WDMA_REQ, 
 					  tag, HDC_EXT_TAG, MSG_NID_HDC, 0);
 
-	m.control.blen = length;	// length
-	m.control.pld_qwn = 1;		// only one QW_ADDR, because cbuff must continuous
-
-	m.hdata_addr = host_addr;	//host address
-
-	phif_wdma_req_optional o;
-	o.cbuff_addr = cbuff_addr;   // cbuff address
+	req->mandatory.control.blen = length;	// length
+	req->mandatory.control.pld_qwn = 1;		// only one QW_ADDR, because cbuff must continuous
+	req->mandatory.hdata_addr = host_addr;	//host address
+	req->optional.cbuff_addr = cbuff_addr;   // cbuff address
 
 	u8 valid = WDMA_QW_ADDR;
 
-	return send_phif_wdma_req(&m, &o, valid);
-}
-
-/*host_nvme_cmd_entry *get_host_cmd_entry(u8 tag)
-{
-	host_nvme_cmd_entry *entry = __get_host_cmd_entry(tag);
-
-	if (entry->state == WRITE_FLOW_STATE_INITIAL) {
-		return entry;
-	} else {
-		print_err("tagid duplicated!!! this tag cmd state:%d", entry->state);
-		// if it occur, it should be a HW BUG
-		//panic();
-		return NULL;
+	if(send_phif_wdma_req(req, valid)) {
+		enqueue(&fw_wdma_req_pend_q, struct qnode * node);
 	}
-}*/
+		
+}
 
 void save_in_host_cmd_entry(host_nvme_cmd_entry *entry, hdc_nvme_cmd *cmd)
 {
@@ -214,12 +208,15 @@ void phif_wdma_response_to_hdc(void)
 	
 	if (--host_cmd_entry->ckc) {
 		// prp1 part and prp2 part all response, structured a phif_cmd_cpl to PHIF
-		phif_cmd_cpl cpl;
-		setup_phif_cmd_cpl(&cpl, host_cmd_entry);
-		send_phif_cmd_cpl(&cpl);
+		phif_cmd_cpl *cpl = __get_host_cmd_cpl_entry(fw_cmd_entry->host_tag);
+		setup_phif_cmd_cpl(cpl, host_cmd_entry);
+	
+		if (send_phif_cmd_cpl(cpl)) {
+			enqueue_front(&host_nvme_cpl_pend_q, &host_cmd_entry->next)
+		}
 	}
-
-	hdc_free_cmdtag(itnl_tag);
+	
+	free_wdma_req_tag(itnl_tag);
 }
 
 
@@ -324,30 +321,6 @@ void dp_setup_phif_cmd_req(phif_cmd_req *req, host_nvme_cmd_entry *host_cmd_entr
 
 	// ask hw to export these define in .hdl or .rdl
 }
-
-
-/*void setup_phif_cmd_cpl(phif_cmd_cpl *cpl, u8 tag, u8 sqid, u8 sriov, u8 sta_sct, u8 sta_sc)
-{
-	// QW0
-	cpl->header.cnt = 2;
-	cpl->header.dstfifo = ;
-	cpl->header.dst = MSG_NID_PHIF;
-	cpl->header.prio = 0;
-	cpl->header.msgid = MSGID_PHIF_CMD_REQ;
-	cpl->header.tag = tag;
-	cpl->header.ext_tag = PHIF_EXTAG;
-	cpl->header.src = MSG_NID_HDC;
-	cpl->header.vfa = sriov & 0x1;
-	cpl->header.port = (sriov >>1) & 0x1;
-	cpl->header.vf = (sriov >>2) & 0xf;	
-	cpl->header.sqid = sqid;
-
-	cpl->cqe.result = 0; // this is command specified
-	cpl->cqe.status = (sta_sc<<1) | (>sta_sct<<9);
-	// phase is filled by HW
-}*/
-
-
 
 void setup_phif_cmd_cpl(phif_cmd_cpl *cpl, host_nvme_cmd_entry *host_cmd_entry)
 {
@@ -470,7 +443,7 @@ void hdc_host_cmd_task(void *para)
 	phif_cmd_cpl *cpl = __get_host_cmd_cpl_entry(tag)
 	setup_phif_cmd_cpl(cpl, host_cmd_entry);
 	if (send_phif_cmd_cpl(cpl)) {
-		enqueue_front(host_nvme_cpl_pend_q, host_cmd_entry->next);
+		enqueue_front(host_nvme_cpl_pend_q, &host_cmd_entry->next);
 	}
 
 	return;

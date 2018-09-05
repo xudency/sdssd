@@ -36,7 +36,6 @@ void identify_namespace_init(u32 nsid)
 	nsdata->ncap = ;
 }
 
-
 // return a 4KB data buffer that describes info about the NVM subsystem
 cqsts handle_admin_identify(host_nvme_cmd_entry *host_cmd_entry)
 {
