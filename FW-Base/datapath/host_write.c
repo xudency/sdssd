@@ -116,7 +116,7 @@ void hdc_host_write_statemachine(host_nvme_cmd_entry *host_cmd_entry)
 		case WRITE_FLOW_STATE_PHIF_REQ_READY:
 			if (send_phif_cmd_req(&req)) {
 				// message port not available
-				enqueue_front(host_nvmd_cmd_pend_q, host_cmd_entry->next);
+				enqueue_front(host_nvme_cmd_pend_q, host_cmd_entry->next);
 				host_cmd_entry->state = WRITE_FLOW_STATE_QUEUED;	
 				break;
 			} else {
@@ -137,7 +137,7 @@ void hdc_host_write_statemachine(host_nvme_cmd_entry *host_cmd_entry)
 		case WRITE_FLOW_STATE_PHIF_CPL_READY
 			if (send_phif_cmd_cpl(cpl)) {
 				// message Port BUSY
-				enqueue_front(host_nvmd_cmd_pend_q, host_cmd_entry->next);
+				enqueue_front(host_nvme_cmd_pend_q, host_cmd_entry->next);
 				host_cmd_entry->state = WRITE_FLOW_STATE_HAS_PHIF_RSP;				
 				break;
 			} else {
@@ -150,7 +150,7 @@ void hdc_host_write_statemachine(host_nvme_cmd_entry *host_cmd_entry)
 			
 		case WRITE_FLOW_STATE_COMPLETE:
 			// get next pending
-			host_cmd_entry = dequeue(&host_nvmd_cmd_pend_q);
+			host_cmd_entry = dequeue(&host_nvme_cmd_pend_q);
 			if (host_cmd_entry) {
 				hdc_host_write_statemachine(host_cmd_entry);
 			} else {
@@ -193,11 +193,11 @@ cqsts host_write_ingress(hdc_nvme_cmd *cmd)
 	} else {
 		// fill it from hdc_nvme_cmd
 		saved_to_host_cmd_entry(host_cmd_entry, cmd);
-		enqueue(&host_nvmd_cmd_pend_q, host_cmd_entry->next);		
+		enqueue(&host_nvme_cmd_pend_q, host_cmd_entry->next);		
 		host_cmd_entry->state = WRITE_FLOW_STATE_QUEUED;
 	}
 	
-	host_cmd_entry = dequeue(&host_nvmd_cmd_pend_q);
+	host_cmd_entry = dequeue(&host_nvme_cmd_pend_q);
 
 	assert(host_cmd_entry);
 	

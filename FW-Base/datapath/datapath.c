@@ -18,12 +18,14 @@
 // host command
 host_nvme_cmd_entry    gat_host_nvme_cmd_array[HOST_NVME_CMD_ENTRY_CNT]       = {{{0}}};
 
-//struct Queue host_nvme_cmd_free_q;
-struct Queue host_nvmd_cmd_pend_q;
+// pending due to SPM not available
+struct Queue host_nvme_cmd_pend_q;
 
 // fw internal command
 fw_internal_cmd_entry    gat_fw_internal_cmd_array[FW_INTERNAL_CMD_ENTRY_CNT]       = {{{0}}};
 
+// pending due to SPM not available
+struct Queue fw_itnl_cmd_pend_q;
 
 // in process
 //host_nvme_cmd_entry *current_host_cmd_entry = NULL;
@@ -102,16 +104,15 @@ int send_phif_wdma_req(phif_wdma_req_mandatory *m, phif_wdma_req_optional *o, u8
 }
 
 
-// fwdata means FW define specific data, include sysdata and manage data
-// host read, data in sram is exclusived
-// both cbuff and host address is continuously
+// move data from Cbuff to Host memory via PHIF WDMA
+// beware: both cbuff and host address is continuously
 int wdma_read_fwdata_to_host(u64 host_addr, u64 cbuff_addr, u16 length)
 {
 	phif_wdma_req_mandatory m;
 
 	// TODO: tag allocated?  bitmap, find_first_zero_bit, u32 support 32 command is enough
 	u16 tag = hdc_alloc_cmdtag();
-	
+
 	msg_header_filled(&m.header, 6, MSG_NID_PHIF, MSG_NID_PHIF, MSGID_PHIF_WDMA_REQ, 
 					  tag, HDC_EXT_TAG, MSG_NID_HDC, 0);
 
@@ -127,7 +128,6 @@ int wdma_read_fwdata_to_host(u64 host_addr, u64 cbuff_addr, u16 length)
 
 	return send_phif_wdma_req(&m, &o, valid);
 }
-
 
 host_nvme_cmd_entry *__get_fw_cmd_entry(u8 itnl_tag)
 {
@@ -147,12 +147,11 @@ host_nvme_cmd_entry *get_host_cmd_entry(u8 tag)
 		return entry;
 	} else {
 		print_err("tagid duplicated!!! this tag cmd state:%d", entry->state);
-		// if it occur, it is a HE BUG
+		// if it occur, it should be a HW BUG
 		//panic();
 		return NULL;
 	}
 }
-
 
 void saved_to_host_cmd_entry(host_nvme_cmd_entry *entry, hdc_nvme_cmd *cmd)
 {
@@ -166,7 +165,11 @@ void saved_to_host_cmd_entry(host_nvme_cmd_entry *entry, hdc_nvme_cmd *cmd)
 	entry->sqe = cmd->sqe;
 }
 
-void host_cmd_phif_response(void)
+
+// TODO:: unify cmd flow, response is a callback
+
+// write/read LBA(HW accelerate) command complete
+void phif_cmd_response_to_hdc(void)
 {
 	phif_cmd_rsp *rsp = (phif_cmd_rsp *)PHIF_CMD_RSP_SPM;
 
@@ -186,6 +189,34 @@ void host_cmd_phif_response(void)
 	}
 
 }
+
+// move cbuff data to host complete
+void phif_wdma_response_to_hdc(void)
+{
+	phif_wdma_rsp *rsp = (phif_wdma_rsp *)PHIF_WDMA_RSP_SPM;
+
+	// release this HDC cmd_tag allocated before
+	u16 itnl_tag = rsp->tag;
+
+	fw_internal_cmd_entry *fw_cmd_entry = __get_fw_cmd_entry(itnl_tag);
+	host_nvme_cmd_entry *host_cmd_entry = __get_host_cmd_entry(fw_cmd_entry->host_tag);
+
+	// any chunk error, this host command is error
+	if (rsp->staus) {
+		host_cmd_entry->sta_sc = NVME_SC_INTERNAL;
+		// reset HW
+	}
+	
+	if (--host_cmd_entry->ckc) {
+		// prp1 part and prp2 part all response, structured a phif_cmd_cpl to PHIF
+		phif_cmd_cpl cpl;
+		setup_phif_cmd_cpl(&cpl, host_cmd_entry);
+		send_phif_cmd_cpl(&cpl);
+	}
+
+	hdc_free_cmdtag(itnl_tag);
+}
+
 
 void setup_phif_cmd_req(phif_cmd_req *req, host_nvme_cmd_entry *host_cmd_entry)
 {

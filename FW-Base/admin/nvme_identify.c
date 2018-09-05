@@ -75,21 +75,4 @@ cqsts handle_admin_identify(hdc_nvme_cmd *cmd)
 	return;
 }
 
-// move cbuff data to host complete
-void phif_wdma_response_to_hdc(void)
-{
-	phif_wdma_rsp *rsp = (phif_wdma_rsp *)PHIF_WDMA_RSP_SPM;
-
-	// release this HDC cmd_tag allocated before
-	u16 itnl_tag = rsp->tag;
-
-	fw_internal_cmd_entry *fw_cmd_entry = __get_fw_cmd_entry(itnl_tag);
-	host_nvme_cmd_entry *host_cmd_entry = __get_host_cmd_entry(fw_cmd_entry->host_tag);
-	
-	if (--host_cmd_entry->ckc) {
-		// prp1 part and prp2 part all response, structured a phif_cmd_cpl to PHIF
-	}
-
-	hdc_free_cmdtag(itnl_tag);
-}
 
