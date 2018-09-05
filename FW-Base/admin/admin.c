@@ -8,23 +8,6 @@
 }*/
 
 
-
-void msg_header_filled(struct msg_qw0 *header, u8 cnt, u8 dstfifo, u8 dst, 
-							u8 msgid, u8 tag, u8 ext_tag, u8 src, u8 sriov)
-{
-	header->cnt = cnt; 	// phif_cmd_req, the length is fixed on 3 QW
-	header->dstfifo = dstfifo;
-	header->dst = dst;
-	header->prio = 0;
-	header->msgid = msgid;
-	header->tag = tag;
-	header->ext_tag = ext_tag;
-	header->src = src;
-	header->vfa = sriov & 0x1;
-	header->port = (sriov >>1) & 0x1;
-	header->vf = (sriov >>2) & 0xf;
-}
-
 // Process Host Admin command 
 cqsts handle_nvme_admin_command(hdc_nvme_cmd *cmd)
 {

@@ -49,6 +49,22 @@ int process_completion_task(void *para)
 	return 0;
 }
 
+void msg_header_filled(struct msg_qw0 *header, u8 cnt, u8 dstfifo, u8 dst, 
+							u8 msgid, u8 tag, u8 ext_tag, u8 src, u8 sriov)
+{
+	header->cnt = cnt; 	// phif_cmd_req, the length is fixed on 3 QW
+	header->dstfifo = dstfifo;
+	header->dst = dst;
+	header->prio = 0;
+	header->msgid = msgid;
+	header->tag = tag;
+	header->ext_tag = ext_tag;
+	header->src = src;
+	header->vfa = sriov & 0x1;
+	header->port = (sriov >>1) & 0x1;
+	header->vf = (sriov >>2) & 0xf;
+}
+
 int send_phif_cmd_req(phif_cmd_req *msg)
 {
 	if (port_is_available()) {
@@ -178,13 +194,15 @@ void phif_cmd_response_to_hdc(void)
 	host_cmd_entry->sta_sct = rsp->sta_sct;
 	host_cmd_entry->sta_sc = rsp->sta_sc;
 
+
 	switch (host_cmd_entry->sqe.common.opcode) {
 	case nvme_io_write:
 		host_cmd_entry.state = WRITE_FLOW_STATE_HAS_PHIF_RSP;
-		hdc_host_write_statemachine(host_cmd_entry);
+		write_datapath_hdc(host_cmd_entry);
 		break;
 	case nvme_io_read:
-		/////////
+		host_cmd_entry.state = READ_FLOW_STATE_HAS_PHIF_RSP;
+		read_datapath_hdc(host_cmd_entry);
 		break;
 	}
 
@@ -218,20 +236,19 @@ void phif_wdma_response_to_hdc(void)
 }
 
 
-void setup_phif_cmd_req(phif_cmd_req *req, host_nvme_cmd_entry *host_cmd_entry)
+// host datapath prepare phif_cmd_req
+void dp_setup_phif_cmd_req(phif_cmd_req *req, host_nvme_cmd_entry *host_cmd_entry)
 {
 	u8 flbas, lbaf_type;
 	u16 lba_size;	// in byte
 	ctrl_dw12h_t control;
+	u8 opcode = host_cmd_entry->sqe.rw.opcode;
 	u64 start_lba = host_cmd_entry->sqe.rw.slba;
 	u32 nsid = host_cmd_entry->sqe.rw.nsid;
 	struct nvme_lbaf *lbaf;
 	control.ctrl = host_cmd_entry->sqe.rw.control;
 	struct nvme_id_ns *ns_info;
 	host_nvme_cmd_entry *host_cmd_entry;
-
-	// TODO: rate limiter, add this cmd to a pendimg list
-	// rate limiter, throttle host write when GC too slowly
 
 	//QW0
 	req->header.cnt = 2; 	// phif_cmd_req, the length is fixed on 3 QW
@@ -257,9 +274,9 @@ void setup_phif_cmd_req(phif_cmd_req *req, host_nvme_cmd_entry *host_cmd_entry)
 	req->header.hxts_mode = enabled | key; 
 	
 	ns_info = get_identify_ns(nsid);
+	
 	//QW1	
-	req->cpa = start_lba / 1;	 // LBA - > CPA
-
+	req->cpa = start_lba / 1;
 	flbas = ns_info->flbas;
 	lbaf_type = flbas & NVME_NS_FLBAS_LBA_MASK;
 	lbaf = &ns_info->lbaf[lbaf_type];
@@ -276,23 +293,44 @@ void setup_phif_cmd_req(phif_cmd_req *req, host_nvme_cmd_entry *host_cmd_entry)
 		req->lb_size = 2;
 	} else {
 		print_err("LBA Size:%d not support", lba_size);
-		//status.bits.sct = NVME_SCT_GENERIC;
-		//status.bits.sc = NVME_SC_INVALID_FORMAT;
-		//return status;
 	}
 	
 	req->crc_en = 1;
-
-	// PI in last8/first8 / type 0(disable)  1	2  3  
-	req->dps = ns_info->dps;
-
-	// DIX or DIF / format LBA size use which (1 of the 16) 
-	req->flbas = flbas;
-
+	req->dps = ns_info->dps;  // PI type and PI in meta pos, first or last 8B
+	req->flbas = flbas;       // DIX or DIF / format LBA size use which (1 of the 16) 
 	req->cache_en = !control.bits.fua;
 
-	// TODO:: according frequency, latency, stream to place host data to  HOSTBAND or WLBAND
-	req->band_rdtype = HOSTBAND;  // FQMGR, 9 queue/die
+	// TODO:: write directive, 
+	if (opcode == nvme_io_read) {
+		//Latency Control via Queue schedule in FQMGR(9 queue per die)
+		
+		dsm_dw13_t dsmgmt;
+		dsmgmt.dw13 = host_cmd_entry->sqe.rw.dsmgmt;
+		u8 access_lat = dsmgmt.bits.dsm_latency;
+		switch (access_lat) {
+		case NVME_RW_DSM_LATENCY_NONE:
+			// XXX: if no latency info provide, add to which queue ?
+			req.band_rdtype = FQMGR_HOST_READ1;
+			break;	
+		case NVME_RW_DSM_LATENCY_IDLE:
+			req.band_rdtype = FQMGR_HOST_READ2;
+			break;
+		case NVME_RW_DSM_LATENCY_NORM:
+			req.band_rdtype = FQMGR_HOST_READ1;
+			break;
+		case NVME_RW_DSM_LATENCY_LOW:
+			req.band_rdtype = FQMGR_HOST_READ0;
+			break;
+		default:
+			print_err("access latency Invalid");
+			return - EINVAL;
+		}
+
+	
+	} else (opcode == nvme_io_write) {		
+		req->band_rdtype = HOSTBAND;
+	}
+
 
 	//QW2
 	req->elba = (nsid<<32) | start_lba;

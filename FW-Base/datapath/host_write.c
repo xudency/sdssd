@@ -101,7 +101,7 @@ void wpb_init(u8 band)
 
 // TODO: optimized when message send fail due to part busy, not re-constructured phif_cmd_req/cpl
 // TODO: enqueue it in another queue host_nvme_cmd_wait_port_q, so next schedule, we only need send it directly.
-void hdc_host_write_statemachine(host_nvme_cmd_entry *host_cmd_entry)
+void write_datapath_hdc(host_nvme_cmd_entry *host_cmd_entry)
 {	
 	switch (host_cmd_entry->state) 
 	{
@@ -110,7 +110,7 @@ void hdc_host_write_statemachine(host_nvme_cmd_entry *host_cmd_entry)
 	
 		case WRITE_FLOW_STATE_QUEUED:
 			phif_cmd_req req;
-			setup_phif_cmd_req(&req, host_cmd_entry);
+			dp_setup_phif_cmd_req(&req, host_cmd_entry);
 			host_cmd_entry->state = WRITE_FLOW_STATE_PHIF_REQ_READY;
 
 		case WRITE_FLOW_STATE_PHIF_REQ_READY:
@@ -152,7 +152,7 @@ void hdc_host_write_statemachine(host_nvme_cmd_entry *host_cmd_entry)
 			// get next pending
 			host_cmd_entry = dequeue(&host_nvme_cmd_pend_q);
 			if (host_cmd_entry) {
-				hdc_host_write_statemachine(host_cmd_entry);
+				write_datapath_hdc(host_cmd_entry);
 			} else {
 				// there is no pending cmd need process
 				return;
@@ -201,7 +201,7 @@ cqsts host_write_ingress(hdc_nvme_cmd *cmd)
 
 	assert(host_cmd_entry);
 	
-	hdc_host_write_statemachine(host_cmd_entry);
+	write_datapath_hdc(host_cmd_entry);
 
 	return 0;
 }
