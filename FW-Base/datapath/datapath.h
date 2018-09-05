@@ -66,4 +66,20 @@ typedef struct {
 } fw_internal_cmd_entry;
 
 
+host_nvme_cmd_entry *__get_fw_cmd_entry(u8 itnl_tag)
+{
+	return &gat_fw_internal_cmd_array[itnl_tag];
+}
+
+host_nvme_cmd_entry *__get_host_cmd_entry(u8 tag)
+{
+	return &gat_host_nvme_cmd_array[tag];
+}
+
+phif_cmd_cpl *__get_host_cmd_cpl_entry(u8 tag)
+{
+	return &gat_host_cmd_cpl_array[tag];
+}
+
+
 #endif

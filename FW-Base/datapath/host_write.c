@@ -98,16 +98,18 @@ void wpb_init(u8 band)
 	wpb->fpa = base_ppa;
 }
 
+//write_datapath_atc
+//write_datapath_stc
+//write_datapath_fdc
 
-// TODO: optimized when message send fail due to part busy, not re-constructured phif_cmd_req/cpl
+// TODO: optimized when message send fail due to part busy, not re-constructured phif_cmd_req
 // TODO: enqueue it in another queue host_nvme_cmd_wait_port_q, so next schedule, we only need send it directly.
 void write_datapath_hdc(host_nvme_cmd_entry *host_cmd_entry)
-{	
+{
+	phif_cmd_cpl *cpl;
+
 	switch (host_cmd_entry->state) 
-	{
-		//case WRITE_FLOW_STATE_INITIAL:
-			//get_from_pend();
-	
+	{	
 		case WRITE_FLOW_STATE_QUEUED:
 			phif_cmd_req req;
 			dp_setup_phif_cmd_req(&req, host_cmd_entry);
@@ -116,7 +118,7 @@ void write_datapath_hdc(host_nvme_cmd_entry *host_cmd_entry)
 		case WRITE_FLOW_STATE_PHIF_REQ_READY:
 			if (send_phif_cmd_req(&req)) {
 				// message port not available
-				enqueue_front(host_nvme_cmd_pend_q, host_cmd_entry->next);
+				enqueue_front(&host_nvme_cmd_pend_q, host_cmd_entry->next);
 				host_cmd_entry->state = WRITE_FLOW_STATE_QUEUED;	
 				break;
 			} else {
@@ -130,15 +132,16 @@ void write_datapath_hdc(host_nvme_cmd_entry *host_cmd_entry)
 			break;
 			
 		case WRITE_FLOW_STATE_HAS_PHIF_RSP:
-			phif_cmd_cpl cpl;
-			setup_phif_cmd_cpl(&cpl, host_cmd_entry);
+			cpl = __get_host_cmd_cpl_entry(host_cmd_entry->cmd_tag);
+			setup_phif_cmd_cpl(cpl, host_cmd_entry);
 			host_cmd_entry->state = WRITE_FLOW_STATE_PHIF_CPL_READY;
 
 		case WRITE_FLOW_STATE_PHIF_CPL_READY
+			cpl = __get_host_cmd_cpl_entry(host_cmd_entry->cmd_tag);   // MUST re get
 			if (send_phif_cmd_cpl(cpl)) {
 				// message Port BUSY
-				enqueue_front(host_nvme_cmd_pend_q, host_cmd_entry->next);
-				host_cmd_entry->state = WRITE_FLOW_STATE_HAS_PHIF_RSP;				
+				enqueue_front(&host_nvme_cpl_pend_q, host_cmd_entry->next);
+				host_cmd_entry->state = WRITE_FLOW_STATE_PHIF_CPL_READY;				
 				break;
 			} else {
 				host_cmd_entry->state = WRITE_FLOW_STATE_PHIF_CPL_SENDOUT;
@@ -150,7 +153,7 @@ void write_datapath_hdc(host_nvme_cmd_entry *host_cmd_entry)
 			
 		case WRITE_FLOW_STATE_COMPLETE:
 			// get next pending
-			host_cmd_entry = dequeue(&host_nvme_cmd_pend_q);
+			host_cmd_entry = get_next_host_cmd_entry();
 			if (host_cmd_entry) {
 				write_datapath_hdc(host_cmd_entry);
 			} else {
@@ -162,7 +165,7 @@ void write_datapath_hdc(host_nvme_cmd_entry *host_cmd_entry)
 	return;
 }
 
-cqsts host_write_ingress(hdc_nvme_cmd *cmd)
+/*cqsts host_write_ingress(hdc_nvme_cmd *cmd)
 {
 	cqsts status = {0};	// status, default no error
 	u64 start_lba = cmd->sqe.rw.slba;
@@ -192,7 +195,7 @@ cqsts host_write_ingress(hdc_nvme_cmd *cmd)
 		// it should never, else we should enlarge the gat array
 	} else {
 		// fill it from hdc_nvme_cmd
-		saved_to_host_cmd_entry(host_cmd_entry, cmd);
+		save_in_host_cmd_entry(host_cmd_entry, cmd);
 		enqueue(&host_nvme_cmd_pend_q, host_cmd_entry->next);		
 		host_cmd_entry->state = WRITE_FLOW_STATE_QUEUED;
 	}
@@ -204,7 +207,7 @@ cqsts host_write_ingress(hdc_nvme_cmd *cmd)
 	write_datapath_hdc(host_cmd_entry);
 
 	return 0;
-}
+}*/
 
 
 // FRWMGR ---> ATC, data has write to NAND, ATC update MAP

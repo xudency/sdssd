@@ -38,13 +38,10 @@ void identify_namespace_init(u32 nsid)
 
 
 // return a 4KB data buffer that describes info about the NVM subsystem
-cqsts handle_admin_identify(hdc_nvme_cmd *cmd)
+cqsts handle_admin_identify(host_nvme_cmd_entry *host_cmd_entry)
 {
-	host_nvme_cmd_entry *host_cmd_entry = __get_host_cmd_entry(cmd->header.tag);
-	u8 cns = cmd->sqe.identify.cns;	
-	struct nvme_identify *idn = &cmd->sqe.identify;
-
-	saved_to_host_cmd_entry(host_cmd_entry, cmd);
+	struct nvme_identify *idn = &host_cmd_entry->sqe.identify;
+	u8 cns = idn->cns;
 
 	switch (cns) {
 	case NVME_ID_CNS_NS:

@@ -10,12 +10,17 @@
  * function: 
  * read/write datapath, ingress of commmand handler
  *
+ * HW notify CPU method
+ *    1. HW interrupt ---> FW check Event register what happen ---> FW handle it
+ *    2. FW Polling check Event register what happen ---> if yes handle it
+ *
  */
 
 #include "nvme_spec.h"
 #include "msg_fmt.h"
+#include "datapath.h"
 
-// host command
+// host coming nvme command
 host_nvme_cmd_entry    gat_host_nvme_cmd_array[HOST_NVME_CMD_ENTRY_CNT]       = {{{0}}};
 
 // pending due to SPM not available
@@ -27,17 +32,10 @@ fw_internal_cmd_entry    gat_fw_internal_cmd_array[FW_INTERNAL_CMD_ENTRY_CNT]   
 // pending due to SPM not available
 struct Queue fw_itnl_cmd_pend_q;
 
-// in process
-//host_nvme_cmd_entry *current_host_cmd_entry = NULL;
+// phif_cmd_cpl NOT define in stack, to prevenrt re-constructed in statemachine
+phif_cmd_cpl	gat_host_cmd_cpl_array[HOST_NVME_CMD_ENTRY_CNT];
 
-//struct Queue host_nvme_wr_pend_q;
-//struct Queue host_nvme_rd_pend_q;
-
-
-// HW notify CPU method
-//    1. HW interrupt ---> FW check Event register what happen ---> FW handle it
-//    2. FW Polling check Event register what happen ---> if yes handle it
-
+struct Queue host_nvme_cpl_pend_q;
 
 // when command process completion, this is the hook callback routine
 int process_completion_task(void *para)
@@ -145,17 +143,7 @@ int wdma_read_fwdata_to_host(u64 host_addr, u64 cbuff_addr, u16 length)
 	return send_phif_wdma_req(&m, &o, valid);
 }
 
-host_nvme_cmd_entry *__get_fw_cmd_entry(u8 itnl_tag)
-{
-	return &gat_fw_internal_cmd_array[itnl_tag];
-}
-
-host_nvme_cmd_entry *__get_host_cmd_entry(u8 tag)
-{
-	return &gat_host_nvme_cmd_array[tag];
-}
-
-host_nvme_cmd_entry *get_host_cmd_entry(u8 tag)
+/*host_nvme_cmd_entry *get_host_cmd_entry(u8 tag)
 {
 	host_nvme_cmd_entry *entry = __get_host_cmd_entry(tag);
 
@@ -167,9 +155,9 @@ host_nvme_cmd_entry *get_host_cmd_entry(u8 tag)
 		//panic();
 		return NULL;
 	}
-}
+}*/
 
-void saved_to_host_cmd_entry(host_nvme_cmd_entry *entry, hdc_nvme_cmd *cmd)
+void save_in_host_cmd_entry(host_nvme_cmd_entry *entry, hdc_nvme_cmd *cmd)
 {
 	entry->cmd_tag = cmd->header.tag;
 	entry->sqid = cmd->header.sqid;
@@ -180,7 +168,6 @@ void saved_to_host_cmd_entry(host_nvme_cmd_entry *entry, hdc_nvme_cmd *cmd)
 
 	entry->sqe = cmd->sqe;
 }
-
 
 // TODO:: unify cmd flow, response is a callback
 
@@ -339,6 +326,29 @@ void dp_setup_phif_cmd_req(phif_cmd_req *req, host_nvme_cmd_entry *host_cmd_entr
 }
 
 
+/*void setup_phif_cmd_cpl(phif_cmd_cpl *cpl, u8 tag, u8 sqid, u8 sriov, u8 sta_sct, u8 sta_sc)
+{
+	// QW0
+	cpl->header.cnt = 2;
+	cpl->header.dstfifo = ;
+	cpl->header.dst = MSG_NID_PHIF;
+	cpl->header.prio = 0;
+	cpl->header.msgid = MSGID_PHIF_CMD_REQ;
+	cpl->header.tag = tag;
+	cpl->header.ext_tag = PHIF_EXTAG;
+	cpl->header.src = MSG_NID_HDC;
+	cpl->header.vfa = sriov & 0x1;
+	cpl->header.port = (sriov >>1) & 0x1;
+	cpl->header.vf = (sriov >>2) & 0xf;	
+	cpl->header.sqid = sqid;
+
+	cpl->cqe.result = 0; // this is command specified
+	cpl->cqe.status = (sta_sc<<1) | (>sta_sct<<9);
+	// phase is filled by HW
+}*/
+
+
+
 void setup_phif_cmd_cpl(phif_cmd_cpl *cpl, host_nvme_cmd_entry *host_cmd_entry)
 {
 	// QW0
@@ -355,61 +365,114 @@ void setup_phif_cmd_cpl(phif_cmd_cpl *cpl, host_nvme_cmd_entry *host_cmd_entry)
 	cpl->header.vf = host_cmd_entry->vf;
 	cpl->header.sqid = host_cmd_entry->sqid;
 
-	//QW 1 2
-	//cpl->cqe = host_cmd_entry->cqe;
-
 	cpl->cqe.result = 0; // this is command specified
-	//cpl->cqe.sq_id = host_cmd_entry->sqid;
-	//cpl->cqe.sq_head = YYYY;
-	//cpl->cqe.command_id = host_cmd_entry->sqe.common.command_id;
 	cpl->cqe.status = (host_cmd_entry->sta_sc<<1) | (host_cmd_entry->sta_sct<<9);
 	// phase is filled by HW
 }
 
 
-// Process Host IO Comamnd
-int handle_nvme_io_command(hdc_nvme_cmd *cmd)
+host_nvme_cmd_entry *get_next_host_cmd_entry(void)
 {
-	int res = 0;
-	
-	u8 opcode = cmd->sqe.common.opcode;
+	host_nvme_cmd_entry *host_cmd_entry = NULL;
 
+	if (queue_empty(&host_nvme_cpl_pend_q)) {
+		host_cmd_entry = dequeue(&host_nvme_cmd_pend_q);
+	} else {
+		host_cmd_entry = dequeue(&host_nvme_cpl_pend_q);
+	}
+
+	return host_cmd_entry;
+}
+
+// Process Host IO Comamnd
+void handle_nvme_io_command(hdc_nvme_cmd *cmd)
+{
+	u8 opcode = cmd->sqe.common.opcode;
+	u64 start_lba = cmd->sqe.rw.slba;
+	u16 nlb = cmd->sqe.rw.length;
+	u32 nsid = cmd->sqe.rw.nsid;
+	u8 tag = cmd->header.tag;
+	
+	// tag is assigned by PHIF, it can guarantee this tag is free,
+	host_nvme_cmd_entry *host_cmd_entry = __get_host_cmd_entry(tag);
+
+	save_in_host_cmd_entry(host_cmd_entry, cmd);
+
+	// para check
+	if ((start_lba + nlb) > MAX_LBA) {
+		print_err("the write LBA Range[%lld--%lld] exceed max_lba:%d", start_lba, start_lba+nlb, MAX_LBA);
+		host_cmd_entry->sta_sct = NVME_SCT_GENERIC;
+		host_cmd_entry->sta_sc = NVME_SC_LBA_RANGE;
+		goto cmd_quit;	
+	}
+
+	if (nsid > MAX_NSID) {
+		print_err("NSID:%d is Invalid", nsid);
+		host_cmd_entry->sta_sct = NVME_SCT_GENERIC;
+		host_cmd_entry->sta_sc = NVME_SC_INVALID_NS;
+		goto cmd_quit;	
+	}
+
+	enqueue(&host_nvme_cmd_pend_q, host_cmd_entry->next);
+
+	if (opcode == nvme_io_read) {
+		host_cmd_entry->state = READ_FLOW_STATE_QUEUED;
+	} else if (opcode == nvme_io_write) {
+		host_cmd_entry->state = WRITE_FLOW_STATE_QUEUED;
+	}
+
+	host_cmd_entry = get_next_host_cmd_entry();
+	
+	assert(host_cmd_entry);
+	
 	switch (opcode) {
 	case nvme_io_read:
-		res = host_read_ingress(cmd);
+		read_datapath_hdc(host_cmd_entry);
 		break;
 	case nvme_io_write:
-		res = host_write_ingress(cmd);
+		write_datapath_hdc(host_cmd_entry);
 		break;
 	case nvme_io_flush:
 		break;
-	default:
-		res = -EINVAL;
-		print_err("Opcode:0x%x Invalid", opcode);
+	case nvme_io_compare:
 		break;
+	default:
+		print_err("Opcode:0x%x Invalid", opcode);
+		host_cmd_entry->sta_sct = NVME_SCT_GENERIC;
+		host_cmd_entry->sta_sc = NVME_SC_INVALID_OPCODE;
+		goto cmd_quit;
 	}
 
-	return res;
+	return;    // host command in-pocess 1.wait phif_cmd_rsp,  2.wait SPM available
+
+cmd_quit:
+	// this NVMe Command is Invalid, post CQE to host immediately
+	phif_cmd_cpl *cpl = __get_host_cmd_cpl_entry(tag)
+	setup_phif_cmd_cpl(cpl, host_cmd_entry);
+	if (send_phif_cmd_cpl(cpl)) {
+		enqueue_front(host_nvme_cpl_pend_q, host_cmd_entry->next);
+	}
+
+	return;
 }
 
 // when host prepare a SQE and submit it to the SQ, then write SQTail DB
 // Phif fetch it and save in CMD_TABLE, then notify HDC by message hdc_nvme_cmd
 
 // taskfn demo
-int hdc_host_cmd_task(void *para)
+void hdc_host_cmd_task(void *para)
 {
-	// HW fetch and fwd the Host CMD to a fix position
-	// queue tail head is managed by HW
 	//hdc_nvme_cmd *cmd = (hdc_nvme_cmd *)para;
 	hdc_nvme_cmd *cmd = (hdc_nvme_cmd *)HDC_NVME_CMD_SPM;
 
 	if (cmd->header.sqid == 0) {
 		// admin queue, this is admin cmd
-		return handle_nvme_admin_command(cmd);
+		handle_nvme_admin_command(cmd);
 	} else {
 		// io command
-		return handle_nvme_io_command(cmd);
+		handle_nvme_io_command(cmd);
 	}
 
+	return;
 }
 
