@@ -26,9 +26,7 @@ struct Queue host_nvme_cmd_pend_q;
 
 
 // fw internal command
-fw_internal_cmd_entry    gat_fw_internal_cmd_array[FW_INTERNAL_CMD_ENTRY_CNT]       = {{{0}}};
-struct Queue fw_itnl_cmd_pend_q;
-
+fw_cmd_ctl_ctx gat_fw_itnl_cmd_ctl;
 
 // phif_cmd_cpl NOT define in stack, to prevenrt re-constructed in statemachine
 phif_cmd_cpl	gat_host_cmd_cpl_array[HOST_NVME_CMD_ENTRY_CNT];
@@ -37,6 +35,10 @@ struct Queue host_nvme_cpl_pend_q;
 
 phif_wdma_req gat_fw_wdma_req_array[FW_WDMA_REQ_CNT];
 struct Queue fw_wdma_req_pend_q;
+
+
+phif_wdma_req gat_fw_rdma_req_array[FW_RDMA_REQ_CNT];
+struct Queue fw_rdma_req_pend_q;
 
 
 // when command process completion, this is the hook callback routine
@@ -125,12 +127,31 @@ int send_phif_wdma_req(phif_wdma_req *req, u8 valid)
 	}
 }
 
+u16 fw_alloc_tag(u8 cmd_types)
+{
+	u16 start_bit, last_bit;
+
+	switch (cmd_types) {
+	case FW_WDMA_REQ:
+		start_bit = 0; 
+		last_bit = FW_WDMA_REQ_CNT-1;
+		break;
+	case FW_RDMA_REQ:
+		start_bit = FW_WDMA_REQ_CNT; 
+		last_bit = FW_WDMA_REQ_CNT + FW_RDMA_REQ_CNT-1;
+		break;
+	
+	}
+
+	return find_first_zero_bit_range(gat_fw_itnl_cmd_ctl.itnl_tag, start_bit, last_bit);
+}
+
 // move data from Cbuff to Host memory via PHIF WDMA
 // beware: both cbuff and host address is continuously
 int wdma_read_fwdata_to_host(u64 host_addr, u64 cbuff_addr, u16 length)
 {
-	// TODO: tag allocated?  bitmap, find_first_zero_bit, u32 support 32 command is enough
-	u8 tag = alloc_wdma_req_tag();
+	// TODO: tag allocated?  bitmap, find_first_zero_bit_range 
+	u16 tag = fw_alloc_tag();
 
 	phif_wdma_req *req = __get_fw_wdma_req_entry(tag);
 	struct msg_qw0 *header = &req->mandatory.header;

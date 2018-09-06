@@ -7,9 +7,14 @@
 //#define HOST_RD_CMD_MAX
 
 #define HOST_NVME_CMD_ENTRY_CNT    256
-#define FW_INTERNAL_CMD_ENTRY_CNT  256
 
-#define FW_WDMA_REQ_CNT		64
+#define FW_WDMA_REQ_CNT		32 //roundup(x, y)//64
+#define FW_RDMA_REQ_CNT		32
+#define FW_OTHER_REQ_CNT    64
+
+#define FW_INTERNAL_CMD_ENTRY_CNT  (FW_WDMA_REQ_CNT + FW_RDMA_REQ_CNT + FW_OTHER_REQ_CNT)
+#define FW_INTERNAL_CMD_TAG_BITMAP (DIV_ROUND_UP(FW_INTERNAL_CMD_ENTRY_CNT, QWORD_BITS))
+
 //#define 
 
 typedef enum {
@@ -61,17 +66,24 @@ typedef int (*fw_cmd_callback)(void *);
 
 // WDMA RDMA ... etc.
 typedef struct {
-	u8 host_tag;     // this fw cmd is split from which host nvme cmd
+	u8 host_tag;         // this fw cmd is split from which host nvme cmd
 	u8 rsvd;	
-	u16 itn_tag;     // a host cmd will split to multi fw internal command
+	u16 itn_tag;         // a host cmd will split to multi fw internal command
+	void *msgptr;	     // this FW itnl cmd pointer 
 	fw_cmd_callback fn;  // DEC(host_cmd_entry[host_tag].ckc), if == 0 send phif_cmd_cpl
 } fw_internal_cmd_entry;
 
 
-host_nvme_cmd_entry *__get_fw_cmd_entry(u8 itnl_tag)
-{
-	return &gat_fw_internal_cmd_array[itnl_tag];
-}
+typedef struct  {
+	fw_internal_cmd_entry fw_cmd_array[FW_INTERNAL_CMD_ENTRY_CNT];
+
+	// itnl_tag assign
+	// [0, 31]:    FW_WDMA_REQ
+	// [32, 63]:   FW_RDMA_REQ
+	// [64: 127]:  FW_OTHER_CMD
+	u64 itnl_tag[FW_INTERNAL_CMD_TAG_BITMAP];
+} fw_cmd_ctl_ctx;
+
 
 host_nvme_cmd_entry *__get_host_cmd_entry(u8 tag)
 {
@@ -83,10 +95,19 @@ phif_cmd_cpl *__get_host_cmd_cpl_entry(u8 tag)
 	return &gat_host_cmd_cpl_array[tag];
 }
 
-
-phif_cmd_cpl *__get_fw_wdma_req_entry(u8 tag)
+phif_cmd_cpl *__get_fw_wdma_req_entry(u16 itnl_tag)
 {
-	return &gat_fw_wdma_req_array[tag];
+	return &gat_fw_wdma_req_array[itnl_tag];
+}
+
+phif_cmd_cpl *__get_fw_rdma_req_entry(u16 itnl_tag)
+{
+	return &gat_fw_rdma_req_array[itnl_tag-FW_WDMA_REQ_CNT];
+}
+
+host_nvme_cmd_entry *__get_fw_cmd_entry(u16 itnl_tag)
+{
+	return &gat_fw_itnl_cmd_ctl.fw_cmd_array[itnl_tag];
 }
 
 #endif
