@@ -24,22 +24,52 @@
 host_nvme_cmd_entry    gat_host_nvme_cmd_array[HOST_NVME_CMD_ENTRY_CNT]       = {{{0}}};
 struct Queue host_nvme_cmd_pend_q;
 
-
-// fw internal command
-fw_cmd_ctl_ctx gat_fw_itnl_cmd_ctl;
-
 // phif_cmd_cpl NOT define in stack, to prevenrt re-constructed in statemachine
 phif_cmd_cpl	gat_host_cmd_cpl_array[HOST_NVME_CMD_ENTRY_CNT];
 struct Queue host_nvme_cpl_pend_q;
 
 
+
+// fw internal command
+fw_cmd_ctl_ctx gat_fw_itnl_cmd_ctl;
+
 phif_wdma_req gat_fw_wdma_req_array[FW_WDMA_REQ_CNT];
 struct Queue fw_wdma_req_pend_q;
-
 
 phif_wdma_req gat_fw_rdma_req_array[FW_RDMA_REQ_CNT];
 struct Queue fw_rdma_req_pend_q;
 
+
+u16 fw_alloc_itnl_tag(u8 cmd_types)
+{
+	u16 start_bit, last_bit;
+
+	switch (cmd_types) {
+	case FW_WDMA_REQ:
+		start_bit = 0; 
+		last_bit = FW_WDMA_REQ_CNT-1;
+		break;
+	case FW_RDMA_REQ:
+		start_bit = FW_WDMA_REQ_CNT; 
+		last_bit = FW_WDMA_REQ_CNT + FW_RDMA_REQ_CNT-1;
+		break;
+	}
+	
+	// TODO: tag allocated?  bitmap, find_first_zero_bit_range 
+	return find_first_zero_bit_range(gat_fw_itnl_cmd_ctl.itnl_tag, start_bit, last_bit);
+}
+
+void fw_free_itnl_tag(u16 itnl_tag)
+{
+	bit_clear(gat_fw_itnl_cmd_ctl.itnl_tag, itnl_tag);
+}
+
+u16 itnl_tag_to_host_tag(u16 itnl_tag)
+{
+	fw_internal_cmd_entry *fw_cmd_entry = __get_fw_cmd_entry(itnl_tag);
+
+	return fw_cmd_entry->host_tag;
+}
 
 // when command process completion, this is the hook callback routine
 int process_completion_task(void *para)
@@ -127,43 +157,22 @@ int send_phif_wdma_req(phif_wdma_req *req, u8 valid)
 	}
 }
 
-u16 fw_alloc_itnl_tag(u8 cmd_types)
-{
-	u16 start_bit, last_bit;
-
-	switch (cmd_types) {
-	case FW_WDMA_REQ:
-		start_bit = 0; 
-		last_bit = FW_WDMA_REQ_CNT-1;
-		break;
-	case FW_RDMA_REQ:
-		start_bit = FW_WDMA_REQ_CNT; 
-		last_bit = FW_WDMA_REQ_CNT + FW_RDMA_REQ_CNT-1;
-		break;
-	}
-	
-	// TODO: tag allocated?  bitmap, find_first_zero_bit_range 
-	return find_first_zero_bit_range(gat_fw_itnl_cmd_ctl.itnl_tag, start_bit, last_bit);
-}
-
-void fw_free_itnl_tag(u16 itnl_tag)
-{
-	bit_clear(gat_fw_itnl_cmd_ctl.itnl_tag, itnl_tag);
-}
-
-
 // move data from Cbuff to Host memory via PHIF WDMA
-// beware: both cbuff and host address is continuously
-int wdma_read_fwdata_to_host(u64 host_addr, u64 cbuff_addr, u16 length, u16 host_tag)
+// beware: one phif_wdma_req only can move data that
+// both src:cbuff and dest:host address is continuously
+int fw_send_wdma_req(u64 host_addr, u64 cbuff_addr, u16 length, 
+							u16 host_tag, fw_cmd_callback handler)
 {
 
 	u16 itnl_tag = fw_alloc_itnl_tag();
 	phif_wdma_req *req = __get_fw_wdma_req_entry(itnl_tag);	
+	host_nvme_cmd_entry *host_cmd_entry = __get_host_cmd_entry(host_tag);
 	struct msg_qw0 *header = &req->mandatory.header;
 	fw_internal_cmd_entry *itnl_cmd_entry = __get_fw_cmd_entry(itnl_tag);
 	
 	itnl_cmd_entry->msgptr = req;
 	itnl_cmd_entry->host_tag = host_tag;
+	itnl_cmd_entry->fn = handler;
 
 	msg_header_filled(header, 6, MSG_NID_PHIF, MSG_NID_PHIF, MSGID_PHIF_WDMA_REQ, 
 					  itnl_tag, HDC_EXT_TAG, MSG_NID_HDC, 0);
@@ -179,7 +188,35 @@ int wdma_read_fwdata_to_host(u64 host_addr, u64 cbuff_addr, u16 length, u16 host
 		enqueue(&fw_wdma_req_pend_q, &itnl_cmd_entry->next);
 	}
 
+	host_cmd_entry->ckc += 1;
 }
+
+// cbuff address must continuously
+void wdma_cbuff_to_host_dptr(union nvme_data_ptr dptr, u64 cbuff, u16 length, 
+									u16 host_tag, fw_cmd_callback handler)
+{
+	u64 prp1 = dptr.prp1;
+	u64 prp2 = dptr.prp2;
+	u64 prp1_offset = page_offset(prp1);
+	//u16 length = SZ_4K - prp1_offset;
+	
+	// Concer case handle 1.cmdtag alloc fail  2.wdma_req_spm busy
+	if (!prp1_offset) {
+		// PRP1 is 4K align
+		//host_cmd_entry->ckc = 1;
+		fw_send_wdma_req(prp1, cbuff, SZ_4K, host_tag, handler);
+	} else {
+		// PRP1 not 4K align, PRP2 is used
+		//host_cmd_entry->ckc = 2;
+		fw_send_wdma_req(prp1, cbuff, length, host_tag, handler);
+		fw_send_wdma_req(prp2, cbuff+length, prp1_offset, host_tag, handler);
+	}
+
+	// TODO: prp2 list analysis
+
+	// TODO:: SGL analysis
+}
+
 
 void save_in_host_cmd_entry(host_nvme_cmd_entry *entry, hdc_nvme_cmd *cmd)
 {
@@ -192,8 +229,6 @@ void save_in_host_cmd_entry(host_nvme_cmd_entry *entry, hdc_nvme_cmd *cmd)
 
 	entry->sqe = cmd->sqe;
 }
-
-// TODO:: unify cmd flow, response is a callback
 
 // write/read LBA(HW accelerate) command complete
 void phif_cmd_response_to_hdc(void)
@@ -219,15 +254,12 @@ void phif_cmd_response_to_hdc(void)
 
 }
 
-// move cbuff data to host complete
-void phif_wdma_response_to_hdc(void)
+// host cmd need WDMA, so when wdma response, check whether all chunk of this
+// host cmd has complete, if yes send cpl to phif to post CQE to host
+int host_cmd_wdma_completion(void *para)
 {
-	phif_wdma_rsp *rsp = (phif_wdma_rsp *)PHIF_WDMA_RSP_SPM;
-
-	// release this HDC cmd_tag allocated before
-	u16 itnl_tag = rsp->tag;
-
-	fw_internal_cmd_entry *fw_cmd_entry = __get_fw_cmd_entry(itnl_tag);
+	phif_wdma_rsp *rsp = (phif_wdma_rsp *)para;
+	fw_internal_cmd_entry *fw_cmd_entry = __get_fw_cmd_entry(rsp->tag);
 	host_nvme_cmd_entry *host_cmd_entry = __get_host_cmd_entry(fw_cmd_entry->host_tag);
 
 	// any chunk error, this host command is error
@@ -245,10 +277,24 @@ void phif_wdma_response_to_hdc(void)
 			enqueue_front(&host_nvme_cpl_pend_q, &host_cmd_entry->next)
 		}
 	}
-	
-	fw_free_itnl_tag(itnl_tag);
+
+	return 0;
 }
 
+// move cbuff data to host complete
+void phif_wdma_response_to_hdc(void)
+{
+	phif_wdma_rsp *rsp = (phif_wdma_rsp *)PHIF_WDMA_RSP_SPM;
+
+	fw_internal_cmd_entry *fw_cmd_entry = __get_fw_cmd_entry(rsp->tag);
+
+	// callback fn
+	fw_cmd_entry->fn(rsp);
+
+	fw_free_itnl_tag(rsp->tag);
+
+	//dequeue(fw_wdma_req_pend_q);
+}
 
 // host datapath prepare phif_cmd_req
 void dp_setup_phif_cmd_req(phif_cmd_req *req, host_nvme_cmd_entry *host_cmd_entry)

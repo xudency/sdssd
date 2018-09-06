@@ -14,26 +14,24 @@ struct nvme_id_ns *get_identify_ns(u32 nsid)
 	return gat_identify_namespaces + nsid;
 }
 
-void identify_data_init(void)
+struct nvme_id_ctrl *get_identify_ctrl()
 {
-	int i;
-	
-	for (i = 0; i < TOTAL_NS_NUM; i++) {
-		identify_namespace_init(i);
-	}
-
-	identify_controller_init();
-
-	return 0;
+	return &gat_identify_controller;
 }
 
 // TODO: init when power on
-void identify_namespace_init(u32 nsid)
+void nvme_ctrl_info_init(void)
 {
-	struct nvme_id_ns *nsdata = get_identify_ns(nsid);
+	struct nvme_id_ctrl *ctrl_data = get_identify_ctrl();
+	ctrl_data->acl = ;
+}
 
-	nsdata->nsze = ;
-	nsdata->ncap = ;
+void nvme_ns_info_init(u32 nsid)
+{
+	struct nvme_id_ns *ns_data = get_identify_ns(nsid);
+
+	ns_data->nsze = ;
+	ns_data->ncap = ;
 }
 
 // return a 4KB data buffer that describes info about the NVM subsystem
@@ -42,31 +40,23 @@ cqsts handle_admin_identify(host_nvme_cmd_entry *host_cmd_entry)
 	struct nvme_identify *idn = &host_cmd_entry->sqe.identify;
 	u8 cns = idn->cns;
 	u8 tag = host_cmd_entry->cmd_tag;
+	u64 cbuff;
 
 	switch (cns) {
 	case NVME_ID_CNS_NS:
-		u64 cbuff = (u64)get_identify_ns(idn->nsid);
-		u64 prp1 = idn->dptr.prp1;
-		u64 prp2 = idn->dptr.prp2;
-		u64 prp1_offset = page_offset(prp1);
-		u16 length = SZ_4K - prp1_offset;
-
-		// Concer case handle 1.cmdtag alloc fail  2.wdma_req_spm busy
-		if (!prp1_offset) {
-			// PRP1 is 4K align
-			host_cmd_entry->ckc = 1;
-			wdma_read_fwdata_to_host(prp1, cbuff, SZ_4K, tag);
-		} else {
-			// PRP1 not 4K align, PRP2 is used
-			host_cmd_entry->ckc = 2;
-			wdma_read_fwdata_to_host(prp1, cbuff, length, tag);
-			wdma_read_fwdata_to_host(prp2, cbuff+length, prp1_offset, tag);
-		}
-
+		cbuff = (u64)get_identify_ns(idn->nsid);
+		wdma_cbuff_to_host_dptr(idn->dptr, cbuff, SZ_4K, tag, host_cmd_wdma_completion);
+		break;
+		
+	case NVME_ID_CNS_CTRL:
+		cbuff = (u64)get_identify_ctrl();
+		wdma_cbuff_to_host_dptr(idn->dptr, cbuff, SZ_4K, tag, host_cmd_wdma_completion);
+		break;
+				
+	case NVME_ID_CNS_NS_ACTIVE_LIST:
+		xxxxxxxx;
 		break;
 
-	case NVME_ID_CNS_CTRL:
-		
 	}
 
 	return;

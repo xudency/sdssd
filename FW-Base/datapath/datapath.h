@@ -110,4 +110,7 @@ fw_internal_cmd_entry *__get_fw_cmd_entry(u16 itnl_tag)
 	return &gat_fw_itnl_cmd_ctl.fw_cmd_array[itnl_tag];
 }
 
+
+int host_cmd_wdma_completion(void *para);
+
 #endif
