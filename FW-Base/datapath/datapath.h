@@ -66,9 +66,9 @@ typedef int (*fw_cmd_callback)(void *);
 
 // WDMA RDMA ... etc.
 typedef struct {
-	u8 host_tag;         // this fw cmd is split from which host nvme cmd
-	u8 rsvd;	
-	u16 itn_tag;         // a host cmd will split to multi fw internal command
+	struct qnode next;
+	u16 host_tag;         // if not rellated to host cmd, 0xffff
+	u16 itn_tag;          // a host cmd will split to multi fw internal command
 	void *msgptr;	     // this FW itnl cmd pointer 
 	fw_cmd_callback fn;  // DEC(host_cmd_entry[host_tag].ckc), if == 0 send phif_cmd_cpl
 } fw_internal_cmd_entry;
@@ -105,7 +105,7 @@ phif_cmd_cpl *__get_fw_rdma_req_entry(u16 itnl_tag)
 	return &gat_fw_rdma_req_array[itnl_tag-FW_WDMA_REQ_CNT];
 }
 
-host_nvme_cmd_entry *__get_fw_cmd_entry(u16 itnl_tag)
+fw_internal_cmd_entry *__get_fw_cmd_entry(u16 itnl_tag)
 {
 	return &gat_fw_itnl_cmd_ctl.fw_cmd_array[itnl_tag];
 }

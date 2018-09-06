@@ -127,7 +127,7 @@ int send_phif_wdma_req(phif_wdma_req *req, u8 valid)
 	}
 }
 
-u16 fw_alloc_tag(u8 cmd_types)
+u16 fw_alloc_itnl_tag(u8 cmd_types)
 {
 	u16 start_bit, last_bit;
 
@@ -140,24 +140,33 @@ u16 fw_alloc_tag(u8 cmd_types)
 		start_bit = FW_WDMA_REQ_CNT; 
 		last_bit = FW_WDMA_REQ_CNT + FW_RDMA_REQ_CNT-1;
 		break;
-	
 	}
-
+	
+	// TODO: tag allocated?  bitmap, find_first_zero_bit_range 
 	return find_first_zero_bit_range(gat_fw_itnl_cmd_ctl.itnl_tag, start_bit, last_bit);
 }
 
+void fw_free_itnl_tag(u16 itnl_tag)
+{
+	bit_clear(gat_fw_itnl_cmd_ctl.itnl_tag, itnl_tag);
+}
+
+
 // move data from Cbuff to Host memory via PHIF WDMA
 // beware: both cbuff and host address is continuously
-int wdma_read_fwdata_to_host(u64 host_addr, u64 cbuff_addr, u16 length)
+int wdma_read_fwdata_to_host(u64 host_addr, u64 cbuff_addr, u16 length, u16 host_tag)
 {
-	// TODO: tag allocated?  bitmap, find_first_zero_bit_range 
-	u16 tag = fw_alloc_tag();
 
-	phif_wdma_req *req = __get_fw_wdma_req_entry(tag);
+	u16 itnl_tag = fw_alloc_itnl_tag();
+	phif_wdma_req *req = __get_fw_wdma_req_entry(itnl_tag);	
 	struct msg_qw0 *header = &req->mandatory.header;
+	fw_internal_cmd_entry *itnl_cmd_entry = __get_fw_cmd_entry(itnl_tag);
+	
+	itnl_cmd_entry->msgptr = req;
+	itnl_cmd_entry->host_tag = host_tag;
 
 	msg_header_filled(header, 6, MSG_NID_PHIF, MSG_NID_PHIF, MSGID_PHIF_WDMA_REQ, 
-					  tag, HDC_EXT_TAG, MSG_NID_HDC, 0);
+					  itnl_tag, HDC_EXT_TAG, MSG_NID_HDC, 0);
 
 	req->mandatory.control.blen = length;	// length
 	req->mandatory.control.pld_qwn = 1;		// only one QW_ADDR, because cbuff must continuous
@@ -167,9 +176,9 @@ int wdma_read_fwdata_to_host(u64 host_addr, u64 cbuff_addr, u16 length)
 	u8 valid = WDMA_QW_ADDR;
 
 	if(send_phif_wdma_req(req, valid)) {
-		enqueue(&fw_wdma_req_pend_q, struct qnode * node);
+		enqueue(&fw_wdma_req_pend_q, &itnl_cmd_entry->next);
 	}
-		
+
 }
 
 void save_in_host_cmd_entry(host_nvme_cmd_entry *entry, hdc_nvme_cmd *cmd)
@@ -237,7 +246,7 @@ void phif_wdma_response_to_hdc(void)
 		}
 	}
 	
-	free_wdma_req_tag(itnl_tag);
+	fw_free_itnl_tag(itnl_tag);
 }
 
 

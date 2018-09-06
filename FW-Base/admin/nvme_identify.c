@@ -41,6 +41,7 @@ cqsts handle_admin_identify(host_nvme_cmd_entry *host_cmd_entry)
 {
 	struct nvme_identify *idn = &host_cmd_entry->sqe.identify;
 	u8 cns = idn->cns;
+	u8 tag = host_cmd_entry->cmd_tag;
 
 	switch (cns) {
 	case NVME_ID_CNS_NS:
@@ -54,12 +55,12 @@ cqsts handle_admin_identify(host_nvme_cmd_entry *host_cmd_entry)
 		if (!prp1_offset) {
 			// PRP1 is 4K align
 			host_cmd_entry->ckc = 1;
-			wdma_read_fwdata_to_host(prp1, cbuff, SZ_4K);
+			wdma_read_fwdata_to_host(prp1, cbuff, SZ_4K, tag);
 		} else {
 			// PRP1 not 4K align, PRP2 is used
 			host_cmd_entry->ckc = 2;
-			wdma_read_fwdata_to_host(prp1, cbuff, length);
-			wdma_read_fwdata_to_host(prp2, cbuff+length, prp1_offset);
+			wdma_read_fwdata_to_host(prp1, cbuff, length, tag);
+			wdma_read_fwdata_to_host(prp2, cbuff+length, prp1_offset, tag);
 		}
 
 		break;
