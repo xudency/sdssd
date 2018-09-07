@@ -446,15 +446,13 @@ int handle_nvme_io_command(host_nvme_cmd_entry *host_cmd_entry)
 	// para check
 	if ((start_lba + nlb) > MAX_LBA) {
 		print_err("the write LBA Range[%lld--%lld] exceed max_lba:%d", start_lba, start_lba+nlb, MAX_LBA);
-		host_cmd_entry->sta_sct = NVME_SCT_GENERIC;
-		host_cmd_entry->sta_sc = NVME_SC_LBA_RANGE;
+		set_host_cmd_staus(host_cmd_entry, NVME_SCT_GENERIC, NVME_SC_LBA_RANGE);
 		return -1;	
 	}
 
 	if (nvme_nsid_valid(nsid)) {
-		print_err("NSID:%d is Invalid", nsid);
-		host_cmd_entry->sta_sct = NVME_SCT_GENERIC;
-		host_cmd_entry->sta_sc = NVME_SC_INVALID_NS;
+		print_err("NSID:%d is Invalid", nsid);		
+		set_host_cmd_staus(host_cmd_entry, NVME_SCT_GENERIC, NVME_SC_INVALID_NS);
 		return -1;	
 	}
 
@@ -485,8 +483,7 @@ int handle_nvme_io_command(host_nvme_cmd_entry *host_cmd_entry)
 		break;
 	default:
 		print_err("Opcode:0x%x Invalid", opcode);
-		host_cmd_entry->sta_sct = NVME_SCT_GENERIC;
-		host_cmd_entry->sta_sc = NVME_SC_INVALID_OPCODE;
+		set_host_cmd_staus(host_cmd_entry, NVME_SCT_GENERIC, NVME_SC_INVALID_OPCODE);
 		return -1;
 	}
 

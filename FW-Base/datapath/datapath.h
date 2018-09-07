@@ -85,31 +85,37 @@ typedef struct  {
 } fw_cmd_ctl_ctx;
 
 
-host_nvme_cmd_entry *__get_host_cmd_entry(u8 tag)
+static inline host_nvme_cmd_entry *__get_host_cmd_entry(u8 tag)
 {
 	return &gat_host_nvme_cmd_array[tag];
 }
 
-phif_cmd_cpl *__get_host_cmd_cpl_entry(u8 tag)
+static inline phif_cmd_cpl *__get_host_cmd_cpl_entry(u8 tag)
 {
 	return &gat_host_cmd_cpl_array[tag];
 }
 
-phif_cmd_cpl *__get_fw_wdma_req_entry(u16 itnl_tag)
+static inline phif_cmd_cpl *__get_fw_wdma_req_entry(u16 itnl_tag)
 {
 	return &gat_fw_wdma_req_array[itnl_tag];
 }
 
-phif_cmd_cpl *__get_fw_rdma_req_entry(u16 itnl_tag)
+static inline phif_cmd_cpl *__get_fw_rdma_req_entry(u16 itnl_tag)
 {
 	return &gat_fw_rdma_req_array[itnl_tag-FW_WDMA_REQ_CNT];
 }
 
-fw_internal_cmd_entry *__get_fw_cmd_entry(u16 itnl_tag)
+static inline fw_internal_cmd_entry *__get_fw_cmd_entry(u16 itnl_tag)
 {
 	return &gat_fw_itnl_cmd_ctl.fw_cmd_array[itnl_tag];
 }
 
+
+static inline void set_host_cmd_staus(host_nvme_cmd_entry *host_cmd_entry, u8 sct, u8 sc)
+{
+	host_cmd_entry->sta_sct = sct;
+	host_cmd_entry->sta_sc = sc;
+}
 
 int host_cmd_wdma_completion(void *para);
 

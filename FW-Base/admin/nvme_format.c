@@ -20,9 +20,8 @@ int handle_admin_format_nvm(host_nvme_cmd_entry *host_cmd_entry)
 	struct nvme_id_ns *ns_data = get_identify_ns(nsid);
 	//struct nvme_lbaf *lbaf
 
-	if (nvme_nsid_valid(nsid)) {
-		host_cmd_entry->sta_sct = NVME_SCT_GENERIC;
-		host_cmd_entry->sta_sc = NVME_SC_NS_ID_UNAVAILABLE;
+	if (nvme_nsid_valid(nsid)) {	
+		set_host_cmd_staus(host_cmd_entry, NVME_SCT_GENERIC, NVME_SC_NS_ID_UNAVAILABLE);
 		return -1;
 	}
 
