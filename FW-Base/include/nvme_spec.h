@@ -325,7 +325,7 @@ enum {
 // rp only need 2 bit, pther 6bit is rsvd in standard NVMe spec
 // here we use 2bit for CPH_SZ
 struct nvme_lbaf {
-	u16			ms;     	// metadata sizze in byte
+	u16			ms;     	// metadata size in byte
 	u8			ds;     	// LBA size 2^n
 	u8			rp   :2;    // relative performance
 	u8			cphs :2;    //CPH size  1:16B / 2:32B / 3:48B

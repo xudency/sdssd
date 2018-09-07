@@ -1,17 +1,30 @@
+/*
+ * Copyright (C) 2018-2020 NET-Swift.
+ * Initial release: Dengcai Xu <dengcaixu@net-swift.com>
+ *
+ * ALL RIGHTS RESERVED. These coded instructions and program statements are
+ * copyrighted works and confidential proprietary information of NET-Swift Corp.
+ * They may not be modified, copied, reproduced, distributed, or disclosed to
+ * third parties in any manner, medium, or form, in whole or in part.
+ *
+ * function: 
+ * nvme admin format command implement
+ *
+ */
 
 
-#define MAX_NSID  15     // 0 1 2 ... 15
-#define TOTAL_NS_NUM  (MAX_NSID + 1)
+#define MAX_NSID  15     // 1 2 ... 15,  nsid=0 is controller
 
-
-struct nvme_id_ns gat_identify_namespaces[TOTAL_NS_NUM];
+struct nvme_id_ns gat_identify_namespaces[MAX_NSID];
 
 struct nvme_id_ctrl gat_identify_controller;
 
 
 struct nvme_id_ns *get_identify_ns(u32 nsid)
 {
-	return gat_identify_namespaces + nsid;
+	assert(nsid);
+	
+	return gat_identify_namespaces + nsid-1;
 }
 
 struct nvme_id_ctrl *get_identify_ctrl()
@@ -29,14 +42,24 @@ void nvme_ctrl_info_init(void)
 
 void nvme_ns_info_init(u32 nsid)
 {
+	int i;
 	struct nvme_id_ns *ns_data = get_identify_ns(nsid);
-
-	ns_data->nsze = ;
-	ns_data->ncap = ;
+	
+    ns_data->nsze 				= MAX_LBA + 1; 		        
+    ns_data->ncap 				= MAX_LBA + 1;		    
+    ns_data->nuse 				= MAX_LBA + 1;
+	
+	// set LBA Format support para
+	for (i=0; i < 16; i++) {
+		ns_data->lbaf[i].ms = METADATA_16B;
+		ns_data->lbaf[i].ds = 12;    // 2^12  4KB
+		ns_data->lbaf[i].rp = NVME_LBAF_RP_GOOD;
+		ns_data->lbaf[i].cphs = 16;  // CPH
+	}
 }
 
 // return a 4KB data buffer that describes info about the NVM subsystem
-cqsts handle_admin_identify(host_nvme_cmd_entry *host_cmd_entry)
+int handle_admin_identify(host_nvme_cmd_entry *host_cmd_entry)
 {
 	struct nvme_identify *idn = &host_cmd_entry->sqe.identify;
 	u8 cns = idn->cns;
@@ -60,7 +83,7 @@ cqsts handle_admin_identify(host_nvme_cmd_entry *host_cmd_entry)
 
 	}
 
-	return;
+	return 0;
 }
 
 

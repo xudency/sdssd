@@ -11,6 +11,7 @@
 // Process Host Admin command 
 int handle_nvme_admin_command(host_nvme_cmd_entry *host_cmd_entry)
 {
+	int res = 0;
 	u8 opcode = host_cmd_entry->sqe.common.opcode;
 	u8 flags = host_cmd_entry->sqe.common.flags;
 
@@ -25,7 +26,7 @@ int handle_nvme_admin_command(host_nvme_cmd_entry *host_cmd_entry)
 
 	switch (opcode) {
 	case nvme_admin_identify:
-		handle_admin_identify(host_cmd_entry);
+		res = handle_admin_identify(host_cmd_entry);
 		break;
 	case nvme_admin_set_features:
 		xxxxx;
@@ -33,11 +34,13 @@ int handle_nvme_admin_command(host_nvme_cmd_entry *host_cmd_entry)
 	case nvme_admin_get_features:
 		xxxxx;
 		break;
+	case nvme_admin_format_nvm:
+		res = handle_admin_format_nvm(host_cmd_entry);
 	}
 
 	//get_next_host_cmd_entry();
 	
-	return 0;
+	return res;
 		
 }
 

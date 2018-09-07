@@ -24,5 +24,14 @@ nvme_sgl_parse(struct nvme_sgl_desc sgl)
 	
 }
 
+// XXXX: nsid = 0
+bool nvme_nsid_valid(u32 nsid)
+{
+	struct nvme_id_ctrl *ctrl_data = get_identify_ctrl();
 
+	if ((nsid > ctrl_data->nn) || (nsid == 0))
+		return false
+
+	return true;
+}
 

@@ -442,7 +442,6 @@ int handle_nvme_io_command(host_nvme_cmd_entry *host_cmd_entry)
 	u16 nlb = host_cmd_entry->sqe.rw.length;
 	u32 nsid = host_cmd_entry->sqe.rw.nsid;
 	u8 tag = host_cmd_entry->cmd_tag;	
-	struct nvme_id_ctrl *ctrl= get_identify_ctrl();
 	
 	// para check
 	if ((start_lba + nlb) > MAX_LBA) {
@@ -452,7 +451,7 @@ int handle_nvme_io_command(host_nvme_cmd_entry *host_cmd_entry)
 		return -1;	
 	}
 
-	if (nsid > ctrl->nn) {
+	if (nvme_nsid_valid(nsid)) {
 		print_err("NSID:%d is Invalid", nsid);
 		host_cmd_entry->sta_sct = NVME_SCT_GENERIC;
 		host_cmd_entry->sta_sc = NVME_SC_INVALID_NS;
