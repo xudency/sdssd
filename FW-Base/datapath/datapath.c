@@ -301,7 +301,7 @@ void dp_setup_phif_cmd_req(phif_cmd_req *req, host_nvme_cmd_entry *host_cmd_entr
 {
 	u8 flbas, lbaf_type;
 	u16 lba_size;	// in byte
-	ctrl_dw12h_t control;
+	rw_ctrl_t control;
 	u8 opcode = host_cmd_entry->sqe.rw.opcode;
 	u64 start_lba = host_cmd_entry->sqe.rw.slba;
 	u32 nsid = host_cmd_entry->sqe.rw.nsid;

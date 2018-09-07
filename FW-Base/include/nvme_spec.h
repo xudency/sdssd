@@ -54,31 +54,6 @@ enum lightnvm_opcode {
 	lightnvm_io_erase   		= 0x92,
 };
 
-enum {
-	NVME_RW_LR					= 1 << 15,
-	NVME_RW_FUA					= 1 << 14,
-	NVME_RW_DSM_FREQ_UNSPEC		= 0,
-	NVME_RW_DSM_FREQ_TYPICAL	= 1,
-	NVME_RW_DSM_FREQ_RARE		= 2,
-	NVME_RW_DSM_FREQ_READS		= 3,
-	NVME_RW_DSM_FREQ_WRITES		= 4,
-	NVME_RW_DSM_FREQ_RW			= 5,
-	NVME_RW_DSM_FREQ_ONCE		= 6,
-	NVME_RW_DSM_FREQ_PREFETCH	= 7,
-	NVME_RW_DSM_FREQ_TEMP		= 8,
-	NVME_RW_DSM_LATENCY_NONE	= 0 << 4,
-	NVME_RW_DSM_LATENCY_IDLE	= 1 << 4,
-	NVME_RW_DSM_LATENCY_NORM	= 2 << 4,
-	NVME_RW_DSM_LATENCY_LOW		= 3 << 4,
-	NVME_RW_DSM_SEQ_REQ			= 1 << 6,
-	NVME_RW_DSM_COMPRESSED		= 1 << 7,
-	NVME_RW_PRINFO_PRCHK_REF	= 1 << 10,
-	NVME_RW_PRINFO_PRCHK_APP	= 1 << 11,
-	NVME_RW_PRINFO_PRCHK_GUARD	= 1 << 12,
-	NVME_RW_PRINFO_PRACT		= 1 << 13,
-	NVME_RW_DTYPE_STREAMS		= 1 << 4,
-};
-
 
 /* NQN names in commands fields specified one size */
 #define NVMF_NQN_FIELD_LEN	256
@@ -448,6 +423,111 @@ enum {
 	NVME_NIDT_UUID		= 0x03,
 };
 
+struct nvme_smart_log {
+	u8			critical_warning;
+	u8			temperature[2];
+	u8			avail_spare;
+	u8			spare_thresh;
+	u8			percent_used;
+	u8			rsvd6[26];
+	u8			data_units_read[16];
+	u8			data_units_written[16];
+	u8			host_reads[16];
+	u8			host_writes[16];
+	u8			ctrl_busy_time[16];
+	u8			power_cycles[16];
+	u8			power_on_hours[16];
+	u8			unsafe_shutdowns[16];
+	u8			media_errors[16];
+	u8			num_err_log_entries[16];
+	u32			warning_temp_time;
+	u32			critical_comp_time;
+	u16			temp_sensor[8];
+	u8			rsvd216[296];
+};
+
+struct nvme_fw_slot_info_log {
+	u8			afi;
+	u8			rsvd1[7];
+	u64			frs[7];
+	u8			rsvd64[448];
+};
+
+enum {
+	NVME_CMD_EFFECTS_CSUPP		= 1 << 0,
+	NVME_CMD_EFFECTS_LBCC		= 1 << 1,
+	NVME_CMD_EFFECTS_NCC		= 1 << 2,
+	NVME_CMD_EFFECTS_NIC		= 1 << 3,
+	NVME_CMD_EFFECTS_CCC		= 1 << 4,
+	NVME_CMD_EFFECTS_CSE_MASK	= 3 << 16,
+};
+
+struct nvme_effects_log {
+	u32 acs[256];
+	u32 iocs[256];
+	u8   resv[2048];
+};
+
+enum {
+	NVME_SMART_CRIT_SPARE		= 1 << 0,
+	NVME_SMART_CRIT_TEMPERATURE	= 1 << 1,
+	NVME_SMART_CRIT_RELIABILITY	= 1 << 2,
+	NVME_SMART_CRIT_MEDIA		= 1 << 3,
+	NVME_SMART_CRIT_VOLATILE_MEMORY	= 1 << 4,
+};
+
+enum {
+	NVME_AER_ERROR			= 0,
+	NVME_AER_SMART			= 1,
+	NVME_AER_CSS			= 6,
+	NVME_AER_VS			= 7,
+	NVME_AER_NOTICE_NS_CHANGED	= 0x0002,
+	NVME_AER_NOTICE_FW_ACT_STARTING = 0x0102,
+};
+
+struct nvme_lba_range_type {
+	u8			type;
+	u8			attributes;
+	u8			rsvd2[14];
+	u64			slba;
+	u64			nlb;
+	u8			guid[16];
+	u8			rsvd48[16];
+};
+
+enum {
+	NVME_LBART_TYPE_FS	= 0x01,
+	NVME_LBART_TYPE_RAID	= 0x02,
+	NVME_LBART_TYPE_CACHE	= 0x03,
+	NVME_LBART_TYPE_SWAP	= 0x04,
+
+	NVME_LBART_ATTRIB_TEMP	= 1 << 0,
+	NVME_LBART_ATTRIB_HIDE	= 1 << 1,
+};
+
+struct nvme_reservation_status {
+	u32	gen;
+	u8	rtype;
+	u8	regctl[2];
+	u8	resv5[2];
+	u8	ptpls;
+	u8	resv10[13];
+	struct {
+		u16	cntlid;
+		u8	rcsts;
+		u8	resv3[5];
+		u64	hostid;
+		u64	rkey;
+	} regctl_ds[];
+};
+
+enum nvme_async_event_type {
+	NVME_AER_TYPE_ERROR	= 0,
+	NVME_AER_TYPE_SMART	= 1,
+	NVME_AER_TYPE_NOTICE	= 2,
+};
+
+
 /*
  * Descriptor subtype - lower 4 bits of nvme_(keyed_)sgl_desc identifier
  * only used in NVMe Over Fabric
@@ -564,6 +644,85 @@ struct nvme_rw_command {
 	u16			appmask;
 };
 
+enum {
+	NVME_RW_LR					= 1 << 15,
+	NVME_RW_FUA					= 1 << 14,
+	NVME_RW_DSM_FREQ_UNSPEC		= 0,
+	NVME_RW_DSM_FREQ_TYPICAL	= 1,
+	NVME_RW_DSM_FREQ_RARE		= 2,
+	NVME_RW_DSM_FREQ_READS		= 3,
+	NVME_RW_DSM_FREQ_WRITES		= 4,
+	NVME_RW_DSM_FREQ_RW			= 5,
+	NVME_RW_DSM_FREQ_ONCE		= 6,
+	NVME_RW_DSM_FREQ_PREFETCH	= 7,
+	NVME_RW_DSM_FREQ_TEMP		= 8,
+	NVME_RW_DSM_LATENCY_NONE	= 0 << 4,
+	NVME_RW_DSM_LATENCY_IDLE	= 1 << 4,
+	NVME_RW_DSM_LATENCY_NORM	= 2 << 4,
+	NVME_RW_DSM_LATENCY_LOW		= 3 << 4,
+	NVME_RW_DSM_SEQ_REQ			= 1 << 6,
+	NVME_RW_DSM_COMPRESSED		= 1 << 7,
+	NVME_RW_PRINFO_PRCHK_REF	= 1 << 10,
+	NVME_RW_PRINFO_PRCHK_APP	= 1 << 11,
+	NVME_RW_PRINFO_PRCHK_GUARD	= 1 << 12,
+	NVME_RW_PRINFO_PRACT		= 1 << 13,
+	NVME_RW_DTYPE_STREAMS		= 1 << 4,
+};
+
+struct nvme_dsm_cmd {
+	u8			opcode;
+	u8			flags;
+	u16			command_id;
+	u32			nsid;
+	u64			rsvd2[2];
+	union nvme_data_ptr	dptr;
+	u32			nr;
+	u32			attributes;
+	u32			rsvd12[4];
+};
+
+enum {
+	NVME_DSMGMT_IDR		= 1 << 0,
+	NVME_DSMGMT_IDW		= 1 << 1,
+	NVME_DSMGMT_AD		= 1 << 2,
+};
+
+#define NVME_DSM_MAX_RANGES	256
+
+struct nvme_dsm_range {
+	u32			cattr;
+	u32			nlb;
+	u64			slba;
+};
+
+struct nvme_write_zeroes_cmd {
+	u8			opcode;
+	u8			flags;
+	u16			command_id;
+	u32			nsid;
+	u64			rsvd2;
+	u64			metadata;
+	union nvme_data_ptr	dptr;
+	u64			slba;
+	u16			length;
+	u16			control;
+	u32			dsmgmt;
+	u32			reftag;
+	u16			apptag;
+	u16			appmask;
+};
+
+/* Features */
+
+struct nvme_feat_auto_pst {
+	u64 entries[32];
+};
+
+enum {
+	NVME_HOST_MEM_ENABLE	= (1 << 0),
+	NVME_HOST_MEM_RETURN	= (1 << 1),
+};
+
 struct nvme_identify {
 	u8			opcode;
 	u8			flags;
@@ -577,6 +736,7 @@ struct nvme_identify {
 	u32			rsvd11[5];
 };
 
+#define NVME_IDENTIFY_DATA_SIZE 4096
 
 struct nvme_features {
 	u8			opcode;
@@ -593,27 +753,280 @@ struct nvme_features {
 	u32         dword15;
 };
 
+struct nvme_host_mem_buf_desc {
+	u64			addr;
+	u32			size;
+	u32			rsvd;
+};
+
+struct nvme_create_cq {
+	u8			opcode;
+	u8			flags;
+	u16			command_id;
+	u32			rsvd1[5];
+	u64			prp1;
+	u64			rsvd8;
+	u16			cqid;
+	u16			qsize;
+	u16			cq_flags;
+	u16			irq_vector;
+	u32			rsvd12[4];
+};
+
+struct nvme_create_sq {
+	u8			opcode;
+	u8			flags;
+	u16			command_id;
+	u32			rsvd1[5];
+	u64			prp1;
+	u64			rsvd8;
+	u16			sqid;
+	u16			qsize;
+	u16			sq_flags;
+	u16			cqid;
+	u32			rsvd12[4];
+};
+
+struct nvme_delete_queue {
+	u8			opcode;
+	u8			flags;
+	u16			command_id;
+	u32			rsvd1[9];
+	u16			qid;
+	u16			rsvd10;
+	u32			rsvd11[5];
+};
+
+struct nvme_abort_cmd {
+	u8			opcode;
+	u8			flags;
+	u16			command_id;
+	u32			rsvd1[9];
+	u16			sqid;
+	u16			cid;
+	u32			rsvd11[5];
+};
+
+struct nvme_download_firmware {
+	u8			opcode;
+	u8			flags;
+	u16			command_id;
+	u32			rsvd1[5];
+	union nvme_data_ptr	dptr;
+	u32			numd;
+	u32			offset;
+	u32			rsvd12[4];
+};
+
+struct nvme_format_cmd {
+	u8			opcode;
+	u8			flags;
+	u16			command_id;
+	u32			nsid;
+	u64			rsvd2[4];
+	u32			cdw10;
+	u32			rsvd11[5];
+};
+
+struct nvme_get_log_page_command {
+	u8			opcode;
+	u8			flags;
+	u16			command_id;
+	u32			nsid;
+	u64			rsvd2[2];
+	union nvme_data_ptr	dptr;
+	u8			lid;
+	u8			rsvd10;
+	u16			numdl;
+	u16			numdu;
+	u16			rsvd11;
+	u32			lpol;
+	u32			lpou;
+	u32			rsvd14[2];
+};
+
+struct nvme_directive_cmd {
+	u8			opcode;
+	u8			flags;
+	u16			command_id;
+	u32			nsid;
+	u64			rsvd2[2];
+	union nvme_data_ptr	dptr;
+	u32			numd;
+	u8			doper;
+	u8			dtype;
+	u16			dspec;
+	u8			endir;
+	u8			tdtype;
+	u16			rsvd15;
+
+	u32			rsvd16[3];
+};
+
+/*
+ * Fabrics subcommands.
+ */
+enum nvmf_fabrics_opcode {
+	nvme_fabrics_command		= 0x7f,
+};
+
+enum nvmf_capsule_command {
+	nvme_fabrics_type_property_set	= 0x00,
+	nvme_fabrics_type_connect	= 0x01,
+	nvme_fabrics_type_property_get	= 0x04,
+};
+
+struct nvmf_common_command {
+	u8	opcode;
+	u8	resv1;
+	u16	command_id;
+	u8	fctype;
+	u8	resv2[35];
+	u8	ts[24];
+};
+
+/*
+ * The legal cntlid range a NVMe Target will provide.
+ * Note that cntlid of value 0 is considered illegal in the fabrics world.
+ * Devices based on earlier specs did not have the subsystem concept;
+ * therefore, those devices had their cntlid value set to 0 as a result.
+ */
+#define NVME_CNTLID_MIN		1
+#define NVME_CNTLID_MAX		0xffef
+#define NVME_CNTLID_DYNAMIC	0xffff
+
+#define MAX_DISC_LOGS	255
+
+/* Discovery log page entry */
+struct nvmf_disc_rsp_page_entry {
+	u8		trtype;
+	u8		adrfam;
+	u8		subtype;
+	u8		treq;
+	u16		portid;
+	u16		cntlid;
+	u16		asqsz;
+	u8		resv8[22];
+	char		trsvcid[NVMF_TRSVCID_SIZE];
+	u8		resv64[192];
+	char		subnqn[NVMF_NQN_FIELD_LEN];
+	char		traddr[NVMF_TRADDR_SIZE];
+	union tsas {
+		char		common[NVMF_TSAS_SIZE];
+		struct rdma {
+			u8	qptype;
+			u8	prtype;
+			u8	cms;
+			u8	resv3[5];
+			u16	pkey;
+			u8	resv10[246];
+		} rdma;
+	} tsas;
+};
+
+/* Discovery log page header */
+struct nvmf_disc_rsp_page_hdr {
+	u64		genctr;
+	u64		numrec;
+	u16		recfmt;
+	u8		resv14[1006];
+	struct nvmf_disc_rsp_page_entry entries[0];
+};
+
+struct nvmf_connect_command {
+	u8		opcode;
+	u8		resv1;
+	u16		command_id;
+	u8		fctype;
+	u8		resv2[19];
+	union nvme_data_ptr dptr;
+	u16		recfmt;
+	u16		qid;
+	u16		sqsize;
+	u8		cattr;
+	u8		resv3;
+	u32		kato;
+	u8		resv4[12];
+};
+
+struct nvmf_connect_data {
+	uuid_t		hostid;
+	u16		cntlid;
+	char		resv4[238];
+	char		subsysnqn[NVMF_NQN_FIELD_LEN];
+	char		hostnqn[NVMF_NQN_FIELD_LEN];
+	char		resv5[256];
+};
+
+struct nvmf_property_set_command {
+	u8		opcode;
+	u8		resv1;
+	u16		command_id;
+	u8		fctype;
+	u8		resv2[35];
+	u8		attrib;
+	u8		resv3[3];
+	u32		offset;
+	u64		value;
+	u8		resv4[8];
+};
+
+struct nvmf_property_get_command {
+	u8		opcode;
+	u8		resv1;
+	u16		command_id;
+	u8		fctype;
+	u8		resv2[35];
+	u8		attrib;
+	u8		resv3[3];
+	u32		offset;
+	u8		resv4[16];
+};
+
+struct nvme_dbbuf {
+	u8			opcode;
+	u8			flags;
+	u16			command_id;
+	u32			rsvd1[5];
+	u64			prp1;
+	u64			prp2;
+	u32			rsvd12[6];
+};
+
+struct streams_directive_params {
+	u16	msl;
+	u16	nssa;
+	u16	nsso;
+	u8	rsvd[10];
+	u32	sws;
+	u16	sgs;
+	u16	nsa;
+	u16	nso;
+	u8	rsvd2[6];
+};
+
+
 struct nvme_command {
 	union {
 		struct nvme_common_command common;
 		struct nvme_rw_command rw;
 		struct nvme_identify identify;
 		struct nvme_features features;
-		//struct nvme_create_cq create_cq;
-		//struct nvme_create_sq create_sq;
-		//struct nvme_delete_queue delete_queue;
-		//struct nvme_download_firmware dlfw;
-		//struct nvme_format_cmd format;
-		//struct nvme_dsm_cmd dsm;
-		//struct nvme_write_zeroes_cmd write_zeroes;
-		//struct nvme_abort_cmd abort;
-		//struct nvme_get_log_page_command get_log_page;
-		//struct nvmf_common_command fabrics;
-		//struct nvmf_connect_command connect;
-		//struct nvmf_property_set_command prop_set;
-		//struct nvmf_property_get_command prop_get;
-		//struct nvme_dbbuf dbbuf;
-		//struct nvme_directive_cmd directive;
+		struct nvme_create_cq create_cq;
+		struct nvme_create_sq create_sq;
+		struct nvme_delete_queue delete_queue;
+		struct nvme_download_firmware dlfw;
+		struct nvme_format_cmd format;
+		struct nvme_dsm_cmd dsm;
+		struct nvme_write_zeroes_cmd write_zeroes;
+		struct nvme_abort_cmd abort;
+		struct nvme_get_log_page_command get_log_page;
+		struct nvmf_common_command fabrics;
+		struct nvmf_connect_command connect;
+		struct nvmf_property_set_command prop_set;
+		struct nvmf_property_get_command prop_get;
+		struct nvme_dbbuf dbbuf;
+		struct nvme_directive_cmd directive;
 	};
 };
 
@@ -739,7 +1152,7 @@ struct nvme_completion {
 	u16	status;		/* did the command fail, and if so, why? */
 };
 
-// self define, not from kernel nvme.h
+// self define, not from kernel nvme.h, rw dw12
 typedef union
 {
     u16  ctrl;
@@ -754,7 +1167,7 @@ typedef union
 		u16 fua		:1;		// fua enable, write through, read not search cache
         u16 lr		:1;     // limit retry, controller should apply limited retry efforts.
     } bits;
-} ctrl_dw12h_t;
+} rw_ctrl_t;
 
 
 typedef union
@@ -771,6 +1184,38 @@ typedef union
 		u32 dspec				:16; // Directive Specific
 	} bits;
 } dsm_dw13_t;
+
+typedef union
+{
+	u32 dw10;
+
+	struct
+	{
+		u32 lbaf 	:4;   // LBA format 16 of which one
+		u32 mset	:1;   // metadata settings, 1-DIF   0-DIX
+		u32 pi 		:3;   // PI type, type0 means not enable
+		u32 pil 	:1;	  // PI location
+		u32 ses		:3;	  // secure erase settings
+		u32 rsvd	:20;
+	} bits;
+} fmt_dw10_t;
+
+enum {
+	NVME_META_DIX = 0,
+	NVME_META_DIF = 1,
+};
+
+enum {
+	NVME_PIL_LAST_8B =  0,
+	NVME_PIL_FIRST_8B = 1,
+};
+
+// Format NVM command security erase setting field
+enum {
+    NO_SECURE_ERASE		= 0x0,
+    UER_DATA_ERASE		= 0x1,
+    CTYPTOGRAPHIC_ERASE	= 0x2,
+};
 
 
 typedef struct {

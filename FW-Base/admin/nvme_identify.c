@@ -45,12 +45,12 @@ cqsts handle_admin_identify(host_nvme_cmd_entry *host_cmd_entry)
 	switch (cns) {
 	case NVME_ID_CNS_NS:
 		cbuff = (u64)get_identify_ns(idn->nsid);
-		wdma_cbuff_to_host_dptr(idn->dptr, cbuff, SZ_4K, tag, host_cmd_wdma_completion);
+		wdma_cbuff_to_host_dptr(idn->dptr, cbuff, NVME_IDENTIFY_DATA_SIZE, tag, host_cmd_wdma_completion);
 		break;
 		
 	case NVME_ID_CNS_CTRL:
 		cbuff = (u64)get_identify_ctrl();
-		wdma_cbuff_to_host_dptr(idn->dptr, cbuff, SZ_4K, tag, host_cmd_wdma_completion);
+		wdma_cbuff_to_host_dptr(idn->dptr, cbuff, NVME_IDENTIFY_DATA_SIZE, tag, host_cmd_wdma_completion);
 		break;
 				
 	case NVME_ID_CNS_NS_ACTIVE_LIST:
