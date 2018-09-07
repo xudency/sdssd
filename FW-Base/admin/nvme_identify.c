@@ -24,6 +24,7 @@ void nvme_ctrl_info_init(void)
 {
 	struct nvme_id_ctrl *ctrl_data = get_identify_ctrl();
 	ctrl_data->acl = ;
+	ctrl_data->nn = MAX_NSID;
 }
 
 void nvme_ns_info_init(u32 nsid)

@@ -433,6 +433,7 @@ host_nvme_cmd_entry *get_next_host_cmd_entry(void)
 	return host_cmd_entry;
 }
 
+
 // Process Host IO Comamnd
 int handle_nvme_io_command(host_nvme_cmd_entry *host_cmd_entry)
 {
@@ -440,7 +441,8 @@ int handle_nvme_io_command(host_nvme_cmd_entry *host_cmd_entry)
 	u64 start_lba = host_cmd_entry->sqe.rw.slba;
 	u16 nlb = host_cmd_entry->sqe.rw.length;
 	u32 nsid = host_cmd_entry->sqe.rw.nsid;
-	u8 tag = host_cmd_entry->cmd_tag;
+	u8 tag = host_cmd_entry->cmd_tag;	
+	struct nvme_id_ctrl *ctrl= get_identify_ctrl();
 	
 	// para check
 	if ((start_lba + nlb) > MAX_LBA) {
@@ -450,12 +452,14 @@ int handle_nvme_io_command(host_nvme_cmd_entry *host_cmd_entry)
 		return -1;	
 	}
 
-	if (nsid > MAX_NSID) {
+	if (nsid > ctrl->nn) {
 		print_err("NSID:%d is Invalid", nsid);
 		host_cmd_entry->sta_sct = NVME_SCT_GENERIC;
 		host_cmd_entry->sta_sc = NVME_SC_INVALID_NS;
 		return -1;	
 	}
+
+	// maximum data transfer size MDTS
 
 	enqueue(&host_nvme_cmd_pend_q, host_cmd_entry->next);
 
