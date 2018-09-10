@@ -27,7 +27,10 @@ int handle_nvme_admin_command(host_nvme_cmd_entry *host_cmd_entry)
 	switch (opcode) {
 	case nvme_admin_create_cq:
 		res = handle_admin_create_cq(host_cmd_entry);
-	
+		break;
+	case nvme_admin_create_sq:
+		res = handle_admin_create_sq(host_cmd_entry);
+		break;
 	case nvme_admin_identify:
 		res = handle_admin_identify(host_cmd_entry);
 		break;
