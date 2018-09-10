@@ -782,13 +782,15 @@ struct nvme_features {
 	u32			nsid;
 	u64			rsvd2[2];
 	union nvme_data_ptr	dptr;
-	u32			fid;
+	u32			fid; 			//MSB is SV
 	u32			dword11;
 	u32         dword12;
 	u32         dword13;
 	u32         dword14;
 	u32         dword15;
 };
+
+#define NVME_FEAT_ID_MASK   0xf   //fid only use cdw10 bit[0:7]
 
 struct nvme_host_mem_buf_desc {
 	u64			addr;
