@@ -19,7 +19,7 @@ int handle_nvme_admin_command(host_nvme_cmd_entry *host_cmd_entry)
 	if (flags & NVME_CMD_SGL_ALL) {
 		print_err("SGLs shall not be used for Admin commands in NVMe Over PCIe implement");		
 		set_host_cmd_staus(host_cmd_entry, NVME_SCT_GENERIC, NVME_SC_INVALID_FIELD);
-		return -1;
+		return NVME_REQUEST_INVALID;
 	}
 
 	//enqueue(&host_nvme_cmd_pend_q, host_cmd_entry->next);
@@ -35,10 +35,10 @@ int handle_nvme_admin_command(host_nvme_cmd_entry *host_cmd_entry)
 		res = handle_admin_identify(host_cmd_entry);
 		break;
 	case nvme_admin_set_features:
-		xxxxx;
+		res = handle_admin_set_feature(host_cmd_entry);
 		break;
 	case nvme_admin_get_features:
-		xxxxx;
+		res = handle_admin_get_feature(host_cmd_entry);
 		break;
 	case nvme_admin_format_nvm:
 		res = handle_admin_format_nvm(host_cmd_entry);

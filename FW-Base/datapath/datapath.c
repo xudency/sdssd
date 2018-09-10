@@ -447,13 +447,13 @@ int handle_nvme_io_command(host_nvme_cmd_entry *host_cmd_entry)
 	if ((start_lba + nlb) > MAX_LBA) {
 		print_err("the write LBA Range[%lld--%lld] exceed max_lba:%d", start_lba, start_lba+nlb, MAX_LBA);
 		set_host_cmd_staus(host_cmd_entry, NVME_SCT_GENERIC, NVME_SC_LBA_RANGE);
-		return -1;	
+		return NVME_REQUEST_INVALID;	
 	}
 
 	if (nvme_nsid_valid(nsid)) {
 		print_err("NSID:%d is Invalid", nsid);		
 		set_host_cmd_staus(host_cmd_entry, NVME_SCT_GENERIC, NVME_SC_INVALID_NS);
-		return -1;	
+		return NVME_REQUEST_INVALID;	
 	}
 
 	// maximum data transfer size MDTS
@@ -484,12 +484,11 @@ int handle_nvme_io_command(host_nvme_cmd_entry *host_cmd_entry)
 	default:
 		print_err("Opcode:0x%x Invalid", opcode);
 		set_host_cmd_staus(host_cmd_entry, NVME_SCT_GENERIC, NVME_SC_INVALID_OPCODE);
-		return -1;
+		return NVME_REQUEST_INVALID;
 	}
 
-	return 0;    // host command in-pocess 1.wait phif_cmd_rsp,  2.wait SPM available
+	return NVME_REQUEST_PROCESSING;    // host command in-pocess 1.wait phif_cmd_rsp,  2.wait SPM available
 }
-
 
 // when host prepare a SQE and submit it to the SQ, then write SQTail DB
 // Phif fetch it and save in CMD_TABLE, then notify HDC by message hdc_nvme_cmd
@@ -510,11 +509,16 @@ void hdc_host_cmd_task(void *para)
 		res = handle_nvme_io_command(host_cmd_entry);
 	}
 
-	// host nvme cmd has fwd to HW process, it may 1.wait response  2.wait SPM available
-	if (!res)
+	// this nvme request has fwd to HW for further process
+	// 1.HW in-processing, FW wait response  
+	// 2.As SPM not available, FW has push it in a queue
+	if (res == NVME_REQUEST_PROCESSING)
 		return;
+
 	
-	// res, this NVMe Command is Invalid, post CQE to host immediately
+	// complete this nvme request directly
+	// 1.this NVMe Command is Invalid
+	// 2.this NVMe Command has handle finish, don't need wait HW response
 	phif_cmd_cpl *cpl = __get_host_cmd_cpl_entry(tag)
 	setup_phif_cmd_cpl(cpl, host_cmd_entry);
 	if (send_phif_cmd_cpl(cpl)) {

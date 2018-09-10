@@ -18,20 +18,20 @@ int handle_admin_create_cq(host_nvme_cmd_entry *host_cmd_entry)
 
 	if (nvme_cmd->cqid==0 || nvme_cmd->cqid > max_nvme_queue_id) {
 		set_host_cmd_staus(host_cmd_entry, NVME_SCT_CMD_SPECIFIC, NVME_SC_QID_INVALID);
-		return -1;
+		return NVME_REQUEST_INVALID;
 	}
 
 	// TODO: check if this cq is exist
 
 	if (nvme_cmd->qsize == 0 || nvme_cmd->qsize > max_nvme_queue_size) {
 		set_host_cmd_staus(host_cmd_entry, NVME_SCT_CMD_SPECIFIC, NVME_SC_QUEUE_SIZE);
-		return -1;
+		return NVME_REQUEST_INVALID;
 	}
 	
 	if (!(nvme_cmd->cq_flags & NVME_QUEUE_PHYS_CONTIG)) {
 		//SQ address physical not contigously
 		set_host_cmd_staus(host_cmd_entry, NVME_SCT_CMD_SPECIFIC, NVME_SC_CQ_INVALID);
-		return -1;
+		return NVME_REQUEST_INVALID;
 	}
 
 	// TODO:: config cq related register  
@@ -39,7 +39,7 @@ int handle_admin_create_cq(host_nvme_cmd_entry *host_cmd_entry)
 	//2.CQ SIZE  
 	//3.CQ Interrupt vector
 
-	return 0;
+	return NVME_REQUEST_COMPLETE;
 }
 
 
@@ -49,13 +49,13 @@ int handle_admin_create_sq(host_nvme_cmd_entry *host_cmd_entry)
 
 	if (nvme_cmd->sqid==0 || nvme_cmd->sqid > max_queue_id) {
 		set_host_cmd_staus(host_cmd_entry, NVME_SCT_CMD_SPECIFIC, NVME_SC_QID_INVALID);
-		return -1;
+		return NVME_REQUEST_INVALID;
 	}
 
 	// check if the associated CQ has created.
 	if (nvme_cmd->cqid) {
 		set_host_cmd_staus(host_cmd_entry, NVME_SCT_CMD_SPECIFIC, NVME_SC_QID_INVALID);
-		return -1;
+		return NVME_REQUEST_INVALID;
 	}
 
 	// TODO:: check if this sq is exist
@@ -64,7 +64,7 @@ int handle_admin_create_sq(host_nvme_cmd_entry *host_cmd_entry)
 	// check if the SQ address is physical contigously
 	if (!(nvme_cmd->sq_flags & NVME_QUEUE_PHYS_CONTIG)) {
 		set_host_cmd_staus(host_cmd_entry, NVME_SCT_CMD_SPECIFIC, NVME_SC_CQ_INVALID);
-		return -1;
+		return NVME_REQUEST_INVALID;
 	}
 
 	// TODO:: config sq related register  
@@ -72,8 +72,10 @@ int handle_admin_create_sq(host_nvme_cmd_entry *host_cmd_entry)
 	//2.SQ SIZE   
 	//3.SQ PRIO and associated CQ
 
-	//set_host_cmd_staus(host_cmd_entry, NVME_SCT_GENERIC, NVME_SC_SUCCESS);
-	
-	return 0;
+
+
+	set_host_cmd_staus(host_cmd_entry, NVME_SCT_GENERIC, NVME_SC_SUCCESS);
+
+	return NVME_REQUEST_COMPLETE;
 }
 
