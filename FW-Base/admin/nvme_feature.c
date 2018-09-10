@@ -14,12 +14,18 @@
 
 int handle_admin_set_feature(host_nvme_cmd_entry * host_cmd_entry)
 {
+	struct nvme_features *nvme_cmd = &host_cmd_entry->sqe.features;
 
+
+	return NVME_REQUEST_COMPLETE;
 }
 
-
+// refer NVMe spec-1_3c  5.21
 int handle_admin_get_feature(host_nvme_cmd_entry * host_cmd_entry)
 {
+	struct nvme_features *nvme_cmd = &host_cmd_entry->sqe.features;
 
+
+	return NVME_REQUEST_COMPLETE;
 }
 

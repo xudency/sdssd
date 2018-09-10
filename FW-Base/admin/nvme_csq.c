@@ -14,7 +14,7 @@
 
 int handle_admin_create_cq(host_nvme_cmd_entry *host_cmd_entry)
 {
-	struct nvme_create_cq *nvme_cmd = host_cmd_entry->sqe.create_cq;
+	struct nvme_create_cq *nvme_cmd = &host_cmd_entry->sqe.create_cq;
 
 	if (nvme_cmd->cqid==0 || nvme_cmd->cqid > max_nvme_queue_id) {
 		set_host_cmd_staus(host_cmd_entry, NVME_SCT_CMD_SPECIFIC, NVME_SC_QID_INVALID);
@@ -45,7 +45,7 @@ int handle_admin_create_cq(host_nvme_cmd_entry *host_cmd_entry)
 
 int handle_admin_create_sq(host_nvme_cmd_entry *host_cmd_entry)
 {
-	struct nvme_create_sq *nvme_cmd = host_cmd_entry->sqe.create_sq;
+	struct nvme_create_sq *nvme_cmd = &host_cmd_entry->sqe.create_sq;
 
 	if (nvme_cmd->sqid==0 || nvme_cmd->sqid > max_queue_id) {
 		set_host_cmd_staus(host_cmd_entry, NVME_SCT_CMD_SPECIFIC, NVME_SC_QID_INVALID);
