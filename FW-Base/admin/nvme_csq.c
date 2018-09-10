@@ -79,3 +79,17 @@ int handle_admin_create_sq(host_nvme_cmd_entry *host_cmd_entry)
 	return NVME_REQUEST_COMPLETE;
 }
 
+
+int handle_admin_delete_sq(host_nvme_cmd_entry *host_cmd_entry)
+{
+
+	return NVME_REQUEST_COMPLETE;
+}
+
+
+int handle_admin_delete_cq(host_nvme_cmd_entry *host_cmd_entry)
+{
+
+	return NVME_REQUEST_COMPLETE;
+}
+
