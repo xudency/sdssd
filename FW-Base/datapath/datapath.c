@@ -124,9 +124,9 @@ int send_phif_wdma_req(phif_wdma_req *req, u8 valid)
 {
 	if (port_is_available()) {
 		void *ptr = (void *)PHIF_WDMA_REQ_SPM;
-		memcpy(ptr, req, PHIF_WDMA_REQ_M_LEN));
-		ptr += PHIF_WDMA_REQ_M_LEN;
-		req +=PHIF_WDMA_REQ_M_LEN;
+		memcpy(ptr, req, PHIF_RWDMA_REQ_M_LEN));
+		ptr += PHIF_RWDMA_REQ_M_LEN;
+		req +=PHIF_RWDMA_REQ_M_LEN;
 
 		if (valid & WDMA_QW_PI) {
 			memcpy(ptr, req, QWORD_BYTES);
@@ -157,6 +157,18 @@ int send_phif_wdma_req(phif_wdma_req *req, u8 valid)
 	}
 }
 
+int fw_send_rdma_req(u64 host_addr, u64 cbuff_addr, u16 length, 
+							u16 host_tag, fw_cmd_callback handler)
+{
+
+}
+
+rdma_host_to_cbuff()
+{
+
+}
+
+
 // move data from Cbuff to Host memory via PHIF WDMA
 // beware: one phif_wdma_req only can move data that
 // both src:cbuff and dest:host address is continuously
@@ -167,7 +179,7 @@ int fw_send_wdma_req(u64 host_addr, u64 cbuff_addr, u16 length,
 	u16 itnl_tag = fw_alloc_itnl_tag();
 	phif_wdma_req *req = __get_fw_wdma_req_entry(itnl_tag);	
 	host_nvme_cmd_entry *host_cmd_entry = __get_host_cmd_entry(host_tag);
-	struct msg_qw0 *header = &req->mandatory.header;
+	struct msg_qw0 *header = (struct msg_qw0 *)req;
 	fw_internal_cmd_entry *itnl_cmd_entry = __get_fw_cmd_entry(itnl_tag);
 	
 	itnl_cmd_entry->msgptr = req;
@@ -177,10 +189,10 @@ int fw_send_wdma_req(u64 host_addr, u64 cbuff_addr, u16 length,
 	msg_header_filled(header, 6, MSG_NID_PHIF, MSG_NID_PHIF, MSGID_PHIF_WDMA_REQ, 
 					  itnl_tag, HDC_EXT_TAG, MSG_NID_HDC, 0);
 
-	req->mandatory.control.blen = length;	// length
-	req->mandatory.control.pld_qwn = 1;		// only one QW_ADDR, because cbuff must continuous
-	req->mandatory.hdata_addr = host_addr;	// host address
-	req->optional.cbuff_addr = cbuff_addr;  // cbuff address
+	req->control.blen = length;	// length
+	req->control.pld_qwn = 1;		// only one QW_ADDR, because cbuff must continuous
+	req->hdata_addr = host_addr;	// host address
+	req->cbuff_addr = cbuff_addr;  // cbuff address
 
 	u8 valid = WDMA_QW_ADDR;
 

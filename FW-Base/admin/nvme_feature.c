@@ -61,9 +61,13 @@ get_feature_fn gat_get_feature_func[] =
 };
 
 
-int setft_xxxxxx(host_nvme_cmd_entry * host_cmd_entry)
+int setft_lba_range_type(host_nvme_cmd_entry * host_cmd_entry)
 {
 	struct nvme_features *nvme_cmd = &host_cmd_entry->sqe.features;
+
+	u8 nlr = nvme_cmd->dword11 & NVME_LBART_NUM_MASK;   // 0-base
+
+	
 
 	
 }

@@ -512,7 +512,9 @@ struct nvme_lba_range_type {
 	u8			rsvd48[16];
 };
 
-#define NVME_LBA_RANGE_ENTRYS    64    // 4K/64B
+#define NVME_LBART_MAX_ENTRYS    64    // 4K/64B
+
+#define NVME_LBART_NUM_MASK 	0x3f   // cwd11
 
 enum {
 	NVME_LBART_TYPE_FS	= 0x01,

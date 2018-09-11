@@ -310,7 +310,8 @@ struct msg_qw0 {
 	u64 port		 :1;	// port of PHIF
 	u64 vf			 :4;
 
-	// cmd specific
+	// TODO:: union, cmd specific like nvme_common
+	
 	u64 sqid		 :8;
 	u64 hxts_mode	 :6;
 	u64 rsvd3		 :2;
@@ -374,7 +375,7 @@ typedef struct {
 	u64 rsvd4			:29;
 } phif_cmd_req;
 
-struct rwdma_ctrl {
+struct wdma_ctrl {
 	u64 blen			:15; //
 	u64	bit_bucket		:1;  // is current req refer to bit bucket
 	u64 cpl				:1;  // CP Last indication
@@ -397,23 +398,45 @@ struct rwdma_ctrl {
 	u32 hxts_mode		:6;
 	u32 rsvd3			:2;
 	u64 mode			:2;	  
-	u64 rsvd  			:2;
+	u64 rsvd4  			:2;
 };
 
 typedef struct {
-	struct msg_qw0 header;
-	struct rwdma_ctrl control;
+	// QW0
+	u64 cnt			 :4;
+	u64 dstfifo		 :4;
+	u64 dst			 :5;
+	u64 prio		 :1;
+	u64 rsvd0		 :1;
+	u64 ckl		 	 :1;   //chunk last
+	u64 msgid		 :8;
+	u64 tag			 :8;
+	u64 ext_tag		 :4;
+	u64 src			 :5;
+	u64 rsvd1		 :1;
+	u64 vfa			 :1;
+	u64 port		 :1;	// port of PHIF
+	u64 vf			 :4;	
+	u64 rsvd3		 :16;
+
+	// QW1
+	struct wdma_ctrl control;
+
+	// QW2
 	u32 cpa;
 	u32 rsvd_2;
+
+	// QW3
 	u64 hdata_addr;
+
+	// QW4
 	u64 hmeta_addr;
+
+	// QW5
 	u64 elba			:35;
 	u64 rsvd_5			:29;
-} phif_wdma_req_mandatory;
 
-#define PHIF_WDMA_REQ_M_LEN   (sizeof(phif_wdma_req_mandatory))
-
-typedef struct {
+	////////////////optional
 	// QW_PI
 	u32 eilbrt;
 	u16 elbat;
@@ -425,7 +448,7 @@ typedef struct {
 
 	// QW_DATA
 	u64 wdata[2];		// mode2, data in message
-} phif_wdma_req_optional;
+} phif_wdma_req;
 
 enum {
 	WDMA_QW_PI		= (1<<0),
@@ -434,12 +457,7 @@ enum {
 	WDMA_QW_DATA1	= (1<<3),
 };
 
-
-typedef struct {
-	phif_wdma_req_mandatory mandatory;
-	phif_wdma_req_optional optional;
-} phif_wdma_req;
-
+#define PHIF_RWDMA_REQ_M_LEN     (QWORD_BYTES*6)    // 6 WQ
 
 typedef struct {
 	u64 cnt			 :4;
@@ -455,10 +473,112 @@ typedef struct {
 	u64 rsvd1		 :1;
 	u64 vfa			 :1;
 	u64 port		 :1;
-	u64 vf			 :4;
-	
+	u64 vf			 :4;	
 	u64 rsvd2		 :14;
 	u64 staus		 :2;
 } phif_wdma_rsp;
+
+
+struct rdma_ctrl {
+	u64 blen			:15; //
+	u64	rsvd			:1;
+	u64 cpl				:1;  // CP Last indication
+	u64 rsvd			:3;	 // Payload QW number. QW number of Address
+	u64 addr_qwen		:1;
+	u64 pi_type			:3;
+	u64 prchk			:3;
+	u64 rsvd0			:1;
+	u64 dix				:1;	 // 1-DIX  0-DIF
+	u64 pil				:1;  // PI location in metadata, (0:first 8B)  (1:last 8B)
+	u64 pract			:1;
+	u64 pien			:1;  // PI enable
+	u64 cp_lb_num		:5;  // multiple LB in one CP   0-base
+	u64 cp_lb_off		:5;	 // this LB offset in CP
+	u64 cp_lb_full		:1;
+	u64 rsvd1			:1;
+	u64 lb_hmeta_sz     :4; 
+	u64 lb_sz			:2;
+	u64 lb_crc_en		:1;
+	u64 rsvd2			:9;
+	u64 mode			:2;	  
+	u64 rsvd3  			:2;
+};
+
+
+typedef struct {
+	// QW0
+	u64 cnt			 :4;
+	u64 dstfifo		 :4;
+	u64 dst			 :5;
+	u64 prio		 :1;
+	u64 rsvd0		 :1;
+	u64 ckl		 	 :1;
+	u64 msgid		 :8;
+	u64 tag			 :8;
+	u64 ext_tag		 :4;
+	u64 src			 :5;
+	u64 rsvd1		 :1;
+	u64 vfa			 :1;
+	u64 port		 :1;
+	u64 vf			 :4;	
+	u64 band		 :8;
+	u64 cache_en	 :1;
+	u64 rsvd3		 :7;
+
+	// QW1
+	struct rdma_ctrl control;
+
+	// QW2
+	u32 cpa;
+	u32 hxts_mode	:6;
+	u32 rsvd_qw2  	:26;
+
+	// QW3
+	u64 hdata_addr;
+
+	// QW4 
+	u64 hmeta_addr;
+
+	// QW5
+	u64 elba	 	:35;     // labek of hxts
+	u64 rsvd_qw5	:29;
+
+	///////////////optional
+	// QW_PI
+	u32 eilbrt;
+	u16 elbat;
+	u16 elbatm;
+
+	// QW_ADDR
+	u64 cbuff_addr		:36;
+	u64 rsvd_addr		:28;
+} phif_rdma_req;
+
+
+typedef struct {
+	u64 cnt			 :4;
+	u64 dstfifo		 :4;
+	u64 dst			 :5;
+	u64 prio		 :1;
+	u64 rsvd0		 :1;
+	u64 ckl		 	 :1;
+	u64 msgid		 :8;
+	u64 tag			 :8;
+	u64 ext_tag		 :4;
+	u64 src			 :5;
+	u64 rsvd1		 :1;
+	u64 vfa			 :1;
+	u64 port		 :1;
+	u64 vf			 :4;
+	u64 qw0_rsvd	 :16;
+
+	u64 xfer_len	 :16;
+	u64 qwn_data	 :4;
+	u64 qw1_rsvd	 :42;
+	u64 status		 :2;
+
+	////////optional
+	u64 qw_data[];  // mode2: data escaplated in response message
+} phif_rdma_rsp;
 
 #endif
