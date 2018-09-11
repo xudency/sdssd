@@ -7,6 +7,10 @@
 #define upper_32_bits(n) ((u32)(((n) >> 16) >> 16))
 #define lower_32_bits(n) ((u32)(n))
 
+// n is 32bit
+#define upper_16_bits(n) ((u16)((n) >> 16))
+#define lower_16_bits(n) ((u16)(n))
+
 
 #define bit_test(f, bitnum)   			(0 != ((f)&(1<<bitnum)))
 #define bit_set(f, bitnum)    			((f) |= (1<<bitnum))

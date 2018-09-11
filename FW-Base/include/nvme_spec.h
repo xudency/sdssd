@@ -725,14 +725,15 @@ enum {
 
 enum {
 	NVME_QUEUE_PHYS_CONTIG	= (1 << 0),
-	NVME_CQ_IRQ_ENABLED	= (1 << 1),
-	NVME_SQ_PRIO_URGENT	= (0 << 1),
-	NVME_SQ_PRIO_HIGH	= (1 << 1),
-	NVME_SQ_PRIO_MEDIUM	= (2 << 1),
-	NVME_SQ_PRIO_LOW	= (3 << 1),
+	NVME_CQ_IRQ_ENABLED		= (1 << 1),
+	NVME_SQ_PRIO_URGENT		= (0 << 1),
+	NVME_SQ_PRIO_HIGH		= (1 << 1),
+	NVME_SQ_PRIO_MEDIUM		= (2 << 1),
+	NVME_SQ_PRIO_LOW		= (3 << 1),
+	NVME_FEAT_UNDEFID		= 0x00,
 	NVME_FEAT_ARBITRATION	= 0x01,
 	NVME_FEAT_POWER_MGMT	= 0x02,
-	NVME_FEAT_LBA_RANGE	= 0x03,
+	NVME_FEAT_LBA_RANGE		= 0x03,
 	NVME_FEAT_TEMP_THRESH	= 0x04,
 	NVME_FEAT_ERR_RECOVERY	= 0x05,
 	NVME_FEAT_VOLATILE_WC	= 0x06,
@@ -741,23 +742,23 @@ enum {
 	NVME_FEAT_IRQ_CONFIG	= 0x09,
 	NVME_FEAT_WRITE_ATOMIC	= 0x0a,
 	NVME_FEAT_ASYNC_EVENT	= 0x0b,
-	NVME_FEAT_AUTO_PST	= 0x0c,
+	NVME_FEAT_AUTO_PST		= 0x0c,
 	NVME_FEAT_HOST_MEM_BUF	= 0x0d,
-	NVME_FEAT_TIMESTAMP	= 0x0e,
-	NVME_FEAT_KATO		= 0x0f,
+	NVME_FEAT_TIMESTAMP		= 0x0e,
+	NVME_FEAT_KATO			= 0x0f,
 	NVME_FEAT_SW_PROGRESS	= 0x80,
-	NVME_FEAT_HOST_ID	= 0x81,
-	NVME_FEAT_RESV_MASK	= 0x82,
+	NVME_FEAT_HOST_ID		= 0x81,
+	NVME_FEAT_RESV_MASK		= 0x82,
 	NVME_FEAT_RESV_PERSIST	= 0x83,
-	NVME_LOG_ERROR		= 0x01,
-	NVME_LOG_SMART		= 0x02,
-	NVME_LOG_FW_SLOT	= 0x03,
+	NVME_LOG_ERROR			= 0x01,
+	NVME_LOG_SMART			= 0x02,
+	NVME_LOG_FW_SLOT		= 0x03,
 	NVME_LOG_CMD_EFFECTS	= 0x05,
-	NVME_LOG_DISC		= 0x70,
+	NVME_LOG_DISC			= 0x70,
 	NVME_LOG_RESERVATION	= 0x80,
-	NVME_FWACT_REPL		= (0 << 3),
+	NVME_FWACT_REPL			= (0 << 3),
 	NVME_FWACT_REPL_ACTV	= (1 << 3),
-	NVME_FWACT_ACTV		= (2 << 3),
+	NVME_FWACT_ACTV			= (2 << 3),
 };
 
 struct nvme_identify {
@@ -775,6 +776,23 @@ struct nvme_identify {
 
 #define NVME_IDENTIFY_DATA_SIZE 4096
 
+typedef union 
+{
+	dword10;
+	
+	struct {
+		u32 fid		:8;
+		u32 rsvd	:23;
+		u32 save	:1;
+	} sf_dw10;
+
+	struct {
+		u32 fid		:8;
+		u32 sel		:3;
+		u32 rsvd	:21;
+	} gf_dw10;
+} feat_dw10;
+
 struct nvme_features {
 	u8			opcode;
 	u8			flags;
@@ -782,7 +800,7 @@ struct nvme_features {
 	u32			nsid;
 	u64			rsvd2[2];
 	union nvme_data_ptr	dptr;
-	u32			fid; 			//MSB is SV
+	feat_dw10   fid; 
 	u32			dword11;
 	u32         dword12;
 	u32         dword13;
