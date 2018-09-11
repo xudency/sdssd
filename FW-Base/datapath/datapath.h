@@ -56,7 +56,8 @@ typedef struct {
 	u8 vf		:4;
 	u8 rsvd		:2;
 	struct nvme_command sqe;
-	//struct nvme_completion cqe;
+	//struct nvme_completion cqe;	
+	union nvme_result result;
 	u32 sta_sc		:8;
 	u32 sta_sct		:4;
 	u32 ckc			:8;   // chunk count

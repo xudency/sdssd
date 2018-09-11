@@ -485,6 +485,23 @@ enum {
 	NVME_AER_NOTICE_FW_ACT_STARTING = 0x0102,
 };
 
+// fid=1
+struct nvme_arbitration_feat {
+    u32		ab		:3;
+    u32		rsvd	:5;
+    u32		lpw		:8;
+    u32		mpw		:8;
+    u32		hpw		:8;
+};
+
+// fid=2
+struct nvme_power_mgmt_feat {
+	u32 	ps		:5;
+	u32 	wh		:3;
+	u32 	rsvd	:24;
+};
+
+// fid=3, pointer by PRP1
 struct nvme_lba_range_type {
 	u8			type;
 	u8			attributes;
@@ -495,6 +512,8 @@ struct nvme_lba_range_type {
 	u8			rsvd48[16];
 };
 
+#define NVME_LBA_RANGE_ENTRYS    64    // 4K/64B
+
 enum {
 	NVME_LBART_TYPE_FS	= 0x01,
 	NVME_LBART_TYPE_RAID	= 0x02,
@@ -504,6 +523,52 @@ enum {
 	NVME_LBART_ATTRIB_TEMP	= 1 << 0,
 	NVME_LBART_ATTRIB_HIDE	= 1 << 1,
 };
+
+// fid=4
+struct nvme_tmperature_th_feat {
+	u16 tmpth;
+	u16 tmpsel		:4;
+	u16 thsel		:2;  // 00-over  01-under
+	u16 rsvd		:10;
+};
+
+enum {
+	NVME_TMPRATURE_COMPOSITE = 0x00,
+	NVME_TMPRATURE_SENSOR1 = 0x01,
+	NVME_TMPRATURE_SENSOR2 = 0x02,
+	NVME_TMPRATURE_SENSOR3 = 0x03,
+	NVME_TMPRATURE_SENSOR4 = 0x04,
+	NVME_TMPRATURE_SENSOR5 = 0x05,
+	NVME_TMPRATURE_SENSOR6 = 0x06,
+	NVME_TMPRATURE_SENSOR7 = 0x07,
+	NVME_TMPRATURE_SENSOR8 = 0x08,
+};
+
+enum {
+	NVME_TMPRATURE_OVER_TH = 0x0,
+	NVME_TMPRATURE_UBDER_TH = 0x1,
+};
+
+// fid=5
+struct nvme_error_recov_feat {
+    u16		tler;
+    u16		dulbe		:1;
+    u16		rsvd		:15;
+};
+
+// fid=6
+struct nvme_volatile_cache_feat {
+    u32		wce			:1;
+    u32		rsvd		:31;
+};
+
+
+// fid=7
+struct nvme_queue_number {
+    u16		nsqr;
+    u16		ncqr;
+};
+
 
 struct nvme_reservation_status {
 	u32	gen;
@@ -1193,16 +1258,17 @@ enum {
 	NVME_SC_DNR			= 0x4000,
 };
 
+typedef union nvme_result {
+	u16 bit16;
+	u32 bit32;
+	u64 bit64;
+} cqe_qw0;
+
 struct nvme_completion {
 	/*
 	 * Used by Admin and Fabrics commands to return data:
 	 */
-	union nvme_result {
-		u16 bit16;
-		u32	bit32;
-		u64 bit64;
-	} result;
-
+	cqe_qw0 result;
 	u16	sq_head;	/* how much of this queue may be reclaimed */
 	u16	sq_id;		/* submission queue that generated this entry */
 	u16	command_id;	/* of the command which completed */

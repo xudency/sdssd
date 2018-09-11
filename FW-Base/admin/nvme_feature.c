@@ -13,6 +13,12 @@
  */
 
 
+nvme_feature_cfg gat_nvme_current_feature;
+
+nvme_feature_cfg gat_nvme_default_feature;
+
+
+//Features that can be configured with Set Features
 set_feature_fn gat_set_feature_func[] = 
 {
 	[NVME_FEAT_UNDEFID] 		= NULL,
@@ -33,7 +39,7 @@ set_feature_fn gat_set_feature_func[] =
 	[NVME_FEAT_KATO]			= xxf,
 };
 
-
+//Features that can be retrieved with Get Features
 get_feature_fn gat_get_feature_func[] = 
 {
 	[NVME_FEAT_UNDEFID] 		= NULL,
@@ -54,6 +60,13 @@ get_feature_fn gat_get_feature_func[] =
 	[NVME_FEAT_KATO]			= xxf,
 };
 
+
+int setft_xxxxxx(host_nvme_cmd_entry * host_cmd_entry)
+{
+	struct nvme_features *nvme_cmd = &host_cmd_entry->sqe.features;
+
+	
+}
 
 int setft_queue_number(host_nvme_cmd_entry * host_cmd_entry)
 {
@@ -85,8 +98,17 @@ int handle_admin_set_feature(host_nvme_cmd_entry * host_cmd_entry)
 		set_host_cmd_staus(host_cmd_entry, NVME_SCT_GENERIC, NVME_SC_INVALID_FIELD);
 		return NVME_REQUEST_INVALID;
 	}
-
 }
+
+
+
+///////////////////////////////////////GET//////////////////////////////////////////////////////
+
+int getft_queue_number(host_nvme_cmd_entry * host_cmd_entry)
+{
+	
+}
+
 
 // refer NVMe spec-1_3c  5.21
 int handle_admin_get_feature(host_nvme_cmd_entry * host_cmd_entry)
@@ -100,7 +122,6 @@ int handle_admin_get_feature(host_nvme_cmd_entry * host_cmd_entry)
 		set_host_cmd_staus(host_cmd_entry, NVME_SCT_GENERIC, NVME_SC_INVALID_FIELD);
 		return NVME_REQUEST_INVALID;
 	}
-
 }
 
 
