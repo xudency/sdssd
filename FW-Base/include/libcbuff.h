@@ -9,14 +9,14 @@
 #define HDC_NVME_CMD_SPM		0x90000 
 
 #define PHIF_CMD_REQ_SPM
-
 #define PHIF_CMD_RSP_SPM
 
 #define PHIF_CMD_CPL_SPM
 
 #define PHIF_WDMA_REQ_SPM
-
 #define PHIF_WDMA_RSP_SPM
 
+#define PHIF_RDMA_REQ_SPM
+#define PHIF_RDMA_RSP_SPM
 
 #endif

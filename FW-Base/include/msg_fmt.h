@@ -4,6 +4,8 @@
 #define _MESSAGE_FORMAT_H_
 
 
+#define APLO_MSG_MAX_LEN		 (QWORD_BYTES*16)
+
 // message node(block/module) ID
 enum msg_nid {
 	MSG_NID_HDC = 0x1,
@@ -451,10 +453,23 @@ typedef struct {
 } phif_wdma_req;
 
 enum {
-	WDMA_QW_PI		= (1<<0),
-	WDMA_QW_ADDR	= (1<<1),
-	WDMA_QW_DATA0	= (1<<2),
-	WDMA_QW_DATA1	= (1<<3),
+	RWDMA_QW_PI		= (1<<0),
+	RWDMA_QW_ADDR	= (1<<1),
+
+	RWDMA_QW_DATA0	= (1<<2),
+	RWDMA_QW_DATA1	= (1<<3),
+	RWDMA_QW_DATA2	= (1<<4),
+	RWDMA_QW_DATA3	= (1<<5),
+	RWDMA_QW_DATA0	= (1<<6),
+	RWDMA_QW_DATA1	= (1<<7),
+	RWDMA_QW_DATA2	= (1<<8),
+	RWDMA_QW_DATA3	= (1<<9),
+	RWDMA_QW_DATA0	= (1<<10),
+	RWDMA_QW_DATA1	= (1<<11),
+	RWDMA_QW_DATA2	= (1<<12),
+	RWDMA_QW_DATA3	= (1<<13),
+	RWDMA_QW_DATA0	= (1<<14),
+	RWDMA_QW_DATA1	= (1<<15),
 };
 
 #define PHIF_RWDMA_REQ_M_LEN     (QWORD_BYTES*6)    // 6 WQ
