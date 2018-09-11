@@ -490,7 +490,7 @@ typedef struct {
 	u64 port		 :1;
 	u64 vf			 :4;	
 	u64 rsvd2		 :14;
-	u64 staus		 :2;
+	u64 status		 :2;
 } phif_wdma_rsp;
 
 

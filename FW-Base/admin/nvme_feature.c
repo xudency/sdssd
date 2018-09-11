@@ -60,6 +60,11 @@ get_feature_fn gat_get_feature_func[] =
 	[NVME_FEAT_KATO]			= xxf,
 };
 
+int setft_lbart_rdma_completion(void *para)
+{
+	return 0;
+}
+
 
 int setft_lba_range_type(host_nvme_cmd_entry * host_cmd_entry)
 {
@@ -67,9 +72,10 @@ int setft_lba_range_type(host_nvme_cmd_entry * host_cmd_entry)
 
 	u8 nlr = nvme_cmd->dword11 & NVME_LBART_NUM_MASK;   // 0-base
 
-	
+	fw_send_rdma_req(nvme_cmd->dptr.prp1, cbuff_addr, (1+nlr)*NVME_LBART_ENTRY_SIZE, 
+					host_cmd_entry->cmd_tag, setft_lbart_rdma_completion);
 
-	
+	// wait response
 }
 
 int setft_queue_number(host_nvme_cmd_entry * host_cmd_entry)

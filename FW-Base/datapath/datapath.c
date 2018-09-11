@@ -295,90 +295,67 @@ void phif_cmd_response_to_hdc(void)
 
 }
 
-// host cmd need WDMA, so when wdma response, check whether all chunk of this
-// host cmd has complete, if yes send cpl to phif to post CQE to host
+
 int host_cmd_wdma_completion(void *para)
 {
-	phif_wdma_rsp *rsp = (phif_wdma_rsp *)para;
-	fw_internal_cmd_entry *fw_cmd_entry = __get_fw_cmd_entry(rsp->tag);
-	host_nvme_cmd_entry *host_cmd_entry = __get_host_cmd_entry(fw_cmd_entry->host_tag);
-
-	// any chunk error, this host command is error
-	if (rsp->staus) {
-		host_cmd_entry->sta_sc = NVME_SC_INTERNAL;
-		// reset HW
-	}
-	
-	if (--host_cmd_entry->ckc) {
-		// prp1 part and prp2 part all response, structured a phif_cmd_cpl to PHIF
-		phif_cmd_cpl *cpl = __get_host_cmd_cpl_entry(fw_cmd_entry->host_tag);
-		setup_phif_cmd_cpl(cpl, host_cmd_entry);
-	
-		if (send_phif_cmd_cpl(cpl)) {
-			enqueue_front(&host_nvme_cpl_pend_q, &host_cmd_entry->next)
-		}
-	}
-
+	// when data has move to host buffer, what else you want do....
 	return 0;
 }
 
-// move cbuff data to host complete
-void phif_wdma_response_to_hdc(void)
-{
-	phif_wdma_rsp *rsp = (phif_wdma_rsp *)PHIF_WDMA_RSP_SPM;
-
-	fw_internal_cmd_entry *fw_cmd_entry = __get_fw_cmd_entry(rsp->tag);
-
-	// callback fn
-	fw_cmd_entry->fn(rsp);
-
-	fw_free_itnl_tag(rsp->tag);
-
-	//dequeue(fw_wdma_req_pend_q);
-}
-
-// host cmd need WDMA, so when wdma response, check whether all chunk of this
-// host cmd has complete, if yes send cpl to phif to post CQE to host
 int host_cmd_rdma_completion(void *para)
 {
-	phif_rdma_rsp *rsp = (phif_rdma_rsp *)para;
-	fw_internal_cmd_entry *fw_cmd_entry = __get_fw_cmd_entry(rsp->tag);
+	return 0;
+}
+
+
+// 0-RDMA   1-WDMA
+void phif_rwdma_response_to_hdc(bool rw)
+{
+	u8 itnl_tag, status;
+	void *ptr;
+
+	if (rw) {
+		phif_wdma_rsp *rsp = (phif_wdma_rsp *)PHIF_WDMA_RSP_SPM;
+		itnl_tag = rsp->tag;
+		status = rsp->status;
+		ptr = (void *)rsp;
+	} else {
+		phif_rdma_rsp *rsp = (phif_rdma_rsp *)PHIF_RDMA_RSP_SPM;		
+		itnl_tag = rsp->tag;
+		status = rsp->status;
+		ptr = (void *)rsp;
+	}
+
+	fw_internal_cmd_entry *fw_cmd_entry = __get_fw_cmd_entry(itnl_tag);
 	host_nvme_cmd_entry *host_cmd_entry = __get_host_cmd_entry(fw_cmd_entry->host_tag);
 
 	// any chunk error, this host command is error
-	if (rsp->status) {
+	if (status) {
 		host_cmd_entry->sta_sc = NVME_SC_INTERNAL;
 		// reset HW
 	}
 	
 	if (--host_cmd_entry->ckc) {
+		
+		// callback fn
+		fw_cmd_entry->fn(ptr);
+	
 		// prp1 part and prp2 part all response, structured a phif_cmd_cpl to PHIF
 		phif_cmd_cpl *cpl = __get_host_cmd_cpl_entry(fw_cmd_entry->host_tag);
 		setup_phif_cmd_cpl(cpl, host_cmd_entry);
 	
 		if (send_phif_cmd_cpl(cpl)) {
-			enqueue_front(&host_nvme_cpl_pend_q, &host_cmd_entry->next)
+			enqueue_front(&host_nvme_cpl_pend_q, &host_cmd_entry->next);
 		}
 	}
 
-	return 0;
-}
-
-// move cbuff data to host complete
-void phif_rdma_response_to_hdc(void)
-{
-	phif_rdma_rsp *rsp = (phif_rdma_rsp *)PHIF_RDMA_RSP_SPM;
-
-	fw_internal_cmd_entry *fw_cmd_entry = __get_fw_cmd_entry(rsp->tag);
-
-	// callback fn
-	fw_cmd_entry->fn(rsp);
-
-	fw_free_itnl_tag(rsp->tag);
+	fw_free_itnl_tag(itnl_tag);
 
 	//dequeue(fw_wdma_req_pend_q);
-}
 
+	return;
+
+}
 
 // host datapath prepare phif_cmd_req
 void dp_setup_phif_cmd_req(phif_cmd_req *req, host_nvme_cmd_entry *host_cmd_entry)

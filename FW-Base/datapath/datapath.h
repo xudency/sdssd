@@ -48,7 +48,7 @@ typedef enum {
 
 typedef struct {
 	struct qnode next;
-	u8 cmd_tag;				// 0-255
+	u8 cmd_tag;				// 0-255  host_tag
 	u8 state;
 	u8 sqid;
 	u8 vfa		:1;
@@ -122,5 +122,6 @@ static inline void set_host_cmd_staus(host_nvme_cmd_entry *host_cmd_entry, u8 sc
 }
 
 int host_cmd_wdma_completion(void *para);
+int host_cmd_rdma_completion(void *para);
 
 #endif
