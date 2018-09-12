@@ -71,6 +71,25 @@ u16 itnl_tag_to_host_tag(u16 itnl_tag)
 	return fw_cmd_entry->host_tag;
 }
 
+void *fw_cmd_get_ctx_fn(u16 itnl_tag, fw_cmd_callback *fn)
+{
+	void *ctx;
+	fw_internal_cmd_entry *fw_cmd = __get_fw_cmd_entry(itnl_tag);
+
+	*fn = fw_cmd->fn;
+	ctx = fw_cmd->ctx;
+
+	return ctx;
+}
+
+/*
+the_bind_host_cmd_entry(void *itnl)
+{
+	phif_wdma_rsp *rsp = (phif_wdma_rsp *)para;
+	u8 host_tag = itnl_tag_to_host_tag(rsp->tag);
+	host_nvme_cmd_entry *host_cmd_entry = __get_host_cmd_entry(host_tag);
+}*/
+
 // when command process completion, this is the hook callback routine
 int process_completion_task(void *para)
 {
@@ -159,8 +178,8 @@ int send_phif_wdma_req(phif_wdma_req *req, u16 valid)
 }
 
 // a piece of  data, mode 1/2, 0 is used by HW accelerated
-void fw_send_rdma_req(u64 host_addr, u64 cbuff_addr, u16 length, 
-							u16 host_tag, fw_cmd_callback handler)
+void fw_send_rdma_req(u64 host_addr, u64 cbuff_addr, u16 length, u16 host_tag, 
+						   fw_cmd_callback handler, void *ctx)
 {
 	u16 itnl_tag = fw_alloc_itnl_tag();
 	phif_rdma_req *req = __get_fw_rdma_req_entry(itnl_tag);
@@ -171,7 +190,7 @@ void fw_send_rdma_req(u64 host_addr, u64 cbuff_addr, u16 length,
 	itnl_cmd_entry->msgptr = req;
 	itnl_cmd_entry->host_tag = host_tag;
 	itnl_cmd_entry->fn = handler;
-	//itnl_cmd_entry->ctx = req;
+	itnl_cmd_entry->ctx = ctx;
 
 	msg_header_filled(header, 6, MSG_NID_PHIF, MSG_NID_PHIF, MSGID_PHIF_RDMA_REQ, 
 					  itnl_tag, HDC_EXT_TAG, MSG_NID_HDC, 0);
@@ -204,8 +223,8 @@ void rdma_host_dptr_to_cbuff(union nvme_data_ptr dptr, u64 cbuff, u16 length,
 // move data from Cbuff to Host memory via PHIF WDMA
 // beware: one phif_wdma_req only can move data that
 // both src:cbuff and dest:host address is continuously
-void fw_send_wdma_req(u64 host_addr, u64 cbuff_addr, u16 length, 
-							u16 host_tag, fw_cmd_callback handler)
+void fw_send_wdma_req(u64 host_addr, u64 cbuff_addr, u16 length, u16 host_tag, 
+						  fw_cmd_callback handler, void *ctx)
 {
 
 	u16 itnl_tag = fw_alloc_itnl_tag();
@@ -217,6 +236,7 @@ void fw_send_wdma_req(u64 host_addr, u64 cbuff_addr, u16 length,
 	itnl_cmd_entry->msgptr = req;
 	itnl_cmd_entry->host_tag = host_tag;
 	itnl_cmd_entry->fn = handler;
+	itnl_cmd_entry->ctx = ctx;
 
 	msg_header_filled(header, 6, MSG_NID_PHIF, MSG_NID_PHIF, MSGID_PHIF_WDMA_REQ, 
 					  itnl_tag, HDC_EXT_TAG, MSG_NID_HDC, 0);
@@ -239,7 +259,7 @@ void fw_send_wdma_req(u64 host_addr, u64 cbuff_addr, u16 length,
 
 // cbuff address must continuously
 void wdma_cbuff_to_host_dptr(union nvme_data_ptr dptr, u64 cbuff, u16 length, 
-									u16 host_tag, fw_cmd_callback handler)
+									u16 host_tag, fw_cmd_callback handler, void *ctx)
 {
 	u64 prp1 = dptr.prp1;
 	u64 prp2 = dptr.prp2;
@@ -250,12 +270,12 @@ void wdma_cbuff_to_host_dptr(union nvme_data_ptr dptr, u64 cbuff, u16 length,
 	if (!prp1_offset) {
 		// PRP1 is 4K align
 		//host_cmd_entry->ckc = 1;
-		fw_send_wdma_req(prp1, cbuff, SZ_4K, host_tag, handler);
+		fw_send_wdma_req(prp1, cbuff, SZ_4K, host_tag, handler, ctx);
 	} else {
 		// PRP1 not 4K align, PRP2 is used
 		//host_cmd_entry->ckc = 2;
-		fw_send_wdma_req(prp1, cbuff, length, host_tag, handler);
-		fw_send_wdma_req(prp2, cbuff+length, prp1_offset, host_tag, handler);
+		fw_send_wdma_req(prp1, cbuff, length, host_tag, handler, ctx);
+		fw_send_wdma_req(prp2, cbuff+length, prp1_offset, host_tag, handler, ctx);
 	}
 
 	// TODO: prp2 list analysis
@@ -301,14 +321,9 @@ void phif_cmd_response_to_hdc(void)
 }
 
 
-int host_cmd_wdma_completion(void *para)
+int host_cmd_rwdma_completion(void *para)
 {
 	// when data has move to host buffer, what else you want do....
-	return 0;
-}
-
-int host_cmd_rdma_completion(void *para)
-{
 	return 0;
 }
 
@@ -317,18 +332,18 @@ int host_cmd_rdma_completion(void *para)
 void phif_rwdma_response_to_hdc(bool rw)
 {
 	u8 itnl_tag, status;
-	void *ptr;
+	//void *ptr;
 
 	if (rw) {
 		phif_wdma_rsp *rsp = (phif_wdma_rsp *)PHIF_WDMA_RSP_SPM;
 		itnl_tag = rsp->tag;
 		status = rsp->status;
-		ptr = (void *)rsp;
+		//ptr = (void *)rsp;
 	} else {
 		phif_rdma_rsp *rsp = (phif_rdma_rsp *)PHIF_RDMA_RSP_SPM;		
 		itnl_tag = rsp->tag;
 		status = rsp->status;
-		ptr = (void *)rsp;
+		//ptr = (void *)rsp;
 	}
 
 	fw_internal_cmd_entry *fw_cmd_entry = __get_fw_cmd_entry(itnl_tag);
@@ -341,9 +356,10 @@ void phif_rwdma_response_to_hdc(bool rw)
 	}
 	
 	if (--host_cmd_entry->ckc) {
-		
-		// callback fn
-		fw_cmd_entry->fn(ptr);
+		fw_cmd_callback fn;
+		void *ctx;
+		ctx = fw_cmd_get_ctx_fn(itnl_tag, &fn);
+		fn(ctx);
 	
 		// prp1 part and prp2 part all response, structured a phif_cmd_cpl to PHIF
 		phif_cmd_cpl *cpl = __get_host_cmd_cpl_entry(fw_cmd_entry->host_tag);
@@ -479,7 +495,7 @@ void setup_phif_cmd_cpl(phif_cmd_cpl *cpl, host_nvme_cmd_entry *host_cmd_entry)
 	cpl->header.vf = host_cmd_entry->vf;
 	cpl->header.sqid = host_cmd_entry->sqid;
 
-	cpl->cqe.result = 0; // this is command specified
+	cpl->cqe.result = host_cmd_entry->result; // this is command specified
 	cpl->cqe.status = (host_cmd_entry->sta_sc<<1) | (host_cmd_entry->sta_sct<<9);
 	// phase is filled by HW
 }

@@ -134,6 +134,8 @@ int handle_admin_delete_cq(host_nvme_cmd_entry *host_cmd_entry)
 	//2.CQ SIZE  
 	//3.CQ Interrupt vector
 
+	
+	set_host_cmd_staus(host_cmd_entry, NVME_SCT_GENERIC, NVME_SC_SUCCESS);
 
 	return NVME_REQUEST_COMPLETE;
 }

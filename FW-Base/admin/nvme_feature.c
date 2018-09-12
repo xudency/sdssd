@@ -45,7 +45,7 @@ get_feature_fn gat_get_feature_func[] =
 	[NVME_FEAT_UNDEFID] 		= NULL,
 	[NVME_FEAT_ARBITRATION] 	= xx1,
 	[NVME_FEAT_POWER_MGMT]		= xx2,
-	[NVME_FEAT_LBA_RANGE] 		= xx3,
+	[NVME_FEAT_LBA_RANGE] 		= setft_lba_range_type,
 	[NVME_FEAT_TEMP_THRESH] 	= xx4,
 	[NVME_FEAT_ERR_RECOVERY]	= xx5,
 	[NVME_FEAT_VOLATILE_WC] 	= xx6,
@@ -60,6 +60,9 @@ get_feature_fn gat_get_feature_func[] =
 	[NVME_FEAT_KATO]			= xxf,
 };
 
+
+/////////////////////////////////////////Set Feature function/////////////////////////////////////////
+
 int setft_lbart_rdma_completion(void *para)
 {
 	return 0;
@@ -70,12 +73,15 @@ int setft_lba_range_type(host_nvme_cmd_entry * host_cmd_entry)
 {
 	struct nvme_features *nvme_cmd = &host_cmd_entry->sqe.features;
 
-	u8 nlr = nvme_cmd->dword11 & NVME_LBART_NUM_MASK;   // 0-base
+	u8 nlr = nvme_cmd->dword11 & NVME_LBART_NUM_MASK;   		// 0-base
+
+	u64 cbuff_addr = &gat_nvme_current_feature.lba_range[0];
 
 	fw_send_rdma_req(nvme_cmd->dptr.prp1, cbuff_addr, (1+nlr)*NVME_LBART_ENTRY_SIZE, 
-					host_cmd_entry->cmd_tag, setft_lbart_rdma_completion);
+					 host_cmd_entry->cmd_tag, setft_lbart_rdma_completion, host_cmd_entry);
 
 	// wait response
+	return NVME_REQUEST_PROCESSING;
 }
 
 int setft_queue_number(host_nvme_cmd_entry * host_cmd_entry)
@@ -102,7 +108,7 @@ int handle_admin_set_feature(host_nvme_cmd_entry * host_cmd_entry)
 	struct nvme_features *nvme_cmd = &host_cmd_entry->sqe.features;
 	u8 featueid = nvme_cmd->fid.sf_dw10.fid;
 
-	if (featueid >=NVME_FEAT_ARBITRATION && featueid <= NVME_FEAT_KATO) {
+	if (featueid >= NVME_FEAT_ARBITRATION && featueid <= NVME_FEAT_KATO) {
 		return gat_set_feature_func[featueid](host_cmd_entry);
 	} else {
 		set_host_cmd_staus(host_cmd_entry, NVME_SCT_GENERIC, NVME_SC_INVALID_FIELD);
@@ -110,15 +116,44 @@ int handle_admin_set_feature(host_nvme_cmd_entry * host_cmd_entry)
 	}
 }
 
+/////////////////////////////////////////Get Feature function/////////////////////////////////////////
 
+int getft_lbart_wdma_completion(void *para)
+{
+	host_nvme_cmd_entry *host_cmd_entry = (host_nvme_cmd_entry *)para;
 
-///////////////////////////////////////GET//////////////////////////////////////////////////////
+	// result is command specific
+	host_cmd_entry->result = NVME_LBART_MAX_ENTRYS;
+
+	return 0;
+}
+
+int getft_lba_range_type(host_nvme_cmd_entry * host_cmd_entry)
+{
+	struct nvme_features *nvme_cmd = &host_cmd_entry->sqe.features;
+
+	//u8 nlr = nvme_cmd->dword11 & NVME_LBART_NUM_MASK;   		// 0-base
+	u64 cbuff_addr;
+
+	// sel is supported? ctrl.ONCS.bit4
+	if (nvme_cmd->fid.gf_dw10.sel == NVME_FEAT_SEL_CURRENT) {
+		cbuff_addr = &gat_nvme_current_feature.lba_range[0];
+	} else {
+		cbuff_addr = &gat_nvme_default_feature.lba_range[0];
+	}
+
+	// BEWARE, dptr is 4K size and phisically contiguous
+	fw_send_wdma_req(nvme_cmd->dptr.prp1, cbuff_addr, NVME_LBART_TBL_SIZE, host_cmd_entry->cmd_tag, 
+					getft_lbart_wdma_completion, host_cmd_entry);
+
+	// wait response
+	return NVME_REQUEST_PROCESSING;
+}
 
 int getft_queue_number(host_nvme_cmd_entry * host_cmd_entry)
 {
 	
 }
-
 
 // refer NVMe spec-1_3c  5.21
 int handle_admin_get_feature(host_nvme_cmd_entry * host_cmd_entry)

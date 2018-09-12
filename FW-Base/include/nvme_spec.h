@@ -514,11 +514,11 @@ struct nvme_lba_range_type {
 
 #define NVME_LBART_ENTRY_SIZE    64
 #define NVME_LBART_MAX_ENTRYS    64    // 4K/64B
-
+#define NVME_LBART_TBL_SIZE     (NVME_LBART_ENTRY_SIZE*NVME_LBART_MAX_ENTRYS)
 #define NVME_LBART_NUM_MASK 	0x3f   // cwd11
 
 enum {
-	NVME_LBART_TYPE_FS	= 0x01,
+	NVME_LBART_TYPE_FS		= 0x01,
 	NVME_LBART_TYPE_RAID	= 0x02,
 	NVME_LBART_TYPE_CACHE	= 0x03,
 	NVME_LBART_TYPE_SWAP	= 0x04,
@@ -860,6 +860,13 @@ typedef union
 		u32 rsvd	:21;
 	} gf_dw10;
 } feat_dw10;
+
+enum {
+	NVME_FEAT_SEL_CURRENT 	  = 0x0,
+	NVME_FEAT_SEL_DEFAULT 	  = 0x1,
+	NVME_FEAT_SEL_SAVED		  = 0x2,
+	NVME_FEAT_SEL_SUPPORT_CAP = 0x3,
+};
 
 struct nvme_features {
 	u8			opcode;
@@ -1271,7 +1278,8 @@ struct nvme_completion {
 	/*
 	 * Used by Admin and Fabrics commands to return data:
 	 */
-	cqe_qw0 result;
+	//cqe_qw0 result;	
+	union nvme_result result;
 	u16	sq_head;	/* how much of this queue may be reclaimed */
 	u16	sq_id;		/* submission queue that generated this entry */
 	u16	command_id;	/* of the command which completed */

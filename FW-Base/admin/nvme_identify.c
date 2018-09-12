@@ -65,16 +65,19 @@ int handle_admin_identify(host_nvme_cmd_entry *host_cmd_entry)
 	u8 cns = idn->cns;
 	u8 tag = host_cmd_entry->cmd_tag;
 	u64 cbuff;
+	void *ctx = host_cmd_entry;
 
 	switch (cns) {
 	case NVME_ID_CNS_NS:
 		cbuff = (u64)get_identify_ns(idn->nsid);
-		wdma_cbuff_to_host_dptr(idn->dptr, cbuff, NVME_IDENTIFY_DATA_SIZE, tag, host_cmd_wdma_completion);
+		wdma_cbuff_to_host_dptr(idn->dptr, cbuff, NVME_IDENTIFY_DATA_SIZE, tag, 
+								host_cmd_rwdma_completion, ctx);
 		break;
 		
 	case NVME_ID_CNS_CTRL:
 		cbuff = (u64)get_identify_ctrl();
-		wdma_cbuff_to_host_dptr(idn->dptr, cbuff, NVME_IDENTIFY_DATA_SIZE, tag, host_cmd_wdma_completion);
+		wdma_cbuff_to_host_dptr(idn->dptr, cbuff, NVME_IDENTIFY_DATA_SIZE, tag, 
+								host_cmd_rwdma_completion, ctx);
 		break;
 				
 	case NVME_ID_CNS_NS_ACTIVE_LIST:

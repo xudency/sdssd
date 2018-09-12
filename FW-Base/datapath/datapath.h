@@ -122,7 +122,6 @@ static inline void set_host_cmd_staus(host_nvme_cmd_entry *host_cmd_entry, u8 sc
 	host_cmd_entry->sta_sc = sc;
 }
 
-int host_cmd_wdma_completion(void *para);
-int host_cmd_rdma_completion(void *para);
+int host_cmd_rwdma_completion(void *para);
 
 #endif
