@@ -112,7 +112,7 @@ void write_datapath_hdc(host_nvme_cmd_entry *host_cmd_entry)
 	{	
 		case WRITE_FLOW_STATE_QUEUED:
 			phif_cmd_req req;
-			dp_setup_phif_cmd_req(&req, host_cmd_entry);
+			setup_phif_cmd_req(&req, host_cmd_entry);
 			host_cmd_entry->state = WRITE_FLOW_STATE_PHIF_REQ_READY;
 
 		case WRITE_FLOW_STATE_PHIF_REQ_READY:

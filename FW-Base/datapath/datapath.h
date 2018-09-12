@@ -75,6 +75,7 @@ typedef struct {
 	u16 itn_tag;          // a host cmd will split to multi fw internal command
 	void *msgptr;	     // this FW itnl cmd pointer 
 	fw_cmd_callback fn;  // DEC(host_cmd_entry[host_tag].ckc), if == 0 send phif_cmd_cpl
+	void *ctx;
 } fw_internal_cmd_entry;
 
 

@@ -119,6 +119,7 @@ int send_phif_cmd_cpl(phif_cmd_cpl *msg)
 	}
 }
 
+// phif_rwdma_req/rsp is variable-length
 int send_phif_wdma_req(phif_wdma_req *req, u16 valid)
 {
 	if (port_is_available()) {
@@ -158,11 +159,11 @@ int send_phif_wdma_req(phif_wdma_req *req, u16 valid)
 }
 
 // a piece of  data, mode 1/2, 0 is used by HW accelerated
-int fw_send_rdma_req(u64 host_addr, u64 cbuff_addr, u16 length, 
+void fw_send_rdma_req(u64 host_addr, u64 cbuff_addr, u16 length, 
 							u16 host_tag, fw_cmd_callback handler)
 {
 	u16 itnl_tag = fw_alloc_itnl_tag();
-	phif_rdma_req *req = __get_fw_rdma_req_entry(itnl_tag);		
+	phif_rdma_req *req = __get_fw_rdma_req_entry(itnl_tag);
 	host_nvme_cmd_entry *host_cmd_entry = __get_host_cmd_entry(host_tag);
 	fw_internal_cmd_entry *itnl_cmd_entry = __get_fw_cmd_entry(itnl_tag);
 	struct msg_qw0 *header = (struct msg_qw0 *)req;
@@ -170,6 +171,7 @@ int fw_send_rdma_req(u64 host_addr, u64 cbuff_addr, u16 length,
 	itnl_cmd_entry->msgptr = req;
 	itnl_cmd_entry->host_tag = host_tag;
 	itnl_cmd_entry->fn = handler;
+	//itnl_cmd_entry->ctx = req;
 
 	msg_header_filled(header, 6, MSG_NID_PHIF, MSG_NID_PHIF, MSGID_PHIF_RDMA_REQ, 
 					  itnl_tag, HDC_EXT_TAG, MSG_NID_HDC, 0);
@@ -189,6 +191,7 @@ int fw_send_rdma_req(u64 host_addr, u64 cbuff_addr, u16 length,
 
 	host_cmd_entry->ckc += 1;
 
+	return;
 }
 
 void rdma_host_dptr_to_cbuff(union nvme_data_ptr dptr, u64 cbuff, u16 length, 
@@ -201,7 +204,7 @@ void rdma_host_dptr_to_cbuff(union nvme_data_ptr dptr, u64 cbuff, u16 length,
 // move data from Cbuff to Host memory via PHIF WDMA
 // beware: one phif_wdma_req only can move data that
 // both src:cbuff and dest:host address is continuously
-int fw_send_wdma_req(u64 host_addr, u64 cbuff_addr, u16 length, 
+void fw_send_wdma_req(u64 host_addr, u64 cbuff_addr, u16 length, 
 							u16 host_tag, fw_cmd_callback handler)
 {
 
@@ -218,9 +221,9 @@ int fw_send_wdma_req(u64 host_addr, u64 cbuff_addr, u16 length,
 	msg_header_filled(header, 6, MSG_NID_PHIF, MSG_NID_PHIF, MSGID_PHIF_WDMA_REQ, 
 					  itnl_tag, HDC_EXT_TAG, MSG_NID_HDC, 0);
 
-	req->control.blen = length;	// length
-	req->control.pld_qwn = 1;		// only one QW_ADDR, because cbuff must continuous
-	req->hdata_addr = host_addr;	// host address
+	req->control.blen = length;	   // length
+	req->control.pld_qwn = 1;	   // only one QW_ADDR, because cbuff must continuous
+	req->hdata_addr = host_addr;   // host address
 	req->cbuff_addr = cbuff_addr;  // cbuff address
 
 	u16 valid = RWDMA_QW_ADDR;
@@ -230,6 +233,8 @@ int fw_send_wdma_req(u64 host_addr, u64 cbuff_addr, u16 length,
 	}
 
 	host_cmd_entry->ckc += 1;
+
+	return;
 }
 
 // cbuff address must continuously
@@ -358,7 +363,7 @@ void phif_rwdma_response_to_hdc(bool rw)
 }
 
 // host datapath prepare phif_cmd_req
-void dp_setup_phif_cmd_req(phif_cmd_req *req, host_nvme_cmd_entry *host_cmd_entry)
+void setup_phif_cmd_req(phif_cmd_req *req, host_nvme_cmd_entry *host_cmd_entry)
 {
 	u8 flbas, lbaf_type;
 	u16 lba_size;	// in byte
@@ -451,8 +456,7 @@ void dp_setup_phif_cmd_req(phif_cmd_req *req, host_nvme_cmd_entry *host_cmd_entr
 	} else {
 		//...
 	}
-
-
+	
 	//QW2
 	req->elba = (nsid<<32) | start_lba;
 
