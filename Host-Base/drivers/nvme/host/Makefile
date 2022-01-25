@@ -3,6 +3,10 @@
   KDIR := /lib/modules/$(KVER)/build
   #ccflags-y += -DEXPORT_SYMTAB
   
+  # Cheader file
+  export NOSTDINC_FLAGS
+  NOSTDINC_FLAGS += -I$(PWD)
+  
   ## nvme.ko
   nvme-objs := pci.o
   obj-m  = nvme.o
